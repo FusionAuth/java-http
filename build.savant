@@ -1,0 +1,92 @@
+/*
+ * Copyright (c) 2018-2022, FusionAuth, All Rights Reserved
+ *
+ * Licensed under the Apache License, Version 2.0 (the "License");
+ * you may not use this file except in compliance with the License.
+ * You may obtain a copy of the License at
+ *
+ *   http://www.apache.org/licenses/LICENSE-2.0
+ *
+ * Unless required by applicable law or agreed to in writing,
+ * software distributed under the License is distributed on an
+ * "AS IS" BASIS, WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND,
+ * either express or implied. See the License for the specific
+ * language governing permissions and limitations under the License.
+ */
+savantVersion = "1.0.0"
+
+slf4jVersion = "2.0.0-alpha5"
+testngVersion = "7.3.0"
+
+project(group: "io.fusionauth", name: "java-http", version: "1.38.0", licenses: ["ApacheV2_0"]) {
+  workflow {
+    fetch {
+      cache()
+      url(url: "https://repository.savantbuild.org")
+    }
+    publish {
+      cache()
+    }
+  }
+
+  publishWorkflow {
+    subversion(repository: "https://svn.savantbuild.org")
+  }
+
+  dependencies {
+    group(name: "compile") {
+      dependency(id: "org.slf4j:slf4j-api:${slf4jVersion}", skipCompatibilityCheck: true)
+    }
+    group(name: "test-compile") {
+      dependency(id: "org.testng:testng:${testngVersion}")
+    }
+  }
+
+  publications {
+    standard()
+  }
+}
+
+// Plugins
+database = loadPlugin(id: "org.savantbuild.plugin:database:1.0.6")
+dependency = loadPlugin(id: "org.savantbuild.plugin:dependency:1.0.2")
+java = loadPlugin(id: "org.savantbuild.plugin:java:1.2.0")
+javaTestNG = loadPlugin(id: "org.savantbuild.plugin:java-testng:1.0.9")
+idea = loadPlugin(id: "org.savantbuild.plugin:idea:1.0.1")
+release = loadPlugin(id: "org.savantbuild.plugin:release-git:${savantVersion}")
+file = loadPlugin(id: "org.savantbuild.plugin:file:1.0.2")
+
+java.settings.javaVersion = "17"
+javaTestNG.settings.javaVersion = "17"
+
+target(name: "clean", description: "Cleans the build directory") {
+  java.clean()
+}
+
+target(name: "compile", description: "Compiles the Java source files") {
+  java.compile()
+}
+
+target(name: "jar", description: "Builds the project JARs", dependsOn: ["compile"]) {
+  java.jar()
+}
+
+target(name: "test", description: "Runs the project's tests", dependsOn: ["jar"]) {
+  javaTestNG.test()
+}
+
+target(name: "int", description: "Releases a local integration build of the project", dependsOn: ["jar"]) {
+  dependency.integrate()
+}
+
+target(name: "release", description: "Releases a full version of the project", dependsOn: ["int"]) {
+  release.release()
+}
+
+target(name: "idea", description: "Updates the IntelliJ IDEA module file") {
+  idea.iml()
+}
+
+target(name: "print-dependency-tree", description: "Prints the dependency tree") {
+  dependency.printFull()
+}
