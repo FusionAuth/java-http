@@ -17,9 +17,9 @@ package io.fusionauth.http.server;
 
 import java.nio.ByteBuffer;
 import java.util.ArrayList;
-import java.util.HashMap;
 import java.util.List;
-import java.util.Map;
+
+import io.fusionauth.http.HTTPRequest;
 
 public class HTTPData {
   public static final int BufferSize = 1024;
@@ -28,23 +28,11 @@ public class HTTPData {
 
   public final StringBuilder builder = new StringBuilder();
 
-  public final Map<String, List<String>> headers = new HashMap<>();
-
-  public String headerName;
-
-  public long lastUsed;
-
-  public String method;
+  public final HTTPRequest request = new HTTPRequest();
 
   public int offset;
 
-  public String path;
-
-  public String protocl;
-
-  public ByteBuffer response;
-
-  public RequestParserState state = RequestParserState.RequestMethod;
+  public RequestHeadState state = RequestHeadState.RequestMethod;
 
   public ByteBuffer currentBuffer() {
     ByteBuffer last = buffers.isEmpty() ? null : buffers.get(buffers.size() - 1);
@@ -62,7 +50,7 @@ public class HTTPData {
     byte[] array = buffer.array();
     for (int i = 0; i < buffer.position(); i++) {
       // If there is a state transition, store the value properly and reset the builder (if needed)
-      RequestParserState nextState = state.next(array[i]);
+      RequestHeadState nextState = state.next(array[i]);
       if (nextState != state) {
         switch (state) {
           case RequestMethod -> method = builder.toString();
@@ -83,7 +71,7 @@ public class HTTPData {
       }
 
       state = nextState;
-      if (state == RequestParserState.RequestComplete) {
+      if (state == RequestHeadState.RequestComplete) {
         return true;
       }
 
@@ -101,14 +89,8 @@ public class HTTPData {
   public void reset() {
     buffers.clear();
     builder.delete(0, builder.length());
-    headers.clear();
-    headerName = null;
-    lastUsed = 0;
-    method = null;
     offset = 0;
-    path = null;
-    protocl = null;
-    response = null;
-    state = RequestParserState.RequestMethod;
+    request.reset();
+    state = RequestHeadState.RequestMethod;
   }
 }

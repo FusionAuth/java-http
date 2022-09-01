@@ -16,7 +16,7 @@
 package io.fusionauth.http;
 
 import io.fusionauth.http.client.SimpleNIOClient;
-import io.fusionauth.http.server.SimpleNIOServer;
+import io.fusionauth.http.server.HTTPServer;
 import org.testng.annotations.Test;
 import static org.testng.Assert.assertEquals;
 
@@ -26,9 +26,16 @@ import static org.testng.Assert.assertEquals;
  * @author Brian Pontarelli
  */
 public class FullTest {
+  private static final byte[] Response = """
+      HTTP/1.1 200 OK\r
+      Content-Type: text/plain\r
+      Content-Length: 16\r
+      \r
+      {"version":"42"}""".getBytes();
+
   @Test
   public void all() throws Exception {
-    try (SimpleNIOServer server = new SimpleNIOServer()) {
+    try (HTTPServer server = new HTTPServer()) {
       server.start();
 
       for (int i = 0; i < 1_000_000; i++) {

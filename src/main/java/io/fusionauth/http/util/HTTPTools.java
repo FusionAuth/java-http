@@ -16,8 +16,24 @@
 package io.fusionauth.http.util;
 
 public final class HTTPTools {
+  /**
+   * Determines if the given character (byte) is a digit (i.e. 0-9)
+   *
+   * @param ch The character as a byte since HTTP is ASCII.
+   * @return True if the character is a digit.
+   */
   public static boolean isDigitCharacter(byte ch) {
     return ch >= '0' && ch <= '9';
+  }
+
+  /**
+   * Determines if the given character (byte) is an allowed hexadecimal character (i.e. 0-9a-zA-Z)
+   *
+   * @param ch The character as a byte since HTTP is ASCII.
+   * @return True if the character is a hexadecimal character.
+   */
+  public static boolean isHexadecimalCharacter(byte ch) {
+    return (ch >= '0' && ch <= '9') || (ch >= 'a' && ch <= 'z') || (ch >= 'A' && ch <= 'Z');
   }
 
   /**
@@ -30,8 +46,8 @@ public final class HTTPTools {
    */
   public static boolean isTokenCharacter(byte ch) {
     return ch == '!' || ch == '#' || ch == '$' || ch == '%' || ch == '&' || ch == '\'' || ch == '*' || ch == '+' || ch == '-' || ch == '.' ||
-           ch == '^' || ch == '_' || ch == '`' || ch == '|' || ch == '~' || (ch >= 'A' && ch <= 'Z') || (ch >= 'a' && ch <= 'z') ||
-           (ch >= '0' && ch <= '9');
+        ch == '^' || ch == '_' || ch == '`' || ch == '|' || ch == '~' || (ch >= 'A' && ch <= 'Z') || (ch >= 'a' && ch <= 'z') ||
+        (ch >= '0' && ch <= '9');
   }
 
   /**

@@ -17,9 +17,10 @@ package io.fusionauth.http.server;
 
 import io.fusionauth.http.util.HTTPTools;
 
-public enum RequestParserState {
+public enum RequestHeadState {
   RequestMethod {
-    public RequestParserState next(byte ch) {
+    @Override
+    public RequestHeadState next(byte ch) {
       if (ch == ' ') {
         return RequestMethodSP;
       } else if (HTTPTools.isTokenCharacter(ch)) {
@@ -29,6 +30,7 @@ public enum RequestParserState {
       }
     }
 
+    @Override
     public boolean store() {
       return true;
     }
@@ -36,7 +38,7 @@ public enum RequestParserState {
 
   RequestMethodSP {
     @Override
-    public RequestParserState next(byte ch) {
+    public RequestHeadState next(byte ch) {
       if (ch == ' ') {
         return RequestMethodSP;
       } else if (HTTPTools.isURICharacter(ch)) {
@@ -54,7 +56,7 @@ public enum RequestParserState {
 
   RequestPath {
     @Override
-    public RequestParserState next(byte ch) {
+    public RequestHeadState next(byte ch) {
       if (ch == ' ') {
         return RequestPathSP;
       } else if (HTTPTools.isURICharacter(ch)) {
@@ -72,7 +74,7 @@ public enum RequestParserState {
 
   RequestPathSP {
     @Override
-    public RequestParserState next(byte ch) {
+    public RequestHeadState next(byte ch) {
       if (ch == ' ') {
         return RequestPathSP;
       } else if (HTTPTools.isURICharacter(ch)) {
@@ -90,7 +92,7 @@ public enum RequestParserState {
 
   RequestProtocol {
     @Override
-    public RequestParserState next(byte ch) {
+    public RequestHeadState next(byte ch) {
       if (ch == 'H' || ch == 'T' || ch == 'P' || ch == '/' || ch == '1' || ch == '.') {
         return RequestProtocol;
       } else if (ch == '\r') {
@@ -108,7 +110,7 @@ public enum RequestParserState {
 
   RequestCR {
     @Override
-    public RequestParserState next(byte ch) {
+    public RequestHeadState next(byte ch) {
       if (ch == '\n') {
         return RequestLF;
       } else {
@@ -124,7 +126,7 @@ public enum RequestParserState {
 
   RequestLF {
     @Override
-    public RequestParserState next(byte ch) {
+    public RequestHeadState next(byte ch) {
       if (ch == '\r') {
         return RequestMessageCR;
       } else if (HTTPTools.isTokenCharacter(ch)) {
@@ -142,7 +144,7 @@ public enum RequestParserState {
 
   RequestMessageCR {
     @Override
-    public RequestParserState next(byte ch) {
+    public RequestHeadState next(byte ch) {
       if (ch == '\n') {
         return RequestComplete;
       } else {
@@ -158,7 +160,7 @@ public enum RequestParserState {
 
   RequestComplete {
     @Override
-    public RequestParserState next(byte ch) {
+    public RequestHeadState next(byte ch) {
       return null;
     }
 
@@ -170,7 +172,7 @@ public enum RequestParserState {
 
   HeaderName {
     @Override
-    public RequestParserState next(byte ch) {
+    public RequestHeadState next(byte ch) {
       if (HTTPTools.isTokenCharacter(ch)) {
         return HeaderName;
       } else if (ch == ':') {
@@ -188,7 +190,7 @@ public enum RequestParserState {
 
   HeaderColon {
     @Override
-    public RequestParserState next(byte ch) {
+    public RequestHeadState next(byte ch) {
       if (ch == ' ') {
         return HeaderColon; // Re-using this state because HeaderSP would be the same
       } else if (HTTPTools.isTokenCharacter(ch)) {
@@ -206,7 +208,7 @@ public enum RequestParserState {
 
   HeaderValue {
     @Override
-    public RequestParserState next(byte ch) {
+    public RequestHeadState next(byte ch) {
       if (ch == '\r') {
         return HeaderCR;
       } else if (HTTPTools.isValueCharacter(ch)) {
@@ -224,7 +226,7 @@ public enum RequestParserState {
 
   HeaderCR {
     @Override
-    public RequestParserState next(byte ch) {
+    public RequestHeadState next(byte ch) {
       if (ch == '\n') {
         return HeaderLF;
       } else {
@@ -240,7 +242,7 @@ public enum RequestParserState {
 
   HeaderLF {
     @Override
-    public RequestParserState next(byte ch) {
+    public RequestHeadState next(byte ch) {
       if (ch == '\r') {
         return RequestMessageCR;
       } else if (HTTPTools.isTokenCharacter(ch)) {
@@ -256,7 +258,7 @@ public enum RequestParserState {
     }
   };
 
-  public abstract RequestParserState next(byte ch);
+  public abstract RequestHeadState next(byte ch);
 
   public abstract boolean store();
 }

@@ -20,18 +20,18 @@ import java.nio.channels.SelectionKey;
 import java.util.Iterator;
 
 public class ClientReaperThread extends Thread {
-  private final SimpleNIOServer simpleNIOServer;
+  private final HTTPServer HTTPServer;
 
   private boolean running;
 
-  public ClientReaperThread(SimpleNIOServer simpleNIOServer) {
-    this.simpleNIOServer = simpleNIOServer;
+  public ClientReaperThread(HTTPServer HTTPServer) {
+    this.HTTPServer = HTTPServer;
     setDaemon(true);
   }
 
   public synchronized void run() {
     while (running) {
-      Iterator<SelectionKey> iterator = simpleNIOServer.clientKeys.iterator();
+      Iterator<SelectionKey> iterator = HTTPServer.clientKeys.iterator();
       while (iterator.hasNext()) {
         SelectionKey key = iterator.next();
         HTTPData data = (HTTPData) key.attachment();
