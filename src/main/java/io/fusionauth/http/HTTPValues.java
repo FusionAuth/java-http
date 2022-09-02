@@ -24,6 +24,16 @@ public final class HTTPValues {
   private HTTPValues() {
   }
 
+  public static final class Connections {
+    public static final String Close = "close";
+
+    public static final String KeepAlive = "keep-alive";
+
+    private Connections() {
+      super();
+    }
+  }
+
   /**
    * Content types.
    */
@@ -39,6 +49,13 @@ public final class HTTPValues {
     public static final String Text = "text/plain";
 
     private ContentTypes() {
+    }
+  }
+
+  public static final class ControlBytes {
+    public static final byte[] CRLF = "\r\n".getBytes();
+
+    private ControlBytes() {
     }
   }
 
@@ -129,6 +146,8 @@ public final class HTTPValues {
 
     public static final String CacheControl = "Cache-Control";
 
+    public static final String Connection = "Connection";
+
     public static final String ContentLength = "Content-Length";
 
     public static final String ContentType = "Content-Type";
@@ -194,6 +213,20 @@ public final class HTTPValues {
     public static final String TRACE = "TRACE";
 
     private Methods() {
+    }
+  }
+
+  public static final class ProtocolBytes {
+    public static final byte[] HTTTP1_1 = Protocols.HTTTP1_1.getBytes();
+
+    private ProtocolBytes() {
+    }
+  }
+
+  public static final class Protocols {
+    public static final String HTTTP1_1 = "HTTP/1.1";
+
+    private Protocols() {
     }
   }
 

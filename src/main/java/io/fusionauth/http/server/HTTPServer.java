@@ -56,6 +56,8 @@ public class HTTPServer extends Thread implements Closeable {
 
   private BiConsumer<HTTPRequest, HTTPResponse> handler;
 
+  private int maxHeadLength;
+
   private int numberOfWorkerThreads = 40;
 
   private int port = 8080;
@@ -185,6 +187,17 @@ public class HTTPServer extends Thread implements Closeable {
   }
 
   /**
+   * Sets the max head length (the start-line and headers constitute the head). Defaults to 64k
+   *
+   * @param maxHeadLength The max head length.
+   * @return This.
+   */
+  public HTTPServer withMaxheadLength(int maxHeadLength) {
+    this.maxHeadLength = maxHeadLength;
+    return this;
+  }
+
+  /**
    * Sets the number of worker threads that will handle requests coming into the HTTP server. Defaults to 40.
    *
    * @param numberOfWorkerThreads The number of worker threads.
@@ -222,7 +235,7 @@ public class HTTPServer extends Thread implements Closeable {
     clientChannel.configureBlocking(false);
 
     var clientKey = clientChannel.register(selector, SelectionKey.OP_READ);
-    clientKey.attach(new HTTPWorker(handler));
+    clientKey.attach(new HTTPWorker(handler, maxHeadLength));
     clientKeys.add(clientKey);
   }
 
@@ -239,7 +252,14 @@ public class HTTPServer extends Thread implements Closeable {
       buffer = processor.headBuffer();
     } else if (state == RequestState.Body) {
       buffer = processor.bodyBuffer();
+    } else if (state == RequestState.Error411) {
+      // Hard-code the response and call it a day
+      worker.response().setContentLength(0L);
+      worker.response().setStatus(411);
+      key.interestOps(SelectionKey.OP_WRITE);
+      return;
     } else {
+      executor.submit(worker);
       key.interestOps(SelectionKey.OP_WRITE);
       return;
     }
@@ -258,13 +278,18 @@ public class HTTPServer extends Thread implements Closeable {
   private void write(SelectionKey key) throws IOException {
     SocketChannel client = (SocketChannel) key.channel();
     HTTPWorker worker = (HTTPWorker) key.attachment();
-    data.markUsed();
+    worker.markUsed();
 
-    client.write(data.response);
+    HTTPResponseProcessor processor = worker.responseProcessor();
+    ByteBuffer buffer = processor.currentBuffer();
+    if (buffer != null && buffer != HTTPResponseProcessor.Last) {
+      client.write(buffer);
+    }
 
-    if (data.response.position() == data.response.limit()) {
+    if (buffer == HTTPResponseProcessor.Last && worker.response().isKeepAlive()) {
+      worker = new HTTPWorker(handler, maxHeadLength);
+      key.attach(worker);
       key.interestOps(SelectionKey.OP_READ);
-      data.reset();
     }
   }
 }

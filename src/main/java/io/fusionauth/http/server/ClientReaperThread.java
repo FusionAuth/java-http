@@ -34,8 +34,8 @@ public class ClientReaperThread extends Thread {
       Iterator<SelectionKey> iterator = HTTPServer.clientKeys.iterator();
       while (iterator.hasNext()) {
         SelectionKey key = iterator.next();
-        HTTPData data = (HTTPData) key.attachment();
-        if (data.lastUsed > System.currentTimeMillis() + 10_000) {
+        HTTPWorker worker = (HTTPWorker) key.attachment();
+        if (worker.lastUsed() > System.currentTimeMillis() + 10_000) {
           iterator.remove();
 
           try {

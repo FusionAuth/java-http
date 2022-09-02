@@ -28,6 +28,8 @@ import java.util.List;
 import java.util.Map;
 import java.util.stream.Collectors;
 
+import io.fusionauth.http.HTTPValues.Connections;
+import io.fusionauth.http.HTTPValues.Headers;
 import io.fusionauth.http.HTTPValues.Status;
 
 /**
@@ -45,6 +47,8 @@ public class HTTPResponse {
   private Throwable exception;
 
   private int status;
+
+  private String statusMessage;
 
   public HTTPResponse(OutputStream outputStream) {
     this.outputStream = outputStream;
@@ -90,27 +94,23 @@ public class HTTPResponse {
   }
 
   public Long getContentLength() {
-    if (containsHeader("Content-Length")) {
-      return Long.parseLong(getHeader("Content-Length"));
+    if (containsHeader(Headers.ContentLength)) {
+      return Long.parseLong(getHeader(Headers.ContentLength));
     }
 
     return null;
   }
 
   public void setContentLength(Long length) {
-    setHeader("Content-Length", length.toString());
+    setHeader(Headers.ContentLength, length.toString());
   }
 
   public String getContentType() {
-    if (containsHeader("Content-Type")) {
-      return getHeader("Content-Type");
-    }
-
-    return null;
+    return getHeader(Headers.ContentType);
   }
 
   public void setContentType(String contentType) {
-    setHeader("Content-Type", contentType);
+    setHeader(Headers.ContentType, contentType);
   }
 
   public List<Cookie> getCookies() {
@@ -146,7 +146,7 @@ public class HTTPResponse {
   }
 
   public String getRedirect() {
-    return getHeader("Location");
+    return getHeader(Headers.Location);
   }
 
   public int getStatus() {
@@ -157,9 +157,22 @@ public class HTTPResponse {
     this.status = status;
   }
 
+  public String getStatusMessage() {
+    return statusMessage;
+  }
+
   public Writer getWriter() {
     Charset charset = getCharset();
     return new OutputStreamWriter(getOutputStream(), charset);
+  }
+
+  /**
+   * @return If the connection should be kept open (keep-alive) or not. The default is to return the Connection: keep-alive header, which
+   * this method does.
+   */
+  public boolean isKeepAlive() {
+    String value = getHeader(Headers.Connection);
+    return value == null || value.equalsIgnoreCase(Connections.KeepAlive);
   }
 
   public void removeCookie(String name) {
@@ -167,7 +180,7 @@ public class HTTPResponse {
   }
 
   public void sendRedirect(String uri) {
-    setHeader("Location", uri);
+    setHeader(Headers.Location, uri);
     status = Status.MovedTemporarily;
   }
 

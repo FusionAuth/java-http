@@ -15,7 +15,56 @@
  */
 package io.fusionauth.http.util;
 
+import java.nio.ByteBuffer;
+
+import io.fusionauth.http.HTTPResponse;
+import io.fusionauth.http.HTTPValues.ControlBytes;
+import io.fusionauth.http.HTTPValues.ProtocolBytes;
+
 public final class HTTPTools {
+  /**
+   * Builds the HTTP response head section (status line, headers, etc).
+   *
+   * @param response  The response.
+   * @param maxLength The maximum length of the complete HTTP response head section.
+   * @return The bytes of the response head section.
+   */
+  @SuppressWarnings("resource")
+  public static ByteBuffer buildResponseHead(HTTPResponse response, int maxLength) {
+    ByteBufferOutputStream bbos = new ByteBufferOutputStream(1024, maxLength);
+    bbos.write(ProtocolBytes.HTTTP1_1);
+    bbos.write(' ');
+    bbos.write(Integer.toString(response.getStatus()).getBytes());
+    bbos.write(' ');
+    if (response.getStatusMessage() != null) {
+      bbos.write(response.getStatusMessage().getBytes());
+    }
+    bbos.write(ControlBytes.CRLF);
+    response.getHeadersMap().forEach((key, values) -> {
+      values.forEach(value -> {
+        bbos.write(key.getBytes());
+        bbos.write(':');
+        bbos.write(value.getBytes());
+        bbos.write(ControlBytes.CRLF);
+      });
+    });
+    bbos.write(ControlBytes.CRLF);
+    return bbos.toByteBuffer();
+  }
+
+  /**
+   * Determines if the given character (byte) is an allowed HTTP multipart boundary character.
+   * <p>
+   * Covered by https://www.w3.org/Protocols/rfc1341/7_2_Multipart.html
+   *
+   * @param ch The character as a byte since HTTP is ASCII.
+   * @return True if the character is a multipart boundary character.
+   */
+  public static boolean isBoundaryCharacter(byte ch) {
+    return ch == '\'' || ch == '(' || ch == ')' || ch == '+' || ch == '_' || ch == ',' || ch == '-' || ch == '.' || ch == '/' || ch == ':' ||
+        ch == '=' || ch == '?' || (ch >= 'A' && ch <= 'Z') || (ch >= 'a' && ch <= 'z') || (ch >= '0' && ch <= '9');
+  }
+
   /**
    * Determines if the given character (byte) is a digit (i.e. 0-9)
    *
@@ -33,7 +82,7 @@ public final class HTTPTools {
    * @return True if the character is a hexadecimal character.
    */
   public static boolean isHexadecimalCharacter(byte ch) {
-    return (ch >= '0' && ch <= '9') || (ch >= 'a' && ch <= 'z') || (ch >= 'A' && ch <= 'Z');
+    return (ch >= '0' && ch <= '9') || (ch >= 'a' && ch <= 'f') || (ch >= 'A' && ch <= 'F');
   }
 
   /**

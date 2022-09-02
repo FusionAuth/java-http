@@ -59,6 +59,10 @@ public class UnlimitedByteBuffer {
     return currentWriter;
   }
 
+  public boolean hasBytes() {
+    return buffers != null && buffers.size() > 0;
+  }
+
   public void release() {
     buffers = null;
     currentReader = null;

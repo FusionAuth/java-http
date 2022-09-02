@@ -58,7 +58,9 @@ public class HTTPRequest implements Buildable<HTTPRequest> {
 
   public HTTPMethod method;
 
-  public boolean multipart;
+  public Boolean multipart;
+
+  public String multipartBoundary;
 
   public String path = "/";
 
@@ -273,6 +275,22 @@ public class HTTPRequest implements Buildable<HTTPRequest> {
     this.method = method;
   }
 
+  public String getMultipartBoundary() {
+    if (isMultipart() && multipartBoundary == null) {
+      String contentType = getContentType();
+      int index = contentType.indexOf("boundary=");
+      multipartBoundary = contentType.substring(index);
+
+      // Strip quotes if needed
+      int length = multipartBoundary.length();
+      if (multipartBoundary.charAt(0) == '"' && multipartBoundary.charAt(length - 1) == '"') {
+        multipartBoundary = multipartBoundary.substring(1, length - 1);
+      }
+    }
+
+    return multipartBoundary;
+  }
+
   public String getParameterValue(String key) {
     List<String> values = parameters.get(key);
     return (values != null && values.size() > 0) ? values.get(0) : null;
@@ -330,11 +348,12 @@ public class HTTPRequest implements Buildable<HTTPRequest> {
   }
 
   public boolean isMultipart() {
-    return multipart;
-  }
+    if (multipart == null) {
+      String contentType = getContentType().toLowerCase();
+      multipart = contentType.startsWith("multipart/");
+    }
 
-  public void setMultipart(boolean multipart) {
-    this.multipart = multipart;
+    return multipart;
   }
 
   public void removeHeader(String name) {

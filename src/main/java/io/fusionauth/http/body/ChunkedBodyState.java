@@ -13,62 +13,63 @@
  * either express or implied. See the License for the specific
  * language governing permissions and limitations under the License.
  */
-package io.fusionauth.http.server;
+package io.fusionauth.http.body;
 
+import io.fusionauth.http.server.ParseException;
 import io.fusionauth.http.util.HTTPTools;
 
 public enum ChunkedBodyState {
   ChunkSize {
     @Override
-    public ChunkedBodyState next(byte ch, int length, int bytesRead) {
+    public ChunkedBodyState next(byte ch, long length, long bytesRead) {
       if (ch == '\r') {
         return ChunkSizeCR;
       } else if (HTTPTools.isHexadecimalCharacter(ch)) {
         return ChunkSize;
-      } else {
-        throw new ParseException();
       }
+
+      throw new ParseException();
     }
   },
 
   ChunkSizeCR {
-    public ChunkedBodyState next(byte ch, int length, int bytesRead) {
+    public ChunkedBodyState next(byte ch, long length, long bytesRead) {
       if (ch == '\n') {
         return Chunk;
-      } else {
-        throw new ParseException();
       }
+
+      throw new ParseException();
     }
   },
 
   Chunk {
     @Override
-    public ChunkedBodyState next(byte ch, int length, int bytesRead) {
+    public ChunkedBodyState next(byte ch, long length, long bytesRead) {
       if (bytesRead == length && ch == '\r') {
         return ChunkCR;
-      } else {
-        throw new ParseException();
       }
+
+      throw new ParseException();
     }
   },
 
   ChunkCR {
     @Override
-    public ChunkedBodyState next(byte ch, int length, int bytesRead) {
+    public ChunkedBodyState next(byte ch, long length, long bytesRead) {
       if (ch == '\n') {
         return length == 0 ? Complete : ChunkSize;
-      } else {
-        throw new ParseException();
       }
+
+      throw new ParseException();
     }
   },
 
   Complete {
     @Override
-    public ChunkedBodyState next(byte ch, int length, int bytesRead) {
+    public ChunkedBodyState next(byte ch, long length, long bytesRead) {
       return null;
     }
   };
 
-  public abstract ChunkedBodyState next(byte ch, int length, int bytesRead);
+  public abstract ChunkedBodyState next(byte ch, long length, long bytesRead);
 }

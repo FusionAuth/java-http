@@ -22,6 +22,7 @@ import java.util.ArrayList;
 import io.fusionauth.http.HTTPMethod;
 import io.fusionauth.http.HTTPRequest;
 import io.fusionauth.http.HTTPValues.TransferEncodings;
+import io.fusionauth.http.body.ChunkedBodyState;
 import io.fusionauth.http.util.UnlimitedByteBuffer;
 
 /**
@@ -96,17 +97,17 @@ public class HTTPRequestProcessor {
           // Determine the next state
           Long contentLength = request.getContentLength();
           boolean chunked = request.getTransferEncoding() != null && request.getTransferEncoding().equals(TransferEncodings.Chunked);
-          if ((contentLength != null && contentLength > 0) || request.getContentType() != null || chunked) {
+          if ((contentLength != null && contentLength > 0) || chunked) {
             state = RequestState.Body;
 
             // Set up the body processor
             if (chunked) {
               bodyProcessor = new ChunkedBodyProcessor();
-            } else if (request.isMultipart()) {
-              bodyProcessor = new MultipartBodyProcessor();
-            } else {
-              bodyProcessor = new ContentLengthBodyProcessor();
+            } else if (contentLength != null) {
+              bodyProcessor = new ContentLengthBodyProcessor(contentLength);
             }
+          } else if (request.getContentType() != null) {
+            state = RequestState.Error411;
           } else {
             state = RequestState.Complete;
           }
@@ -130,19 +131,20 @@ public class HTTPRequestProcessor {
   public enum RequestState {
     Head,
     Body,
+    Error411,
     Complete
   }
 
   public static class ChunkedBodyProcessor implements BodyProcessor {
-    public int bytesRead;
+    private final byte[] lengthBytes = new byte[32];
 
-    public int length;
+    private long bytesRead;
 
-    public byte[] lengthBytes = new byte[32];
+    private long length;
 
-    public int lengthIndex;
+    private int lengthIndex;
 
-    public ChunkedBodyState state = ChunkedBodyState.Chunk;
+    private ChunkedBodyState state = ChunkedBodyState.Chunk;
 
     @Override
     public boolean process(ByteBuffer buffer) {
@@ -172,23 +174,28 @@ public class HTTPRequestProcessor {
         if (nextState == ChunkedBodyState.Complete) {
           return true;
         }
+
+        state = nextState;
       }
 
       return false;
     }
   }
 
-  public class ContentLengthBodyProcessor implements BodyProcessor {
-    @Override
-    public boolean process(ByteBuffer buffer) {
-      return false;
-    }
-  }
+  public static class ContentLengthBodyProcessor implements BodyProcessor {
+    private final long contentLength;
 
-  public class MultipartBodyProcessor implements BodyProcessor {
+    private long bytesRead;
+
+    public ContentLengthBodyProcessor(long contentLength) {
+      this.contentLength = contentLength;
+    }
+
     @Override
     public boolean process(ByteBuffer buffer) {
-      return false;
+      bytesRead++;
+
+      return bytesRead == contentLength;
     }
   }
 }

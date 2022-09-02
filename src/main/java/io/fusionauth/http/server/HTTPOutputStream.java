@@ -17,8 +17,8 @@ package io.fusionauth.http.server;
 
 import java.io.OutputStream;
 import java.nio.ByteBuffer;
-import java.util.LinkedList;
-import java.util.Queue;
+
+import io.fusionauth.http.util.UnlimitedByteBuffer;
 
 /**
  * Defines an OutputStream that can handle writing an HTTP response back to the client without having to maintain the entire body in memory.
@@ -27,18 +27,30 @@ import java.util.Queue;
  * @author Brian Pontarelli
  */
 public class HTTPOutputStream extends OutputStream {
-  private Queue<ByteBuffer> buffers;
+  private UnlimitedByteBuffer buffer = new UnlimitedByteBuffer();
 
-  private ByteBuffer current;
+  private volatile boolean closed;
 
   @Override
   public void close() {
-    // No-op
+    closed = true;
+  }
+
+  public ByteBuffer currentReadBuffer() {
+    return null;
   }
 
   @Override
   public void flush() {
     // No-op
+  }
+
+  public boolean hasBytes() {
+    return buffer.hasBytes();
+  }
+
+  public boolean isClosed() {
+    return closed;
   }
 
   @Override
@@ -49,7 +61,7 @@ public class HTTPOutputStream extends OutputStream {
   @Override
   public void write(byte[] b, int off, int len) {
     ByteBuffer buffer = currentBuffer();
-    int min = Math.min(len, current.remaining());
+    int min = Math.min(len, buffer.remaining());
     buffer.put(b, 0, min);
 
     // If there are any left over, write them to a new buffer
@@ -66,15 +78,6 @@ public class HTTPOutputStream extends OutputStream {
   }
 
   private ByteBuffer currentBuffer() {
-    if (buffers == null) {
-      buffers = new LinkedList<>();
-    }
-
-    if (current == null || current.position() == current.limit()) {
-      current = ByteBuffer.allocate(1024);
-      buffers.offer(current);
-    }
-
-    return current;
+    return buffer.currentWriteBuffer();
   }
 }

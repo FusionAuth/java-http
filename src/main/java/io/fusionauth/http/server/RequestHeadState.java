@@ -25,9 +25,9 @@ public enum RequestHeadState {
         return RequestMethodSP;
       } else if (HTTPTools.isTokenCharacter(ch)) {
         return RequestMethod;
-      } else {
-        throw new ParseException();
       }
+
+      throw new ParseException();
     }
 
     @Override
@@ -43,9 +43,9 @@ public enum RequestHeadState {
         return RequestMethodSP;
       } else if (HTTPTools.isURICharacter(ch)) {
         return RequestPath;
-      } else {
-        throw new ParseException();
       }
+
+      throw new ParseException();
     }
 
     @Override
@@ -61,9 +61,9 @@ public enum RequestHeadState {
         return RequestPathSP;
       } else if (HTTPTools.isURICharacter(ch)) {
         return RequestPath;
-      } else {
-        throw new ParseException();
       }
+
+      throw new ParseException();
     }
 
     @Override
@@ -79,9 +79,9 @@ public enum RequestHeadState {
         return RequestPathSP;
       } else if (HTTPTools.isURICharacter(ch)) {
         return RequestProtocol;
-      } else {
-        throw new ParseException();
       }
+
+      throw new ParseException();
     }
 
     @Override
@@ -97,9 +97,9 @@ public enum RequestHeadState {
         return RequestProtocol;
       } else if (ch == '\r') {
         return RequestCR;
-      } else {
-        throw new ParseException();
       }
+
+      throw new ParseException();
     }
 
     @Override
@@ -113,9 +113,9 @@ public enum RequestHeadState {
     public RequestHeadState next(byte ch) {
       if (ch == '\n') {
         return RequestLF;
-      } else {
-        throw new ParseException();
       }
+
+      throw new ParseException();
     }
 
     @Override
@@ -131,9 +131,9 @@ public enum RequestHeadState {
         return RequestMessageCR;
       } else if (HTTPTools.isTokenCharacter(ch)) {
         return HeaderName;
-      } else {
-        throw new ParseException();
       }
+
+      throw new ParseException();
     }
 
     @Override
@@ -147,9 +147,9 @@ public enum RequestHeadState {
     public RequestHeadState next(byte ch) {
       if (ch == '\n') {
         return RequestComplete;
-      } else {
-        throw new ParseException();
       }
+
+      throw new ParseException();
     }
 
     @Override
@@ -177,9 +177,9 @@ public enum RequestHeadState {
         return HeaderName;
       } else if (ch == ':') {
         return HeaderColon;
-      } else {
-        throw new ParseException();
       }
+
+      throw new ParseException();
     }
 
     @Override
@@ -195,9 +195,9 @@ public enum RequestHeadState {
         return HeaderColon; // Re-using this state because HeaderSP would be the same
       } else if (HTTPTools.isTokenCharacter(ch)) {
         return HeaderValue;
-      } else {
-        throw new ParseException();
       }
+
+      throw new ParseException();
     }
 
     @Override
@@ -213,9 +213,9 @@ public enum RequestHeadState {
         return HeaderCR;
       } else if (HTTPTools.isValueCharacter(ch)) {
         return HeaderValue;
-      } else {
-        throw new ParseException();
       }
+
+      throw new ParseException();
     }
 
     @Override
@@ -229,9 +229,9 @@ public enum RequestHeadState {
     public RequestHeadState next(byte ch) {
       if (ch == '\n') {
         return HeaderLF;
-      } else {
-        throw new ParseException();
       }
+
+      throw new ParseException();
     }
 
     @Override
@@ -247,9 +247,9 @@ public enum RequestHeadState {
         return RequestMessageCR;
       } else if (HTTPTools.isTokenCharacter(ch)) {
         return HeaderName;
-      } else {
-        throw new ParseException();
       }
+
+      throw new ParseException();
     }
 
     @Override
