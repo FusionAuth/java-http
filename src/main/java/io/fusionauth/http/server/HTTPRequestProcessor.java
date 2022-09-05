@@ -16,14 +16,12 @@
 package io.fusionauth.http.server;
 
 import java.nio.ByteBuffer;
-import java.nio.charset.StandardCharsets;
 import java.util.ArrayList;
 
 import io.fusionauth.http.HTTPMethod;
 import io.fusionauth.http.HTTPRequest;
 import io.fusionauth.http.HTTPValues.TransferEncodings;
-import io.fusionauth.http.body.ChunkedBodyState;
-import io.fusionauth.http.util.UnlimitedByteBuffer;
+import io.fusionauth.http.io.ReaderBlockingByteBufferInputStream;
 
 /**
  * A processor that handles incoming bytes that form the HTTP request.
@@ -31,171 +29,127 @@ import io.fusionauth.http.util.UnlimitedByteBuffer;
  * @author Brian Pontarelli
  */
 public class HTTPRequestProcessor {
-  private final UnlimitedByteBuffer bodyBuffer = new UnlimitedByteBuffer();
-
   private final StringBuilder builder = new StringBuilder();
-
-  private final UnlimitedByteBuffer headBuffer = new UnlimitedByteBuffer();
 
   private final HTTPRequest request;
 
-  private BodyProcessor bodyProcessor;
+  private long bytesRead;
 
-  private RequestHeadState headState = RequestHeadState.RequestMethod;
+  private long contentLength;
+
+  private ByteBuffer currentBodyBuffer;
 
   private String headerName;
 
-  private RequestState state = RequestState.Head;
+  private ReaderBlockingByteBufferInputStream inputStream;
+
+  private RequestPreambleState preambleState = RequestPreambleState.RequestMethod;
+
+  private RequestState state = RequestState.Preamble;
 
   public HTTPRequestProcessor(HTTPRequest request) {
     this.request = request;
   }
 
   public ByteBuffer bodyBuffer() {
-    return bodyBuffer.currentWriteBuffer();
+    // If there is still a decent amount of space left, return the current buffer
+    if (currentBodyBuffer != null && currentBodyBuffer.remaining() > 128) {
+      return currentBodyBuffer;
+    }
+
+    // There isn't enough space to warrant reuse, so let's feed the current buffer to the InputStream
+    if (currentBodyBuffer != null) {
+      inputStream.addByteBuffer(currentBodyBuffer);
+    }
+
+    // Create a new buffer and return it. This will also be hit if currentBodyBuffer is null
+    currentBodyBuffer = ByteBuffer.allocate(1024);
+    return currentBodyBuffer;
   }
 
-  public ByteBuffer headBuffer() {
-    return headBuffer.currentWriteBuffer();
+  public RequestState processBodyBytes() {
+    bytesRead += currentBodyBuffer.position();
+
+    if (currentBodyBuffer.remaining() == 0) {
+      currentBodyBuffer.flip();
+      inputStream.addByteBuffer(currentBodyBuffer);
+      bodyBuffer();
+    }
+
+    if (bytesRead >= contentLength) {
+      inputStream.signalDone();
+      return RequestState.Complete;
+    }
+
+    return RequestState.Body;
+  }
+
+  public RequestState processPreambleBytes(ByteBuffer buffer) {
+    while (buffer.hasRemaining()) {
+      // If there is a state transition, store the value properly and reset the builder (if needed)
+      byte ch = buffer.get();
+      RequestPreambleState nextState = preambleState.next(ch);
+      if (nextState != preambleState) {
+        switch (preambleState) {
+          case RequestMethod -> request.method = HTTPMethod.of(builder.toString());
+          case RequestPath -> request.path = builder.toString();
+          case RequestProtocol -> request.protocl = builder.toString();
+          case HeaderName -> headerName = builder.toString();
+          case HeaderValue -> request.headers.computeIfAbsent(headerName.toLowerCase(), key -> new ArrayList<>()).add(builder.toString());
+        }
+
+        // If the next state is storing, reset the builder
+        if (nextState.store()) {
+          builder.delete(0, builder.length());
+          builder.append(ch);
+        }
+      } else if (preambleState.store()) {
+        // If the current state is storing, store the character
+        builder.append((char) ch);
+      }
+
+      preambleState = nextState;
+      if (preambleState == RequestPreambleState.Complete) {
+        // Determine the next state
+        Long contentLength = request.getContentLength();
+        if (contentLength != null) {
+          this.contentLength = contentLength;
+        }
+
+        boolean chunked = request.getTransferEncoding() != null && request.getTransferEncoding().equals(TransferEncodings.Chunked);
+        if ((contentLength != null && contentLength > 0) || chunked) {
+          state = RequestState.Body;
+
+          if (chunked) {
+            throw new IllegalStateException("Chunking not supported yet");
+          }
+
+          // Create the input stream and add any body data that is left over in the buffer
+          inputStream = new ReaderBlockingByteBufferInputStream();
+          if (buffer.hasRemaining()) {
+            int remaining = buffer.remaining();
+            byte[] bodyStart = new byte[remaining];
+            System.arraycopy(buffer.array(), buffer.position(), bodyStart, 0, remaining);
+            inputStream.addByteBuffer(ByteBuffer.wrap(bodyStart));
+          }
+
+          request.setInputStream(inputStream);
+        } else {
+          state = RequestState.Complete;
+        }
+      }
+    }
+
+    return state;
   }
 
   public RequestState state() {
     return state;
   }
 
-  public RequestState update() {
-    if (state == RequestState.Head) {
-      ByteBuffer buffer = headBuffer.currentReadBuffer();
-      while (buffer.hasRemaining()) {
-        // If there is a state transition, store the value properly and reset the builder (if needed)
-        byte ch = buffer.get();
-        RequestHeadState nextState = headState.next(ch);
-        if (nextState != headState) {
-          switch (headState) {
-            case RequestMethod -> request.method = HTTPMethod.of(builder.toString());
-            case RequestPath -> request.path = builder.toString();
-            case RequestProtocol -> request.protocl = builder.toString();
-            case HeaderName -> headerName = builder.toString();
-            case HeaderValue -> request.headers.computeIfAbsent(headerName.toLowerCase(), key -> new ArrayList<>()).add(builder.toString());
-          }
-
-          // If the next state is storing, reset the builder
-          if (nextState.store()) {
-            builder.delete(0, builder.length());
-            builder.append(ch);
-          }
-        } else if (headState.store()) {
-          // If the current state is storing, store the character
-          builder.append((char) ch);
-        }
-
-        headState = nextState;
-        if (headState == RequestHeadState.RequestComplete) {
-          // Release the buffer
-          headBuffer.release();
-
-          // Determine the next state
-          Long contentLength = request.getContentLength();
-          boolean chunked = request.getTransferEncoding() != null && request.getTransferEncoding().equals(TransferEncodings.Chunked);
-          if ((contentLength != null && contentLength > 0) || chunked) {
-            state = RequestState.Body;
-
-            // Set up the body processor
-            if (chunked) {
-              bodyProcessor = new ChunkedBodyProcessor();
-            } else if (contentLength != null) {
-              bodyProcessor = new ContentLengthBodyProcessor(contentLength);
-            }
-          } else if (request.getContentType() != null) {
-            state = RequestState.Error411;
-          } else {
-            state = RequestState.Complete;
-          }
-        }
-      }
-    } else if (state == RequestState.Body) {
-      ByteBuffer buffer = bodyBuffer.currentReadBuffer();
-      if (bodyProcessor.process(buffer)) {
-        bodyBuffer.release();
-        state = RequestState.Complete;
-      }
-    }
-
-    return state;
-  }
-
-  public interface BodyProcessor {
-    boolean process(ByteBuffer buffer);
-  }
-
   public enum RequestState {
-    Head,
+    Preamble,
     Body,
-    Error411,
     Complete
-  }
-
-  public static class ChunkedBodyProcessor implements BodyProcessor {
-    private final byte[] lengthBytes = new byte[32];
-
-    private long bytesRead;
-
-    private long length;
-
-    private int lengthIndex;
-
-    private ChunkedBodyState state = ChunkedBodyState.Chunk;
-
-    @Override
-    public boolean process(ByteBuffer buffer) {
-      while (buffer.hasRemaining()) {
-        byte b = buffer.get();
-        ChunkedBodyState nextState = state.next(b, length, bytesRead);
-
-        // Store the length hex digit
-        if (nextState == ChunkedBodyState.ChunkSize) {
-          lengthBytes[lengthIndex] = b;
-          lengthIndex++;
-
-          if (lengthIndex >= 32) {
-            throw new ParseException();
-          }
-        }
-
-        if (state == ChunkedBodyState.ChunkSize && nextState != ChunkedBodyState.ChunkSize) {
-          length = Integer.parseInt(new String(lengthBytes, 0, lengthIndex, StandardCharsets.US_ASCII), 16);
-          bytesRead = 0;
-        }
-
-        if (nextState == ChunkedBodyState.Chunk) {
-          bytesRead++;
-        }
-
-        if (nextState == ChunkedBodyState.Complete) {
-          return true;
-        }
-
-        state = nextState;
-      }
-
-      return false;
-    }
-  }
-
-  public static class ContentLengthBodyProcessor implements BodyProcessor {
-    private final long contentLength;
-
-    private long bytesRead;
-
-    public ContentLengthBodyProcessor(long contentLength) {
-      this.contentLength = contentLength;
-    }
-
-    @Override
-    public boolean process(ByteBuffer buffer) {
-      bytesRead++;
-
-      return bytesRead == contentLength;
-    }
   }
 }

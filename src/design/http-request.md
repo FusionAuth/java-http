@@ -15,3 +15,6 @@
 
 #3 needs to use a thread safe pipe of some sort. This allows us to start the execute thread and then let the processing begin in a streaming way. The pipe for this needs to block on the read side and not on the write side.
 
+* [x] Implement preamble parser
+* [x] Implement server to worker pipe such that it blocks on the reader side
+* [x] Connect to NIO selector

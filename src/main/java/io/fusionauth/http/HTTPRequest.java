@@ -15,7 +15,7 @@
  */
 package io.fusionauth.http;
 
-import java.nio.ByteBuffer;
+import java.io.InputStream;
 import java.nio.charset.Charset;
 import java.nio.charset.StandardCharsets;
 import java.time.Instant;
@@ -44,8 +44,6 @@ public class HTTPRequest implements Buildable<HTTPRequest> {
 
   public final Map<String, List<String>> parameters = new HashMap<>(0);
 
-  public ByteBuffer body;
-
   public Long contentLength;
 
   public String contentType;
@@ -53,6 +51,8 @@ public class HTTPRequest implements Buildable<HTTPRequest> {
   public Charset encoding = StandardCharsets.UTF_8;
 
   public String host;
+
+  public InputStream inputStream;
 
   public String ipAddress;
 
@@ -164,15 +164,6 @@ public class HTTPRequest implements Buildable<HTTPRequest> {
     return uri;
   }
 
-  public ByteBuffer getBody() {
-    return body;
-  }
-
-  public void setBody(ByteBuffer body) {
-    this.body = body;
-    this.contentLength = (long) body.position();
-  }
-
   public Charset getCharacterEncoding() {
     return encoding;
   }
@@ -257,6 +248,14 @@ public class HTTPRequest implements Buildable<HTTPRequest> {
 
   public void setIPAddress(String ipAddress) {
     this.ipAddress = ipAddress;
+  }
+
+  public InputStream getInputStream() {
+    return inputStream;
+  }
+
+  public void setInputStream(InputStream inputStream) {
+    this.inputStream = inputStream;
   }
 
   public Locale getLocale() {

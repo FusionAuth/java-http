@@ -19,6 +19,7 @@ import java.nio.ByteBuffer;
 
 import io.fusionauth.http.HTTPResponse;
 import io.fusionauth.http.HTTPValues;
+import io.fusionauth.http.io.NonBlockingByteBufferOutputStream;
 import io.fusionauth.http.util.HTTPTools;
 
 /**
@@ -31,33 +32,35 @@ public class HTTPResponseProcessor {
 
   private final int maxHeadLength;
 
+  private final NonBlockingByteBufferOutputStream outputStream;
+
   private final HTTPResponse response;
 
-  private ByteBuffer headBuffer;
+  private ByteBuffer preambleBuffer;
 
-  public HTTPResponseProcessor(HTTPResponse response, int maxHeadLength) {
+  public HTTPResponseProcessor(HTTPResponse response, NonBlockingByteBufferOutputStream outputStream, int maxHeadLength) {
     this.response = response;
+    this.outputStream = outputStream;
     this.maxHeadLength = maxHeadLength;
   }
 
   public ByteBuffer currentBuffer() {
-    HTTPOutputStream outputStream = (HTTPOutputStream) response.getOutputStream();
     boolean closed = outputStream.isClosed();
-    if (!outputStream.hasBytes() && !closed) {
+    ByteBuffer buffer = outputStream.writableBuffer();
+    if (buffer == null && !closed) {
       return null;
     }
 
-    if (headBuffer == null) {
+    if (preambleBuffer == null) {
       fillInHeaders();
-      headBuffer = HTTPTools.buildResponseHead(response, maxHeadLength);
+      preambleBuffer = HTTPTools.buildResponsePreamble(response, maxHeadLength);
     }
 
-    if (headBuffer.hasRemaining()) {
-      return headBuffer;
+    if (preambleBuffer.hasRemaining()) {
+      return preambleBuffer;
     }
 
-    ByteBuffer buffer = outputStream.currentReadBuffer();
-    if (buffer == null && closed) {
+    if (buffer == null) {
       return Last;
     }
 

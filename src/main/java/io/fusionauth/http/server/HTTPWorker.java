@@ -20,6 +20,7 @@ import java.util.function.BiConsumer;
 
 import io.fusionauth.http.HTTPRequest;
 import io.fusionauth.http.HTTPResponse;
+import io.fusionauth.http.io.NonBlockingByteBufferOutputStream;
 
 /**
  * A worker that handles a single request/response from a client.
@@ -29,11 +30,11 @@ import io.fusionauth.http.HTTPResponse;
 public class HTTPWorker implements Runnable {
   private final BiConsumer<HTTPRequest, HTTPResponse> handler;
 
-  private final HTTPRequest request = new HTTPRequest();
+  private final HTTPRequest request;
 
   private final HTTPRequestProcessor requestProcessor;
 
-  private final HTTPResponse response = new HTTPResponse(new HTTPOutputStream());
+  private final HTTPResponse response;
 
   private final HTTPResponseProcessor responseProcessor;
 
@@ -41,8 +42,13 @@ public class HTTPWorker implements Runnable {
 
   public HTTPWorker(BiConsumer<HTTPRequest, HTTPResponse> handler, int maxHeadLength) {
     this.handler = handler;
+
+    this.request = new HTTPRequest();
     this.requestProcessor = new HTTPRequestProcessor(request);
-    this.responseProcessor = new HTTPResponseProcessor(response, maxHeadLength);
+
+    NonBlockingByteBufferOutputStream outputStream = new NonBlockingByteBufferOutputStream();
+    this.response = new HTTPResponse(outputStream);
+    this.responseProcessor = new HTTPResponseProcessor(response, outputStream, maxHeadLength);
   }
 
   public long lastUsed() {

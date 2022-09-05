@@ -18,20 +18,21 @@ package io.fusionauth.http.server;
 import java.io.IOException;
 import java.nio.channels.SelectionKey;
 import java.util.Iterator;
+import java.util.Queue;
 
 public class ClientReaperThread extends Thread {
-  private final HTTPServer HTTPServer;
+  private final Queue<SelectionKey> clientKeys;
 
   private boolean running;
 
-  public ClientReaperThread(HTTPServer HTTPServer) {
-    this.HTTPServer = HTTPServer;
+  public ClientReaperThread(Queue<SelectionKey> clientKeys) {
+    this.clientKeys = clientKeys;
     setDaemon(true);
   }
 
   public synchronized void run() {
     while (running) {
-      Iterator<SelectionKey> iterator = HTTPServer.clientKeys.iterator();
+      Iterator<SelectionKey> iterator = clientKeys.iterator();
       while (iterator.hasNext()) {
         SelectionKey key = iterator.next();
         HTTPWorker worker = (HTTPWorker) key.attachment();

@@ -15,13 +15,18 @@
  */
 package io.fusionauth.http;
 
-import io.fusionauth.http.client.SimpleNIOClient;
+import java.io.IOException;
+import java.io.OutputStream;
+import java.util.function.BiConsumer;
+
+import com.inversoft.rest.RESTClient;
+import com.inversoft.rest.TextResponseHandler;
 import io.fusionauth.http.server.HTTPServer;
 import org.testng.annotations.Test;
 import static org.testng.Assert.assertEquals;
 
 /**
- * Tests the Simple NIO server.
+ * Tests the HTTP server.
  *
  * @author Brian Pontarelli
  */
@@ -35,27 +40,39 @@ public class FullTest {
 
   @Test
   public void all() throws Exception {
-    try (HTTPServer server = new HTTPServer()) {
+    BiConsumer<HTTPRequest, HTTPResponse> handler = (req, res) -> {
+      try {
+        OutputStream outputStream = res.getOutputStream();
+        outputStream.write(Response);
+        outputStream.close();
+      } catch (IOException e) {
+        throw new RuntimeException(e);
+      }
+    };
+
+    HTTPServer server = new HTTPServer().withHandler(handler).withNumberOfWorkerThreads(1).withPort(8080);
+    server.start();
+    try (server) {
       server.start();
 
       for (int i = 0; i < 1_000_000; i++) {
-        SimpleNIOClient client = new SimpleNIOClient();
-        int status = client.url("http://localhost:9011/api/system/version")
-                           .get()
-                           .go();
-
-        assertEquals(status, 200);
-
-//        ClientResponse<String, String> response = new RESTClient<>(String.class, String.class)
-//            .url("http://localhost:9011/api/system/version")
-//            .successResponseHandler(new TextResponseHandler())
-//            .errorResponseHandler(new TextResponseHandler())
-//            .connectTimeout(1_000_000)
-//            .readTimeout(1_000_000)
-//            .get()
-//            .go();
+//        SimpleNIOClient client = new SimpleNIOClient();
+//        int status = client.url("http://localhost:9011/api/system/version")
+//                           .get()
+//                           .go();
 //
-//        assertEquals(response.status, 200);
+//        assertEquals(status, 200);
+
+        var response = new RESTClient<>(String.class, String.class)
+            .url("http://localhost:9011/api/system/version")
+            .successResponseHandler(new TextResponseHandler())
+            .errorResponseHandler(new TextResponseHandler())
+            .connectTimeout(1_000_000)
+            .readTimeout(1_000_000)
+            .get()
+            .go();
+
+        assertEquals(response.status, 200);
 
         if (i % 10_000 == 0) {
           System.out.println(i);

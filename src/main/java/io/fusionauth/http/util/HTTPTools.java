@@ -20,6 +20,7 @@ import java.nio.ByteBuffer;
 import io.fusionauth.http.HTTPResponse;
 import io.fusionauth.http.HTTPValues.ControlBytes;
 import io.fusionauth.http.HTTPValues.ProtocolBytes;
+import io.fusionauth.http.io.ByteBufferOutputStream;
 
 public final class HTTPTools {
   /**
@@ -30,7 +31,7 @@ public final class HTTPTools {
    * @return The bytes of the response head section.
    */
   @SuppressWarnings("resource")
-  public static ByteBuffer buildResponseHead(HTTPResponse response, int maxLength) {
+  public static ByteBuffer buildResponsePreamble(HTTPResponse response, int maxLength) {
     ByteBufferOutputStream bbos = new ByteBufferOutputStream(1024, maxLength);
     bbos.write(ProtocolBytes.HTTTP1_1);
     bbos.write(' ');
@@ -44,6 +45,7 @@ public final class HTTPTools {
       values.forEach(value -> {
         bbos.write(key.getBytes());
         bbos.write(':');
+        bbos.write(' ');
         bbos.write(value.getBytes());
         bbos.write(ControlBytes.CRLF);
       });

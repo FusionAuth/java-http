@@ -44,7 +44,7 @@ import org.slf4j.LoggerFactory;
 public class HTTPServer extends Thread implements Closeable {
   private static final Logger logger = LoggerFactory.getLogger(HTTPServer.class);
 
-  final Queue<SelectionKey> clientKeys = new ConcurrentLinkedQueue<>();
+  private final Queue<SelectionKey> clientKeys = new ConcurrentLinkedQueue<>();
 
   private InetAddress address;
 
@@ -61,6 +61,10 @@ public class HTTPServer extends Thread implements Closeable {
   private int numberOfWorkerThreads = 40;
 
   private int port = 8080;
+
+  private ByteBuffer preambleBuffer;
+
+  private int preambleBufferSize = 4096;
 
   private Selector selector;
 
@@ -121,7 +125,6 @@ public class HTTPServer extends Thread implements Closeable {
         while (iterator.hasNext()) {
           var key = iterator.next();
           if (key.isAcceptable()) {
-            System.out.println("Accepting");
             accept();
           } else if (key.isReadable()) {
             read(key);
@@ -142,6 +145,8 @@ public class HTTPServer extends Thread implements Closeable {
 
   @Override
   public synchronized void start() {
+    preambleBuffer = ByteBuffer.allocate(preambleBufferSize);
+
     try {
       selector = Selector.open();
       channel = ServerSocketChannel.open();
@@ -153,7 +158,7 @@ public class HTTPServer extends Thread implements Closeable {
       throw new IllegalStateException("Unable to start the HTTP server due to an error opening an NIO resource. See the stack trace of the cause for the specific error.", e);
     }
 
-    clientReaper = new ClientReaperThread(this);
+    clientReaper = new ClientReaperThread(clientKeys);
     clientReaper.start();
 
     // Start the worker executor
@@ -165,7 +170,7 @@ public class HTTPServer extends Thread implements Closeable {
   }
 
   /**
-   * Sets the bind address that this server listens on. Defaults to *.
+   * Sets the bind address that this server listens on. Defaults to `::`.
    *
    * @param address The bind address.
    * @return This.
@@ -220,6 +225,17 @@ public class HTTPServer extends Thread implements Closeable {
   }
 
   /**
+   * Sets the size of the preamble buffer (that is the buffer that reads the start-line and headers). Defaults to 4096.
+   *
+   * @param size The buffer size.
+   * @return This.
+   */
+  public HTTPServer withPreambleBufferSize(int size) {
+    this.preambleBufferSize = size;
+    return this;
+  }
+
+  /**
    * Sets the number of seconds the server will wait for running requests to be completed.
    *
    * @param seconds The number of seconds the server will wait for all running request processing threads to complete their work.
@@ -248,18 +264,11 @@ public class HTTPServer extends Thread implements Closeable {
     HTTPRequestProcessor processor = worker.requestProcessor();
     RequestState state = processor.state();
     ByteBuffer buffer;
-    if (state == RequestState.Head) {
-      buffer = processor.headBuffer();
+    if (state == RequestState.Preamble) {
+      buffer = preambleBuffer;
     } else if (state == RequestState.Body) {
       buffer = processor.bodyBuffer();
-    } else if (state == RequestState.Error411) {
-      // Hard-code the response and call it a day
-      worker.response().setContentLength(0L);
-      worker.response().setStatus(411);
-      key.interestOps(SelectionKey.OP_WRITE);
-      return;
     } else {
-      executor.submit(worker);
       key.interestOps(SelectionKey.OP_WRITE);
       return;
     }
@@ -269,7 +278,22 @@ public class HTTPServer extends Thread implements Closeable {
       return;
     }
 
-    if (processor.update() == RequestState.Complete) {
+    if (state == RequestState.Preamble) {
+      buffer.flip();
+      state = processor.processPreambleBytes(buffer);
+
+      // Reset the preamble buffer because it is shared
+      buffer.reset();
+
+      // If the next state is not preamble, that means we are done processing that and ready to handle the request in a separate thread
+      if (state != RequestState.Preamble) {
+        executor.submit(worker);
+      }
+    } else {
+      state = processor.processBodyBytes();
+    }
+
+    if (state == RequestState.Complete) {
       key.interestOps(SelectionKey.OP_WRITE);
     }
   }

@@ -15,6 +15,7 @@
  */
 savantVersion = "1.0.0"
 
+restifyVersion = "4.1.2"
 slf4jVersion = "2.0.0-alpha5"
 testngVersion = "7.3.0"
 
@@ -38,6 +39,7 @@ project(group: "io.fusionauth", name: "java-http", version: "1.38.0", licenses: 
       dependency(id: "org.slf4j:slf4j-api:${slf4jVersion}", skipCompatibilityCheck: true)
     }
     group(name: "test-compile") {
+      dependency(id: "com.inversoft:restify:${restifyVersion}")
       dependency(id: "org.testng:testng:${testngVersion}")
     }
   }
