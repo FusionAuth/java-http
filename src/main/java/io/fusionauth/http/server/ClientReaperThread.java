@@ -23,7 +23,7 @@ import java.util.Queue;
 public class ClientReaperThread extends Thread {
   private final Queue<SelectionKey> clientKeys;
 
-  private boolean running;
+  private boolean running = true;
 
   public ClientReaperThread(Queue<SelectionKey> clientKeys) {
     this.clientKeys = clientKeys;
@@ -36,7 +36,7 @@ public class ClientReaperThread extends Thread {
       while (iterator.hasNext()) {
         SelectionKey key = iterator.next();
         HTTPWorker worker = (HTTPWorker) key.attachment();
-        if (worker.lastUsed() > System.currentTimeMillis() + 10_000) {
+        if (worker.lastUsed() < System.currentTimeMillis() + 100_000) {
           iterator.remove();
 
           try {

@@ -22,6 +22,8 @@ import java.util.function.BiConsumer;
 import com.inversoft.rest.RESTClient;
 import com.inversoft.rest.TextResponseHandler;
 import io.fusionauth.http.server.HTTPServer;
+import org.slf4j.Logger;
+import org.slf4j.LoggerFactory;
 import org.testng.annotations.Test;
 import static org.testng.Assert.assertEquals;
 
@@ -31,28 +33,26 @@ import static org.testng.Assert.assertEquals;
  * @author Brian Pontarelli
  */
 public class FullTest {
-  private static final byte[] Response = """
-      HTTP/1.1 200 OK\r
-      Content-Type: text/plain\r
-      Content-Length: 16\r
-      \r
-      {"version":"42"}""".getBytes();
+  private static final Logger logger = LoggerFactory.getLogger(FullTest.class);
 
   @Test
   public void all() throws Exception {
     BiConsumer<HTTPRequest, HTTPResponse> handler = (req, res) -> {
+      res.setHeader("Content-Type", "text/plain");
+      res.setHeader("Content-Length", "16");
+      res.setStatus(200);
+
       try {
         OutputStream outputStream = res.getOutputStream();
-        outputStream.write(Response);
+        outputStream.write("{\"version\":\"42\"}".getBytes());
         outputStream.close();
+        logger.debug("Wrote response back to client");
       } catch (IOException e) {
         throw new RuntimeException(e);
       }
     };
 
-    HTTPServer server = new HTTPServer().withHandler(handler).withNumberOfWorkerThreads(1).withPort(8080);
-    server.start();
-    try (server) {
+    try (HTTPServer server = new HTTPServer().withHandler(handler).withNumberOfWorkerThreads(1).withPort(4242)) {
       server.start();
 
       for (int i = 0; i < 1_000_000; i++) {
@@ -64,7 +64,7 @@ public class FullTest {
 //        assertEquals(status, 200);
 
         var response = new RESTClient<>(String.class, String.class)
-            .url("http://localhost:9011/api/system/version")
+            .url("http://localhost:4242/api/system/version")
             .successResponseHandler(new TextResponseHandler())
             .errorResponseHandler(new TextResponseHandler())
             .connectTimeout(1_000_000)
@@ -74,7 +74,7 @@ public class FullTest {
 
         assertEquals(response.status, 200);
 
-        if (i % 10_000 == 0) {
+        if (i % 1_000 == 0) {
           System.out.println(i);
         }
       }

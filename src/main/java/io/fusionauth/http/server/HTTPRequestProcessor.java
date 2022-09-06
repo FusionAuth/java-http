@@ -116,7 +116,7 @@ public class HTTPRequestProcessor {
           this.contentLength = contentLength;
         }
 
-        boolean chunked = request.getTransferEncoding() != null && request.getTransferEncoding().equals(TransferEncodings.Chunked);
+        boolean chunked = request.getTransferEncoding() != null && request.getTransferEncoding().equalsIgnoreCase(TransferEncodings.Chunked);
         if ((contentLength != null && contentLength > 0) || chunked) {
           state = RequestState.Body;
 

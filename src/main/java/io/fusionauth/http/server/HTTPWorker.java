@@ -15,7 +15,6 @@
  */
 package io.fusionauth.http.server;
 
-import java.io.IOException;
 import java.util.function.BiConsumer;
 
 import io.fusionauth.http.HTTPRequest;
@@ -40,13 +39,13 @@ public class HTTPWorker implements Runnable {
 
   private long lastUsed = System.currentTimeMillis();
 
-  public HTTPWorker(BiConsumer<HTTPRequest, HTTPResponse> handler, int maxHeadLength) {
+  public HTTPWorker(BiConsumer<HTTPRequest, HTTPResponse> handler, int maxHeadLength, Notifier notifier) {
     this.handler = handler;
 
     this.request = new HTTPRequest();
     this.requestProcessor = new HTTPRequestProcessor(request);
 
-    NonBlockingByteBufferOutputStream outputStream = new NonBlockingByteBufferOutputStream();
+    NonBlockingByteBufferOutputStream outputStream = new NonBlockingByteBufferOutputStream(notifier);
     this.response = new HTTPResponse(outputStream);
     this.responseProcessor = new HTTPResponseProcessor(response, outputStream, maxHeadLength);
   }
@@ -76,10 +75,8 @@ public class HTTPWorker implements Runnable {
     handler.accept(request, response);
 
     // Close the stream - for good measure in case the Handler didn't close it
-    try {
-      response.getOutputStream().close();
-    } catch (IOException e) {
-      // Smother since this should never happen with HTTPOutputStream
+    if (!responseProcessor.outputStream().isClosed()) {
+      responseProcessor.outputStream().close();
     }
   }
 }

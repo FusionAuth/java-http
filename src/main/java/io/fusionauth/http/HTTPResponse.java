@@ -46,7 +46,7 @@ public class HTTPResponse {
 
   private Throwable exception;
 
-  private int status;
+  private int status = 200;
 
   private String statusMessage;
 

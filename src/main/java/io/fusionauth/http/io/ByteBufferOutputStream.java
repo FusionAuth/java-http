@@ -61,12 +61,14 @@ public class ByteBufferOutputStream extends OutputStream {
   public void write(byte[] b, int off, int len) {
     ensureSize(index + len);
     System.arraycopy(b, 0, buf, index, len);
+    index += len;
   }
 
   @Override
   public void write(int b) {
     ensureSize(index + 1);
-    buf[index++] = (byte) b;
+    buf[index] = (byte) b;
+    index++;
   }
 
   private void ensureSize(int minCapacity) {

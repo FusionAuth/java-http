@@ -20,6 +20,8 @@ import java.nio.ByteBuffer;
 import java.util.concurrent.BlockingQueue;
 import java.util.concurrent.LinkedBlockingQueue;
 
+import io.fusionauth.http.server.Notifier;
+
 /**
  * This InputStream uses ByteBuffers read by the Server processor and piped into this class. Those ByteBuffers are then fed to the reader of
  * the InputStream. The pushing of ByteBuffers never blocks but the reading will block if there are no more bytes to read.
@@ -32,19 +34,28 @@ public class NonBlockingByteBufferOutputStream extends OutputStream {
   // Shared between writer and reader threads and the writer blocks
   private final BlockingQueue<ByteBuffer> buffers = new LinkedBlockingQueue<>();
 
+  private final Notifier notifier;
+
   private volatile boolean closed;
 
   // Only used by the writer thread
   private ByteBuffer currentBuffer;
 
+  public NonBlockingByteBufferOutputStream(Notifier notifier) {
+    this.notifier = notifier;
+  }
+
   @Override
   public void close() {
-    this.closed = true;
-
     if (currentBuffer != null) {
       addBuffer();
       currentBuffer = null;
+    } else {
+      // Notify whoever is listening for bytes to be written
+      notifier.notifyNow();
     }
+
+    closed = true;
   }
 
   public boolean isClosed() {
@@ -67,12 +78,14 @@ public class NonBlockingByteBufferOutputStream extends OutputStream {
 
   @Override
   public void write(byte[] b, int off, int len) {
-    if (currentBuffer == null) {
-      currentBuffer = ByteBuffer.allocate(1024);
+    if (closed) {
+      throw new IllegalStateException("Steam is closed");
     }
 
-    int remaining = currentBuffer.remaining();
-    int length = Math.min(remaining, len);
+    // Set up the buffer to handle the bytes
+    setupBuffer(Math.max(1024, len));
+
+    int length = Math.min(currentBuffer.remaining(), len);
     currentBuffer.put(b, off, length);
 
     if (length < len) {
@@ -92,12 +105,11 @@ public class NonBlockingByteBufferOutputStream extends OutputStream {
 
   @Override
   public void write(int b) {
-    if (currentBuffer == null) {
-      currentBuffer = ByteBuffer.allocate(1024);
-    } else if (!currentBuffer.hasRemaining()) {
-      addBuffer();
-      currentBuffer = ByteBuffer.allocate(1024);
+    if (closed) {
+      throw new IllegalStateException("Steam is closed");
     }
+
+    setupBuffer(1024);
 
     currentBuffer.put((byte) b);
   }
@@ -105,6 +117,18 @@ public class NonBlockingByteBufferOutputStream extends OutputStream {
   private void addBuffer() {
     if (!buffers.offer(currentBuffer)) {
       throw new IllegalStateException("The LinkedBlockingQueue is borked. It should never reject an offer() operation.");
+    }
+
+    // Notify whoever is listening for bytes to be written
+    notifier.notifyNow();
+  }
+
+  private void setupBuffer(int length) {
+    if (currentBuffer == null) {
+      currentBuffer = ByteBuffer.allocate(length);
+    } else if (!currentBuffer.hasRemaining()) {
+      addBuffer();
+      currentBuffer = ByteBuffer.allocate(length);
     }
   }
 }

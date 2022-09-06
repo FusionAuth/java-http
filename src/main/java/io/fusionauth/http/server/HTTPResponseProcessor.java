@@ -21,6 +21,8 @@ import io.fusionauth.http.HTTPResponse;
 import io.fusionauth.http.HTTPValues;
 import io.fusionauth.http.io.NonBlockingByteBufferOutputStream;
 import io.fusionauth.http.util.HTTPTools;
+import org.slf4j.Logger;
+import org.slf4j.LoggerFactory;
 
 /**
  * A processor that handles incoming bytes that form the HTTP request.
@@ -29,6 +31,8 @@ import io.fusionauth.http.util.HTTPTools;
  */
 public class HTTPResponseProcessor {
   public static final ByteBuffer Last = ByteBuffer.allocate(0);
+
+  private static final Logger logger = LoggerFactory.getLogger(HTTPResponseProcessor.class);
 
   private final int maxHeadLength;
 
@@ -48,23 +52,36 @@ public class HTTPResponseProcessor {
     boolean closed = outputStream.isClosed();
     ByteBuffer buffer = outputStream.writableBuffer();
     if (buffer == null && !closed) {
+      logger.debug("Nothing to write from the worker thread");
       return null;
     }
 
     if (preambleBuffer == null) {
+      logger.debug("The worker thread has bytes to write or has closed the stream, but the preamble hasn't been sent yet. Generating preamble");
       fillInHeaders();
       preambleBuffer = HTTPTools.buildResponsePreamble(response, maxHeadLength);
+      logger.debug("Preamble is [{}] bytes long", preambleBuffer.remaining());
     }
 
     if (preambleBuffer.hasRemaining()) {
+      logger.debug("Still writing preamble");
+      logger.trace("(WP)");
       return preambleBuffer;
     }
 
     if (buffer == null) {
+      logger.debug("No more bytes from worker thread. Sending the `Last` signal");
+      logger.trace("(WL)");
       return Last;
     }
 
+    logger.debug("Writing back bytes");
+    logger.trace("(WB)");
     return buffer;
+  }
+
+  public NonBlockingByteBufferOutputStream outputStream() {
+    return outputStream;
   }
 
   private void fillInHeaders() {

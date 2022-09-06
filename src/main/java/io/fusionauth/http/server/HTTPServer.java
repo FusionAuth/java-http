@@ -41,7 +41,7 @@ import io.fusionauth.http.server.HTTPRequestProcessor.RequestState;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 
-public class HTTPServer extends Thread implements Closeable {
+public class HTTPServer extends Thread implements Closeable, Notifier {
   private static final Logger logger = LoggerFactory.getLogger(HTTPServer.class);
 
   private final Queue<SelectionKey> clientKeys = new ConcurrentLinkedQueue<>();
@@ -107,6 +107,12 @@ public class HTTPServer extends Thread implements Closeable {
     }
   }
 
+  @Override
+  public void notifyNow() {
+    // Wake-up! Time to put on a little make-up!
+    selector.wakeup();
+  }
+
   public void run() {
     while (true) {
       try {
@@ -125,10 +131,13 @@ public class HTTPServer extends Thread implements Closeable {
         while (iterator.hasNext()) {
           var key = iterator.next();
           if (key.isAcceptable()) {
+            logger.debug("Accepting incoming connection");
             accept();
           } else if (key.isReadable()) {
+            logger.debug("Reading from client");
             read(key);
           } else if (key.isWritable()) {
+            logger.debug("Writing to client");
             write(key);
           }
 
@@ -192,13 +201,13 @@ public class HTTPServer extends Thread implements Closeable {
   }
 
   /**
-   * Sets the max head length (the start-line and headers constitute the head). Defaults to 64k
+   * Sets the max preamble length (the start-line and headers constitute the head). Defaults to 64k
    *
-   * @param maxHeadLength The max head length.
+   * @param maxLength The max preamble length.
    * @return This.
    */
-  public HTTPServer withMaxheadLength(int maxHeadLength) {
-    this.maxHeadLength = maxHeadLength;
+  public HTTPServer withMaxPreambleLength(int maxLength) {
+    this.maxHeadLength = maxLength;
     return this;
   }
 
@@ -251,8 +260,9 @@ public class HTTPServer extends Thread implements Closeable {
     clientChannel.configureBlocking(false);
 
     var clientKey = clientChannel.register(selector, SelectionKey.OP_READ);
-    clientKey.attach(new HTTPWorker(handler, maxHeadLength));
-    clientKeys.add(clientKey);
+    clientKey.attach(new HTTPWorker(handler, maxHeadLength, this));
+    logger.trace("(A)");
+//    clientKeys.add(clientKey);
   }
 
   @SuppressWarnings("resource")
@@ -265,10 +275,13 @@ public class HTTPServer extends Thread implements Closeable {
     RequestState state = processor.state();
     ByteBuffer buffer;
     if (state == RequestState.Preamble) {
+      logger.trace("(RP)");
       buffer = preambleBuffer;
     } else if (state == RequestState.Body) {
+      logger.trace("(RB)");
       buffer = processor.bodyBuffer();
     } else {
+      logger.trace("(RD1)");
       key.interestOps(SelectionKey.OP_WRITE);
       return;
     }
@@ -283,10 +296,11 @@ public class HTTPServer extends Thread implements Closeable {
       state = processor.processPreambleBytes(buffer);
 
       // Reset the preamble buffer because it is shared
-      buffer.reset();
+      buffer.clear();
 
       // If the next state is not preamble, that means we are done processing that and ready to handle the request in a separate thread
       if (state != RequestState.Preamble) {
+        logger.trace("(RW)");
         executor.submit(worker);
       }
     } else {
@@ -294,6 +308,7 @@ public class HTTPServer extends Thread implements Closeable {
     }
 
     if (state == RequestState.Complete) {
+      logger.trace("(RD2)");
       key.interestOps(SelectionKey.OP_WRITE);
     }
   }
@@ -307,13 +322,15 @@ public class HTTPServer extends Thread implements Closeable {
     HTTPResponseProcessor processor = worker.responseProcessor();
     ByteBuffer buffer = processor.currentBuffer();
     if (buffer != null && buffer != HTTPResponseProcessor.Last) {
-      client.write(buffer);
+      int bytes = client.write(buffer);
+      logger.debug("Wrote [{}] bytes to the client", bytes);
     }
 
     if (buffer == HTTPResponseProcessor.Last && worker.response().isKeepAlive()) {
-      worker = new HTTPWorker(handler, maxHeadLength);
-      key.attach(worker);
       key.interestOps(SelectionKey.OP_READ);
+      worker = new HTTPWorker(handler, maxHeadLength, this);
+      key.attach(worker);
+      logger.trace("(WD)");
     }
   }
 }
