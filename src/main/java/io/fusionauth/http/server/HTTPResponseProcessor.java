@@ -17,12 +17,11 @@ package io.fusionauth.http.server;
 
 import java.nio.ByteBuffer;
 
-import io.fusionauth.http.HTTPResponse;
 import io.fusionauth.http.HTTPValues;
 import io.fusionauth.http.io.NonBlockingByteBufferOutputStream;
+import io.fusionauth.http.log.Logger;
+import io.fusionauth.http.log.LoggerFactory;
 import io.fusionauth.http.util.HTTPTools;
-import org.slf4j.Logger;
-import org.slf4j.LoggerFactory;
 
 /**
  * A processor that handles incoming bytes that form the HTTP request.
@@ -30,9 +29,7 @@ import org.slf4j.LoggerFactory;
  * @author Brian Pontarelli
  */
 public class HTTPResponseProcessor {
-  public static final ByteBuffer Last = ByteBuffer.allocate(0);
-
-  private static final Logger logger = LoggerFactory.getLogger(HTTPResponseProcessor.class);
+  private final Logger logger;
 
   private final int maxHeadLength;
 
@@ -42,13 +39,21 @@ public class HTTPResponseProcessor {
 
   private ByteBuffer preambleBuffer;
 
-  public HTTPResponseProcessor(HTTPResponse response, NonBlockingByteBufferOutputStream outputStream, int maxHeadLength) {
+  private volatile ResponseState state = ResponseState.Preamble;
+
+  public HTTPResponseProcessor(HTTPResponse response, NonBlockingByteBufferOutputStream outputStream, int maxHeadLength,
+                               LoggerFactory loggerFactory) {
     this.response = response;
     this.outputStream = outputStream;
     this.maxHeadLength = maxHeadLength;
+    this.logger = loggerFactory.getLogger(HTTPRequestProcessor.class);
   }
 
-  public ByteBuffer currentBuffer() {
+  public synchronized ByteBuffer currentBuffer() {
+    if (state != ResponseState.Preamble && state != ResponseState.Body) {
+      return null;
+    }
+
     boolean closed = outputStream.isClosed();
     ByteBuffer buffer = outputStream.writableBuffer();
     if (buffer == null && !closed) {
@@ -61,6 +66,9 @@ public class HTTPResponseProcessor {
       fillInHeaders();
       preambleBuffer = HTTPTools.buildResponsePreamble(response, maxHeadLength);
       logger.debug("Preamble is [{}] bytes long", preambleBuffer.remaining());
+      if (logger.isDebuggable()) {
+        logger.debug("Preamble is [\n{}\n]", new String(preambleBuffer.array(), 0, preambleBuffer.remaining()));
+      }
     }
 
     if (preambleBuffer.hasRemaining()) {
@@ -70,9 +78,10 @@ public class HTTPResponseProcessor {
     }
 
     if (buffer == null) {
-      logger.debug("No more bytes from worker thread. Sending the `Last` signal");
+      state = response.isKeepAlive() ? ResponseState.KeepAlive : ResponseState.Close;
+      logger.debug("No more bytes from worker thread. Changing state to [{}]", state);
       logger.trace("(WL)");
-      return Last;
+      return null;
     }
 
     logger.debug("Writing back bytes");
@@ -80,13 +89,40 @@ public class HTTPResponseProcessor {
     return buffer;
   }
 
-  public NonBlockingByteBufferOutputStream outputStream() {
-    return outputStream;
+  public synchronized void failure() {
+    // Go nuclear and wipe the response and stream, even if the response has already been committed (meaning one or more bytes have been
+    // written)
+    response.setStatus(500);
+    response.setStatusMessage("Failure");
+    response.clearHeaders();
+    response.setContentLength(0L);
+
+    preambleBuffer = null;
+
+    outputStream.clear();
+    outputStream.close();
+    state = ResponseState.Failure;
+  }
+
+  public void resetState(ResponseState state) {
+    this.state = state;
+  }
+
+  public ResponseState state() {
+    return state;
   }
 
   private void fillInHeaders() {
     if (!response.containsHeader(HTTPValues.Headers.Connection)) {
       response.setHeader(HTTPValues.Headers.Connection, HTTPValues.Connections.KeepAlive);
     }
+  }
+
+  public enum ResponseState {
+    Preamble,
+    Body,
+    KeepAlive,
+    Close,
+    Failure
   }
 }

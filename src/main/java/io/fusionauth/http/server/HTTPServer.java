@@ -25,25 +25,18 @@ import java.nio.channels.ClosedSelectorException;
 import java.nio.channels.SelectionKey;
 import java.nio.channels.Selector;
 import java.nio.channels.ServerSocketChannel;
-import java.nio.channels.SocketChannel;
+import java.time.Duration;
 import java.util.Iterator;
+import java.util.Objects;
 import java.util.Queue;
 import java.util.concurrent.ConcurrentLinkedQueue;
-import java.util.concurrent.ExecutorService;
-import java.util.concurrent.Executors;
-import java.util.concurrent.TimeUnit;
-import java.util.concurrent.atomic.AtomicInteger;
-import java.util.function.BiConsumer;
 
-import io.fusionauth.http.HTTPRequest;
-import io.fusionauth.http.HTTPResponse;
-import io.fusionauth.http.server.HTTPRequestProcessor.RequestState;
-import org.slf4j.Logger;
-import org.slf4j.LoggerFactory;
+import io.fusionauth.http.log.Logger;
+import io.fusionauth.http.log.LoggerFactory;
+import io.fusionauth.http.log.SystemOutLoggerFactory;
+import io.fusionauth.http.util.ThreadPool;
 
 public class HTTPServer extends Thread implements Closeable, Notifier {
-  private static final Logger logger = LoggerFactory.getLogger(HTTPServer.class);
-
   private final Queue<SelectionKey> clientKeys = new ConcurrentLinkedQueue<>();
 
   private InetAddress address;
@@ -52,9 +45,11 @@ public class HTTPServer extends Thread implements Closeable, Notifier {
 
   private ClientReaperThread clientReaper;
 
-  private ExecutorService executor;
+  private HTTPHandler handler;
 
-  private BiConsumer<HTTPRequest, HTTPResponse> handler;
+  private LoggerFactory loggerFactory = SystemOutLoggerFactory.FACTORY;
+
+  private Logger logger = loggerFactory.getLogger(HTTPServer.class);
 
   private int maxHeadLength;
 
@@ -62,13 +57,16 @@ public class HTTPServer extends Thread implements Closeable, Notifier {
 
   private int port = 8080;
 
+  // This is shared across all worker, processors, etc.
   private ByteBuffer preambleBuffer;
 
   private int preambleBufferSize = 4096;
 
   private Selector selector;
 
-  private int shutdownSeconds;
+  private Duration shutdownDuration = Duration.ofSeconds(10);
+
+  private ThreadPool threadPool;
 
   public HTTPServer() {
     try {
@@ -95,15 +93,10 @@ public class HTTPServer extends Thread implements Closeable, Notifier {
       logger.error("Unable to close the Channel.", t);
     }
 
-    executor.shutdownNow();
-    try {
-      if (executor.awaitTermination(shutdownSeconds, TimeUnit.SECONDS)) {
-        logger.info("HTTP server shutdown successfully.");
-      } else {
-        logger.error("HTTP server shutdown failed. Harsh!");
-      }
-    } catch (InterruptedException e) {
-      // Ignore and exit
+    if (threadPool.shutdown()) {
+      logger.info("HTTP server shutdown successfully.");
+    } else {
+      logger.error("HTTP server shutdown failed. Harsh!");
     }
   }
 
@@ -115,6 +108,7 @@ public class HTTPServer extends Thread implements Closeable, Notifier {
 
   public void run() {
     while (true) {
+      SelectionKey key = null;
       try {
         // If the selector has been closed, shut the thread down
         if (!selector.isOpen()) {
@@ -129,25 +123,42 @@ public class HTTPServer extends Thread implements Closeable, Notifier {
         var keys = selector.selectedKeys();
         Iterator<SelectionKey> iterator = keys.iterator();
         while (iterator.hasNext()) {
-          var key = iterator.next();
+          key = iterator.next();
           if (key.isAcceptable()) {
             logger.debug("Accepting incoming connection");
-            accept();
+            var clientChannel = channel.accept();
+            clientChannel.configureBlocking(false);
+
+            HTTPProcessor processor = new HTTP11Processor(handler, maxHeadLength, this, loggerFactory, preambleBuffer, threadPool);
+            var clientKey = clientChannel.register(selector, SelectionKey.OP_READ, processor);
+            logger.trace("(A)");
+            clientKeys.add(clientKey);
           } else if (key.isReadable()) {
             logger.debug("Reading from client");
-            read(key);
+            HTTPProcessor processor = (HTTP11Processor) key.attachment();
+            processor.read(key);
           } else if (key.isWritable()) {
             logger.debug("Writing to client");
-            write(key);
+            HTTPProcessor processor = (HTTP11Processor) key.attachment();
+            processor.write(key);
           }
 
           iterator.remove();
+          key = null;
         }
-      } catch (IOException e) {
-        e.printStackTrace();
       } catch (ClosedSelectorException cse) {
         // Shut down
         break;
+      } catch (Throwable t) {
+        logger.error("An exception was thrown during processing", t);
+
+        if (key != null) {
+          try (var ignore = key.channel()) {
+            key.cancel();
+          } catch (Throwable t2) {
+            logger.error("An exception was thrown while trying to cancel a SelectionKey and close a channel with a client", t2);
+          }
+        }
       }
     }
   }
@@ -170,9 +181,8 @@ public class HTTPServer extends Thread implements Closeable, Notifier {
     clientReaper = new ClientReaperThread(clientKeys);
     clientReaper.start();
 
-    // Start the worker executor
-    AtomicInteger threadCount = new AtomicInteger(1);
-    executor = Executors.newFixedThreadPool(numberOfWorkerThreads, runnable -> new Thread(runnable, "HTTP server worker thread " + threadCount.incrementAndGet()));
+    // Start the thread pool for the workers
+    threadPool = new ThreadPool(numberOfWorkerThreads, "HTTP Server Worker Thread", shutdownDuration);
 
     super.start();
     logger.info("HTTP server started successfully and listening on port [{}]", port);
@@ -195,8 +205,22 @@ public class HTTPServer extends Thread implements Closeable, Notifier {
    * @param handler The handler that processes the requests.
    * @return This.
    */
-  public HTTPServer withHandler(BiConsumer<HTTPRequest, HTTPResponse> handler) {
+  public HTTPServer withHandler(HTTPHandler handler) {
     this.handler = handler;
+    return this;
+  }
+
+  /**
+   * Sets the logger factory that all the HTTP server classes use to retrieve specific loggers. Defaults to the
+   * {@link SystemOutLoggerFactory}.
+   *
+   * @param loggerFactory The factory.
+   * @return This.
+   */
+  public HTTPServer withLoggerFactory(LoggerFactory loggerFactory) {
+    Objects.requireNonNull(loggerFactory);
+    this.loggerFactory = loggerFactory;
+    this.logger = loggerFactory.getLogger(HTTPServer.class);
     return this;
   }
 
@@ -245,92 +269,13 @@ public class HTTPServer extends Thread implements Closeable, Notifier {
   }
 
   /**
-   * Sets the number of seconds the server will wait for running requests to be completed.
+   * Sets the duration the server will wait for running requests to be completed. Defaults to 10 seconds.
    *
-   * @param seconds The number of seconds the server will wait for all running request processing threads to complete their work.
+   * @param duration The duration the server will wait for all running request processing threads to complete their work.
    * @return This.
    */
-  public HTTPServer withShutdownSeconds(int seconds) {
-    this.shutdownSeconds = seconds;
+  public HTTPServer withShutdownDuration(Duration duration) {
+    this.shutdownDuration = duration;
     return this;
-  }
-
-  private void accept() throws IOException {
-    var clientChannel = channel.accept();
-    clientChannel.configureBlocking(false);
-
-    var clientKey = clientChannel.register(selector, SelectionKey.OP_READ);
-    clientKey.attach(new HTTPWorker(handler, maxHeadLength, this));
-    logger.trace("(A)");
-//    clientKeys.add(clientKey);
-  }
-
-  @SuppressWarnings("resource")
-  private void read(SelectionKey key) throws IOException {
-    SocketChannel client = (SocketChannel) key.channel();
-    HTTPWorker worker = (HTTPWorker) key.attachment();
-    worker.markUsed();
-
-    HTTPRequestProcessor processor = worker.requestProcessor();
-    RequestState state = processor.state();
-    ByteBuffer buffer;
-    if (state == RequestState.Preamble) {
-      logger.trace("(RP)");
-      buffer = preambleBuffer;
-    } else if (state == RequestState.Body) {
-      logger.trace("(RB)");
-      buffer = processor.bodyBuffer();
-    } else {
-      logger.trace("(RD1)");
-      key.interestOps(SelectionKey.OP_WRITE);
-      return;
-    }
-
-    long read = client.read(buffer);
-    if (read <= 0) {
-      return;
-    }
-
-    if (state == RequestState.Preamble) {
-      buffer.flip();
-      state = processor.processPreambleBytes(buffer);
-
-      // Reset the preamble buffer because it is shared
-      buffer.clear();
-
-      // If the next state is not preamble, that means we are done processing that and ready to handle the request in a separate thread
-      if (state != RequestState.Preamble) {
-        logger.trace("(RW)");
-        executor.submit(worker);
-      }
-    } else {
-      state = processor.processBodyBytes();
-    }
-
-    if (state == RequestState.Complete) {
-      logger.trace("(RD2)");
-      key.interestOps(SelectionKey.OP_WRITE);
-    }
-  }
-
-  @SuppressWarnings("resource")
-  private void write(SelectionKey key) throws IOException {
-    SocketChannel client = (SocketChannel) key.channel();
-    HTTPWorker worker = (HTTPWorker) key.attachment();
-    worker.markUsed();
-
-    HTTPResponseProcessor processor = worker.responseProcessor();
-    ByteBuffer buffer = processor.currentBuffer();
-    if (buffer != null && buffer != HTTPResponseProcessor.Last) {
-      int bytes = client.write(buffer);
-      logger.debug("Wrote [{}] bytes to the client", bytes);
-    }
-
-    if (buffer == HTTPResponseProcessor.Last && worker.response().isKeepAlive()) {
-      key.interestOps(SelectionKey.OP_READ);
-      worker = new HTTPWorker(handler, maxHeadLength, this);
-      key.attach(worker);
-      logger.trace("(WD)");
-    }
   }
 }

@@ -13,7 +13,7 @@
  * either express or implied. See the License for the specific
  * language governing permissions and limitations under the License.
  */
-package io.fusionauth.http;
+package io.fusionauth.http.server;
 
 import java.io.OutputStream;
 import java.io.OutputStreamWriter;
@@ -28,12 +28,14 @@ import java.util.List;
 import java.util.Map;
 import java.util.stream.Collectors;
 
+import io.fusionauth.http.Cookie;
 import io.fusionauth.http.HTTPValues.Connections;
 import io.fusionauth.http.HTTPValues.Headers;
 import io.fusionauth.http.HTTPValues.Status;
 
 /**
- * Default class for HTTPResponse.
+ * An HTTP response that the server sends back to a client. The handler that processes the HTTP request can fill out this object and the
+ * HTTP server will send it back to the client.
  *
  * @author Brian Pontarelli
  */
@@ -60,9 +62,11 @@ public class HTTPResponse {
   }
 
   public void addHeader(String name, String value) {
-    String key = name.toLowerCase();
-    headers.putIfAbsent(key, new ArrayList<>());
-    headers.get(key).add(value);
+    headers.computeIfAbsent(name.toLowerCase(), key -> new ArrayList<>()).add(value);
+  }
+
+  public void clearHeaders() {
+    headers.clear();
   }
 
   public boolean containsHeader(String name) {
@@ -159,6 +163,10 @@ public class HTTPResponse {
 
   public String getStatusMessage() {
     return statusMessage;
+  }
+
+  public void setStatusMessage(String statusMessage) {
+    this.statusMessage = statusMessage;
   }
 
   public Writer getWriter() {

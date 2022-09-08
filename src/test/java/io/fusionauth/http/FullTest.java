@@ -17,15 +17,18 @@ package io.fusionauth.http;
 
 import java.io.IOException;
 import java.io.OutputStream;
-import java.util.function.BiConsumer;
+import java.net.URI;
+import java.net.http.HttpClient;
+import java.net.http.HttpRequest;
+import java.net.http.HttpRequest.BodyPublishers;
+import java.net.http.HttpResponse.BodySubscribers;
+import java.nio.charset.StandardCharsets;
 
-import com.inversoft.rest.RESTClient;
-import com.inversoft.rest.TextResponseHandler;
+import io.fusionauth.http.server.HTTPHandler;
 import io.fusionauth.http.server.HTTPServer;
-import org.slf4j.Logger;
-import org.slf4j.LoggerFactory;
 import org.testng.annotations.Test;
 import static org.testng.Assert.assertEquals;
+import static org.testng.Assert.fail;
 
 /**
  * Tests the HTTP server.
@@ -33,20 +36,61 @@ import static org.testng.Assert.assertEquals;
  * @author Brian Pontarelli
  */
 public class FullTest {
-  private static final Logger logger = LoggerFactory.getLogger(FullTest.class);
+  public static final String ExpectedResponse = "{\"version\":\"42\"}";
+
+  public static final String RequestBody = "{\"message\":\"Hello World\"";
 
   @Test
-  public void all() throws Exception {
-    BiConsumer<HTTPRequest, HTTPResponse> handler = (req, res) -> {
+  public void handlerFailureGet() throws Exception {
+    HTTPHandler handler = (req, res) -> {
+      throw new IllegalStateException("Bad state");
+    };
+
+    try (HTTPServer server = new HTTPServer().withHandler(handler).withNumberOfWorkerThreads(1).withPort(4242)) {
+      server.start();
+
+      var client = HttpClient.newHttpClient();
+      URI uri = URI.create("http://localhost:4242/api/system/version");
+      var response = client.send(
+          HttpRequest.newBuilder().uri(uri).GET().build(),
+          r -> BodySubscribers.ofString(StandardCharsets.UTF_8)
+      );
+
+      assertEquals(response.statusCode(), 500);
+    }
+  }
+
+  @Test
+  public void handlerFailurePost() throws Exception {
+    HTTPHandler handler = (req, res) -> {
+      throw new IllegalStateException("Bad state");
+    };
+
+    try (HTTPServer server = new HTTPServer().withHandler(handler).withNumberOfWorkerThreads(1).withPort(4242)) {
+      server.start();
+
+      var client = HttpClient.newHttpClient();
+      URI uri = URI.create("http://localhost:4242/api/system/version");
+      var response = client.send(
+          HttpRequest.newBuilder().uri(uri).header("Content-Type", "application/json").POST(BodyPublishers.ofString(RequestBody)).build(),
+          r -> BodySubscribers.ofString(StandardCharsets.UTF_8)
+      );
+
+      assertEquals(response.statusCode(), 500);
+    }
+  }
+
+  @Test
+  public void simpleGet() throws Exception {
+    HTTPHandler handler = (req, res) -> {
       res.setHeader("Content-Type", "text/plain");
       res.setHeader("Content-Length", "16");
       res.setStatus(200);
 
       try {
         OutputStream outputStream = res.getOutputStream();
-        outputStream.write("{\"version\":\"42\"}".getBytes());
+        outputStream.write(ExpectedResponse.getBytes());
         outputStream.close();
-        logger.debug("Wrote response back to client");
       } catch (IOException e) {
         throw new RuntimeException(e);
       }
@@ -55,29 +99,68 @@ public class FullTest {
     try (HTTPServer server = new HTTPServer().withHandler(handler).withNumberOfWorkerThreads(1).withPort(4242)) {
       server.start();
 
+      var client = HttpClient.newHttpClient();
+      URI uri = URI.create("http://localhost:4242/api/system/version");
       for (int i = 0; i < 1_000_000; i++) {
-//        SimpleNIOClient client = new SimpleNIOClient();
-//        int status = client.url("http://localhost:9011/api/system/version")
-//                           .get()
-//                           .go();
-//
-//        assertEquals(status, 200);
+        var response = client.send(
+            HttpRequest.newBuilder().uri(uri).GET().build(),
+            r -> BodySubscribers.ofString(StandardCharsets.UTF_8)
+        );
 
-        var response = new RESTClient<>(String.class, String.class)
-            .url("http://localhost:4242/api/system/version")
-            .successResponseHandler(new TextResponseHandler())
-            .errorResponseHandler(new TextResponseHandler())
-            .connectTimeout(1_000_000)
-            .readTimeout(1_000_000)
-            .get()
-            .go();
-
-        assertEquals(response.status, 200);
+        assertEquals(response.statusCode(), 200);
+        assertEquals(response.body(), ExpectedResponse);
 
         if (i % 1_000 == 0) {
           System.out.println(i);
         }
       }
     }
+  }
+
+  @Test
+  public void simplePost() throws Exception {
+    HTTPHandler handler = (req, res) -> {
+      System.out.println("Handling");
+      assertEquals(req.getHeader("Content-TYPE"), "application/json"); // Mixed case
+
+      try {
+        System.out.println("Reading");
+        byte[] body = req.getInputStream().readAllBytes();
+        assertEquals(new String(body), RequestBody);
+      } catch (IOException e) {
+        fail("Unable to parse body", e);
+      }
+
+      System.out.println("Done");
+      res.setHeader("Content-Type", "text/plain");
+      res.setHeader("Content-Length", "16");
+      res.setStatus(200);
+
+      try {
+        OutputStream outputStream = res.getOutputStream();
+        outputStream.write(ExpectedResponse.getBytes());
+        outputStream.close();
+      } catch (IOException e) {
+        throw new RuntimeException(e);
+      }
+    };
+
+    try (HTTPServer server = new HTTPServer().withHandler(handler).withNumberOfWorkerThreads(1).withPort(4242)) {
+      server.start();
+
+      var client = HttpClient.newHttpClient();
+      URI uri = URI.create("http://localhost:4242/api/system/version");
+      var response = client.send(
+          HttpRequest.newBuilder().uri(uri).header("Content-Type", "application/json").POST(BodyPublishers.ofString(RequestBody)).build(),
+          r -> BodySubscribers.ofString(StandardCharsets.UTF_8)
+      );
+
+      assertEquals(response.statusCode(), 200);
+      assertEquals(response.body(), ExpectedResponse);
+    }
+  }
+
+  static {
+//    SystemOutLoggerFactory.FACTORY.getLogger(FullTest.class).setLevel(Level.Debug);
   }
 }

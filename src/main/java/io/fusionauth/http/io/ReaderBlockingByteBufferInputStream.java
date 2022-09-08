@@ -57,10 +57,10 @@ public class ReaderBlockingByteBufferInputStream extends InputStream {
   @Override
   public int read(byte[] b, int off, int len) {
     poll();
+
     if (currentBuffer == Last) {
       return -1;
     }
-
 
     int length = Math.min(len, currentBuffer.remaining());
     currentBuffer.get(b, off, length);
@@ -72,8 +72,9 @@ public class ReaderBlockingByteBufferInputStream extends InputStream {
   }
 
   private void poll() {
-    while (currentBuffer == null || !currentBuffer.hasRemaining()) {
+    while (currentBuffer != Last && (currentBuffer == null || !currentBuffer.hasRemaining())) {
       try {
+        System.out.println("Taking non-last");
         currentBuffer = buffers.take();
       } catch (InterruptedException e) {
         // Ignore and try again

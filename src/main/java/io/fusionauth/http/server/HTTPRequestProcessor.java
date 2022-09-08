@@ -16,10 +16,8 @@
 package io.fusionauth.http.server;
 
 import java.nio.ByteBuffer;
-import java.util.ArrayList;
 
 import io.fusionauth.http.HTTPMethod;
-import io.fusionauth.http.HTTPRequest;
 import io.fusionauth.http.HTTPValues.TransferEncodings;
 import io.fusionauth.http.io.ReaderBlockingByteBufferInputStream;
 
@@ -52,12 +50,12 @@ public class HTTPRequestProcessor {
   }
 
   public ByteBuffer bodyBuffer() {
-    // If there is still a decent amount of space left, return the current buffer
-    if (currentBodyBuffer != null && currentBodyBuffer.remaining() > 128) {
+    // If there is still space left, return the current buffer
+    if (currentBodyBuffer != null && currentBodyBuffer.hasRemaining()) {
       return currentBodyBuffer;
     }
 
-    // There isn't enough space to warrant reuse, so let's feed the current buffer to the InputStream
+    // There isn't any space left, so let's feed the current buffer to the InputStream
     if (currentBodyBuffer != null) {
       inputStream.addByteBuffer(currentBodyBuffer);
     }
@@ -70,15 +68,17 @@ public class HTTPRequestProcessor {
   public RequestState processBodyBytes() {
     bytesRead += currentBodyBuffer.position();
 
-    if (currentBodyBuffer.remaining() == 0) {
+    if (bytesRead >= contentLength && currentBodyBuffer.position() > 0) {
+      currentBodyBuffer.flip();
+      inputStream.addByteBuffer(currentBodyBuffer);
+      inputStream.signalDone();
+      return RequestState.Complete;
+    }
+
+    if (!currentBodyBuffer.hasRemaining()) {
       currentBodyBuffer.flip();
       inputStream.addByteBuffer(currentBodyBuffer);
       bodyBuffer();
-    }
-
-    if (bytesRead >= contentLength) {
-      inputStream.signalDone();
-      return RequestState.Complete;
     }
 
     return RequestState.Body;
@@ -91,21 +91,21 @@ public class HTTPRequestProcessor {
       RequestPreambleState nextState = preambleState.next(ch);
       if (nextState != preambleState) {
         switch (preambleState) {
-          case RequestMethod -> request.method = HTTPMethod.of(builder.toString());
-          case RequestPath -> request.path = builder.toString();
-          case RequestProtocol -> request.protocl = builder.toString();
+          case RequestMethod -> request.setMethod(HTTPMethod.of(builder.toString()));
+          case RequestPath -> request.setPath(builder.toString());
+          case RequestProtocol -> request.setProtocol(builder.toString());
           case HeaderName -> headerName = builder.toString();
-          case HeaderValue -> request.headers.computeIfAbsent(headerName.toLowerCase(), key -> new ArrayList<>()).add(builder.toString());
+          case HeaderValue -> request.addHeader(headerName, builder.toString());
         }
 
         // If the next state is storing, reset the builder
         if (nextState.store()) {
           builder.delete(0, builder.length());
-          builder.append(ch);
+          builder.appendCodePoint(ch);
         }
       } else if (preambleState.store()) {
         // If the current state is storing, store the character
-        builder.append((char) ch);
+        builder.appendCodePoint(ch);
       }
 
       preambleState = nextState;
@@ -127,10 +127,9 @@ public class HTTPRequestProcessor {
           // Create the input stream and add any body data that is left over in the buffer
           inputStream = new ReaderBlockingByteBufferInputStream();
           if (buffer.hasRemaining()) {
-            int remaining = buffer.remaining();
-            byte[] bodyStart = new byte[remaining];
-            System.arraycopy(buffer.array(), buffer.position(), bodyStart, 0, remaining);
-            inputStream.addByteBuffer(ByteBuffer.wrap(bodyStart));
+            currentBodyBuffer = ByteBuffer.allocate(buffer.remaining());
+            currentBodyBuffer.put(buffer);
+            processBodyBytes();
           }
 
           request.setInputStream(inputStream);

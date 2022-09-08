@@ -45,6 +45,11 @@ public class NonBlockingByteBufferOutputStream extends OutputStream {
     this.notifier = notifier;
   }
 
+  public void clear() {
+    currentBuffer = null;
+    buffers.clear();
+  }
+
   @Override
   public void close() {
     if (currentBuffer != null) {
@@ -115,6 +120,7 @@ public class NonBlockingByteBufferOutputStream extends OutputStream {
   }
 
   private void addBuffer() {
+    currentBuffer.flip();
     if (!buffers.offer(currentBuffer)) {
       throw new IllegalStateException("The LinkedBlockingQueue is borked. It should never reject an offer() operation.");
     }

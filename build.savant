@@ -36,17 +36,8 @@ project(group: "io.fusionauth", name: "java-http", version: "1.38.0", licenses: 
   }
 
   dependencies {
-    group(name: "compile") {
-      dependency(id: "org.slf4j:slf4j-api:${slf4jVersion}", skipCompatibilityCheck: true)
-    }
     group(name: "test-compile") {
-      dependency(id: "com.inversoft:restify:${restifyVersion}")
-      dependency(id: "com.inversoft:restify:${restifyVersion}")
       dependency(id: "org.testng:testng:${testngVersion}")
-    }
-    group(name: "test-runtime") {
-      dependency(id: "ch.qos.logback:logback-classic:${logbackVersion}")
-      dependency(id: "ch.qos.logback:logback-core:${logbackVersion}")
     }
   }
 

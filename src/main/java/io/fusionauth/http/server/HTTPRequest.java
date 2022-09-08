@@ -13,9 +13,10 @@
  * either express or implied. See the License for the specific
  * language governing permissions and limitations under the License.
  */
-package io.fusionauth.http;
+package io.fusionauth.http.server;
 
 import java.io.InputStream;
+import java.net.URLDecoder;
 import java.nio.charset.Charset;
 import java.nio.charset.StandardCharsets;
 import java.time.Instant;
@@ -28,49 +29,56 @@ import java.util.HashMap;
 import java.util.List;
 import java.util.Locale;
 import java.util.Map;
-import java.util.Map.Entry;
 import java.util.Objects;
 
+import io.fusionauth.http.Buildable;
+import io.fusionauth.http.Cookie;
+import io.fusionauth.http.HTTPMethod;
 import io.fusionauth.http.HTTPValues.Headers;
 
+/**
+ * An HTTP request that is received by the HTTP server. This contains all the relevant information from the request including any file
+ * uploads and the InputStream that the server can read from to handle the HTTP body.
+ * <p>
+ * This is mutable because the server is not trying to enforce that the request is always the same as the one it received. There are many
+ * cases where requests values are mutated, removed, or replaced. Rather than using a janky delegate or wrapper, this is simply mutable.
+ *
+ * @author Brian Pontarelli
+ */
 public class HTTPRequest implements Buildable<HTTPRequest> {
-  public final Map<String, Cookie> cookies = new HashMap<>();
+  private final Map<String, Cookie> cookies = new HashMap<>();
 
-  public final List<FileInfo> files = new ArrayList<>();
+  private final Map<String, List<String>> headers = new HashMap<>();
 
-  public final Map<String, List<String>> headers = new HashMap<>();
+  private final List<Locale> locales = new ArrayList<>();
 
-  public final List<Locale> locales = new ArrayList<>();
+  private final Map<String, List<String>> parameters = new HashMap<>(0);
 
-  public final Map<String, List<String>> parameters = new HashMap<>(0);
+  private Long contentLength;
 
-  public Long contentLength;
+  private String contentType;
 
-  public String contentType;
+  private Charset encoding = StandardCharsets.UTF_8;
 
-  public Charset encoding = StandardCharsets.UTF_8;
+  private String host;
 
-  public String host;
+  private InputStream inputStream;
 
-  public InputStream inputStream;
+  private String ipAddress;
 
-  public String ipAddress;
+  private HTTPMethod method;
 
-  public HTTPMethod method;
+  private Boolean multipart;
 
-  public Boolean multipart;
+  private String multipartBoundary;
 
-  public String multipartBoundary;
+  private String path = "/";
 
-  public String path = "/";
+  private int port = -1;
 
-  public int port = -1;
+  private String protocol;
 
-  public String protocl;
-
-  public String queryString;
-
-  public String scheme;
+  private String scheme;
 
   public void addCookies(Cookie... cookies) {
     for (Cookie cookie : cookies) {
@@ -88,26 +96,29 @@ public class HTTPRequest implements Buildable<HTTPRequest> {
     }
   }
 
-  public void addFile(FileInfo fileInfo) {
-    this.files.add(fileInfo);
-  }
-
   public void addHeader(String name, String value) {
-    headers.computeIfAbsent(name, key -> new ArrayList<>()).add(value);
+    headers.computeIfAbsent(name.toLowerCase(), key -> new ArrayList<>()).add(value);
+    decodeHeader(name, value);
   }
 
   public void addHeaders(String name, String... values) {
-    headers.computeIfAbsent(name, key -> new ArrayList<>()).addAll(List.of(values));
+    headers.computeIfAbsent(name.toLowerCase(), key -> new ArrayList<>()).addAll(List.of(values));
+
+    for (String value : values) {
+      decodeHeader(name, value);
+    }
   }
 
   public void addHeaders(String name, Collection<String> values) {
-    headers.computeIfAbsent(name, key -> new ArrayList<>()).addAll(values);
+    headers.computeIfAbsent(name.toLowerCase(), key -> new ArrayList<>()).addAll(values);
+
+    for (String value : values) {
+      decodeHeader(name, value);
+    }
   }
 
   public void addHeaders(Map<String, List<String>> params) {
-    for (String name : params.keySet()) {
-      headers.put(name, params.get(name));
-    }
+    params.forEach(this::addHeaders);
   }
 
   public void addLocales(Locale... locales) {
@@ -131,9 +142,7 @@ public class HTTPRequest implements Buildable<HTTPRequest> {
   }
 
   public void addParameters(Map<String, List<String>> params) {
-    for (String name : params.keySet()) {
-      parameters.put(name, params.get(name));
-    }
+    params.forEach(this::addParameters);
   }
 
   public void deleteCookie(String name) {
@@ -201,26 +210,22 @@ public class HTTPRequest implements Buildable<HTTPRequest> {
     return header != null ? ZonedDateTime.parse(header, DateTimeFormatter.RFC_1123_DATE_TIME).toInstant() : null;
   }
 
-  public List<FileInfo> getFiles() {
-    return files;
-  }
-
   public String getHeader(String key) {
     List<String> values = getHeaders(key);
     return values != null && values.size() > 0 ? values.get(0) : null;
   }
 
   public List<String> getHeaders(String key) {
-    return headers.entrySet()
-                  .stream()
-                  .filter(entry -> entry.getKey().equalsIgnoreCase(key))
-                  .map(Entry::getValue)
-                  .findFirst()
-                  .orElse(null);
+    return headers.get(key.toLowerCase());
   }
 
-  public Map<String, List<String>> getHeadersMap() {
+  public Map<String, List<String>> getHeaders() {
     return headers;
+  }
+
+  public void setHeaders(Map<String, List<String>> parameters) {
+    this.headers.clear();
+    parameters.forEach(this::setHeaders);
   }
 
   public String getHost() {
@@ -275,18 +280,6 @@ public class HTTPRequest implements Buildable<HTTPRequest> {
   }
 
   public String getMultipartBoundary() {
-    if (isMultipart() && multipartBoundary == null) {
-      String contentType = getContentType();
-      int index = contentType.indexOf("boundary=");
-      multipartBoundary = contentType.substring(index);
-
-      // Strip quotes if needed
-      int length = multipartBoundary.length();
-      if (multipartBoundary.charAt(0) == '"' && multipartBoundary.charAt(length - 1) == '"') {
-        multipartBoundary = multipartBoundary.substring(1, length - 1);
-      }
-    }
-
     return multipartBoundary;
   }
 
@@ -313,7 +306,45 @@ public class HTTPRequest implements Buildable<HTTPRequest> {
   }
 
   public void setPath(String path) {
-    this.path = path;
+    // Parse the parameters
+    int questionMark = path.indexOf('?');
+    if (questionMark > 0 && questionMark != path.length() - 1) {
+      char[] chars = path.toCharArray();
+      int start = questionMark + 1;
+      String name = null;
+      String value;
+      for (int i = start; i < chars.length; i++) {
+        if (chars[i] == '=') {
+          try {
+            name = URLDecoder.decode(path.substring(start, i), StandardCharsets.UTF_8);
+          } catch (Exception e) {
+            name = null; // Malformed
+          }
+
+          start = i + 1;
+        } else if (chars[i] == '&') {
+          if (name == null) {
+            continue; // Malformed
+          }
+
+          if (start >= i) {
+            continue; // Malformed
+          }
+
+          try {
+            value = URLDecoder.decode(path.substring(start, i), StandardCharsets.UTF_8);
+            addParameter(name, value);
+          } catch (Exception e) {
+            name = null; // Malformed
+          }
+
+          start = i + 1;
+        }
+      }
+    }
+
+    // Only save the path portion
+    this.path = questionMark > 0 ? path.substring(0, questionMark) : path;
   }
 
   public int getPort() {
@@ -325,12 +356,12 @@ public class HTTPRequest implements Buildable<HTTPRequest> {
     this.port = port;
   }
 
-  public String getQueryString() {
-    return queryString;
+  public String getProtocol() {
+    return protocol;
   }
 
-  public void setQueryString(String queryString) {
-    this.queryString = queryString;
+  public void setProtocol(String protocol) {
+    this.protocol = protocol;
   }
 
   public String getScheme() {
@@ -347,40 +378,39 @@ public class HTTPRequest implements Buildable<HTTPRequest> {
   }
 
   public boolean isMultipart() {
-    if (multipart == null) {
-      String contentType = getContentType().toLowerCase();
-      multipart = contentType.startsWith("multipart/");
-    }
-
     return multipart;
   }
 
   public void removeHeader(String name) {
-    headers.remove(name);
+    headers.remove(name.toLowerCase());
   }
 
   public void removeHeader(String name, String... values) {
-    List<String> actual = headers.get(name);
+    List<String> actual = headers.get(name.toLowerCase());
     if (actual != null) {
       actual.removeAll(List.of(values));
     }
   }
 
   public void setHeader(String name, String value) {
-    this.headers.put(name, new ArrayList<>(List.of(value)));
+    this.headers.put(name.toLowerCase(), new ArrayList<>(List.of(value)));
+    decodeHeader(name, value);
   }
 
   public void setHeaders(String name, String... values) {
-    this.headers.put(name, new ArrayList<>(List.of(values)));
+    this.headers.put(name.toLowerCase(), new ArrayList<>(List.of(values)));
+
+    for (String value : values) {
+      decodeHeader(name, value);
+    }
   }
 
   public void setHeaders(String name, Collection<String> values) {
-    this.headers.put(name, new ArrayList<>(values));
-  }
+    this.headers.put(name.toLowerCase(), new ArrayList<>(values));
 
-  public void setHeaders(Map<String, List<String>> parameters) {
-    this.headers.clear();
-    this.headers.putAll(parameters);
+    for (String value : values) {
+      decodeHeader(name, value);
+    }
   }
 
   public void setParameter(String name, String value) {
@@ -388,7 +418,7 @@ public class HTTPRequest implements Buildable<HTTPRequest> {
   }
 
   public void setParameters(String name, String... values) {
-    setParameters(name, Arrays.asList(values));
+    setParameters(name, new ArrayList<>(List.of(values)));
   }
 
   public void setParameters(String name, Collection<String> values) {
@@ -398,5 +428,35 @@ public class HTTPRequest implements Buildable<HTTPRequest> {
     values.stream()
           .filter(Objects::nonNull)
           .forEach(list::add);
+  }
+
+  private void decodeHeader(String name, String value) {
+    if (name.equals(Headers.ContentType)) {
+      this.contentType = value;
+      this.multipart = contentType.toLowerCase().startsWith("multipart/");
+
+      if (multipart) {
+        int index = contentType.indexOf("boundary=");
+        this.multipartBoundary = contentType.substring(index);
+
+        // Strip quotes if needed
+        int length = multipartBoundary.length();
+        if (multipartBoundary.charAt(0) == '"' && multipartBoundary.charAt(length - 1) == '"') {
+          multipartBoundary = multipartBoundary.substring(1, length - 1);
+        }
+      }
+    } else if (name.equals(Headers.ContentLength)) {
+      if (value == null || value.isBlank()) {
+        contentLength = null;
+      } else {
+        try {
+          contentLength = Long.parseLong(value);
+        } catch (NumberFormatException e) {
+          contentLength = null;
+        }
+      }
+    } else if (name.equals(Headers.Cookie)) {
+      addCookies(Cookie.fromRequestHeader(value));
+    }
   }
 }

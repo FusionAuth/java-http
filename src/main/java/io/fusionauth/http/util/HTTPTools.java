@@ -17,10 +17,10 @@ package io.fusionauth.http.util;
 
 import java.nio.ByteBuffer;
 
-import io.fusionauth.http.HTTPResponse;
 import io.fusionauth.http.HTTPValues.ControlBytes;
 import io.fusionauth.http.HTTPValues.ProtocolBytes;
 import io.fusionauth.http.io.ByteBufferOutputStream;
+import io.fusionauth.http.server.HTTPResponse;
 
 public final class HTTPTools {
   /**

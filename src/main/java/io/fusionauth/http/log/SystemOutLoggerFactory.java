@@ -13,30 +13,20 @@
  * either express or implied. See the License for the specific
  * language governing permissions and limitations under the License.
  */
-package io.fusionauth.http.server;
+package io.fusionauth.http.log;
 
 /**
- * An exception that is thrown when an HTTP message fails to parse correctly due to an invalid character or similar issue.
+ * Simple implementation of the LoggerFactory that always returns the same instance of a {@link SystemOutLogger}.
  *
  * @author Brian Pontarelli
  */
-public class ParseException extends RuntimeException {
-  public ParseException() {
-  }
+public class SystemOutLoggerFactory implements LoggerFactory {
+  public static final SystemOutLoggerFactory FACTORY = new SystemOutLoggerFactory();
 
-  public ParseException(String message) {
-    super(message);
-  }
+  private static final SystemOutLogger logger = new SystemOutLogger();
 
-  public ParseException(String message, Throwable cause) {
-    super(message, cause);
-  }
-
-  public ParseException(Throwable cause) {
-    super(cause);
-  }
-
-  protected ParseException(String message, Throwable cause, boolean enableSuppression, boolean writableStackTrace) {
-    super(message, cause, enableSuppression, writableStackTrace);
+  @Override
+  public Logger getLogger(Class<?> klass) {
+    return logger;
   }
 }

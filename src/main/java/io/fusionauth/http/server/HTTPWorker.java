@@ -15,68 +15,43 @@
  */
 package io.fusionauth.http.server;
 
-import java.util.function.BiConsumer;
-
-import io.fusionauth.http.HTTPRequest;
-import io.fusionauth.http.HTTPResponse;
-import io.fusionauth.http.io.NonBlockingByteBufferOutputStream;
+import io.fusionauth.http.log.Logger;
+import io.fusionauth.http.log.LoggerFactory;
+import io.fusionauth.http.util.ThreadPool;
 
 /**
- * A worker that handles a single request/response from a client.
+ * An HTTP worker that is a delegate Runnable to an {@link HTTPHandler}. This provides the interface and handling for use with the
+ * {@link ThreadPool}.
  *
  * @author Brian Pontarelli
  */
 public class HTTPWorker implements Runnable {
-  private final BiConsumer<HTTPRequest, HTTPResponse> handler;
+  private final HTTPHandler handler;
+
+  private final Logger logger;
+
+  private final HTTPProcessor processor;
 
   private final HTTPRequest request;
 
-  private final HTTPRequestProcessor requestProcessor;
-
   private final HTTPResponse response;
 
-  private final HTTPResponseProcessor responseProcessor;
-
-  private long lastUsed = System.currentTimeMillis();
-
-  public HTTPWorker(BiConsumer<HTTPRequest, HTTPResponse> handler, int maxHeadLength, Notifier notifier) {
+  public HTTPWorker(HTTPHandler handler, LoggerFactory loggerFactory, HTTPProcessor processor, HTTPRequest request, HTTPResponse response) {
     this.handler = handler;
-
-    this.request = new HTTPRequest();
-    this.requestProcessor = new HTTPRequestProcessor(request);
-
-    NonBlockingByteBufferOutputStream outputStream = new NonBlockingByteBufferOutputStream(notifier);
-    this.response = new HTTPResponse(outputStream);
-    this.responseProcessor = new HTTPResponseProcessor(response, outputStream, maxHeadLength);
-  }
-
-  public long lastUsed() {
-    return lastUsed;
-  }
-
-  public void markUsed() {
-    lastUsed = System.currentTimeMillis();
-  }
-
-  public HTTPRequestProcessor requestProcessor() {
-    return requestProcessor;
-  }
-
-  public HTTPResponse response() {
-    return response;
-  }
-
-  public HTTPResponseProcessor responseProcessor() {
-    return responseProcessor;
+    this.logger = loggerFactory.getLogger(HTTPWorker.class);
+    this.processor = processor;
+    this.request = request;
+    this.response = response;
   }
 
   @Override
   public void run() {
-    handler.accept(request, response);
-
-    // Close the stream - for good measure in case the Handler didn't close it
-    if (!responseProcessor.outputStream().isClosed()) {
-      responseProcessor.outputStream().close();
+    try {
+      handler.handle(request, response);
+    } catch (Throwable t) {
+      // Log the error and signal a failure
+      logger.error("HTTP worker threw an exception while processing a request", t);
+      processor.failure(t);
     }
   }
 }
