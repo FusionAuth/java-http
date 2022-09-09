@@ -81,6 +81,48 @@ public class FullTest {
   }
 
   @Test
+  public void performance() throws Exception {
+    HTTPHandler handler = (req, res) -> {
+      res.setHeader("Content-Type", "text/plain");
+      res.setHeader("Content-Length", "16");
+      res.setStatus(200);
+
+      try {
+        OutputStream outputStream = res.getOutputStream();
+        outputStream.write(ExpectedResponse.getBytes());
+        outputStream.close();
+      } catch (IOException e) {
+        throw new RuntimeException(e);
+      }
+    };
+
+    try (HTTPServer server = new HTTPServer().withHandler(handler).withNumberOfWorkerThreads(1).withPort(4242)) {
+      server.start();
+
+      var client = HttpClient.newHttpClient();
+      URI uri = URI.create("http://localhost:4242/api/system/version");
+      long start = System.currentTimeMillis();
+      for (int i = 0; i < 100_000; i++) {
+        var response = client.send(
+            HttpRequest.newBuilder().uri(uri).GET().build(),
+            r -> BodySubscribers.ofString(StandardCharsets.UTF_8)
+        );
+
+        assertEquals(response.statusCode(), 200);
+        assertEquals(response.body(), ExpectedResponse);
+
+        if (i % 1_000 == 0) {
+          System.out.println(i);
+        }
+      }
+
+      long end = System.currentTimeMillis();
+      double average = (end - start) / 10_000D;
+      System.out.println("Average linear request time is [" + average + "]ms");
+    }
+  }
+
+  @Test
   public void simpleGet() throws Exception {
     HTTPHandler handler = (req, res) -> {
       res.setHeader("Content-Type", "text/plain");
@@ -101,19 +143,13 @@ public class FullTest {
 
       var client = HttpClient.newHttpClient();
       URI uri = URI.create("http://localhost:4242/api/system/version");
-      for (int i = 0; i < 1_000_000; i++) {
-        var response = client.send(
-            HttpRequest.newBuilder().uri(uri).GET().build(),
-            r -> BodySubscribers.ofString(StandardCharsets.UTF_8)
-        );
+      var response = client.send(
+          HttpRequest.newBuilder().uri(uri).GET().build(),
+          r -> BodySubscribers.ofString(StandardCharsets.UTF_8)
+      );
 
-        assertEquals(response.statusCode(), 200);
-        assertEquals(response.body(), ExpectedResponse);
-
-        if (i % 1_000 == 0) {
-          System.out.println(i);
-        }
-      }
+      assertEquals(response.statusCode(), 200);
+      assertEquals(response.body(), ExpectedResponse);
     }
   }
 
@@ -137,6 +173,7 @@ public class FullTest {
       res.setStatus(200);
 
       try {
+        System.out.println("Writing");
         OutputStream outputStream = res.getOutputStream();
         outputStream.write(ExpectedResponse.getBytes());
         outputStream.close();
@@ -161,6 +198,6 @@ public class FullTest {
   }
 
   static {
-//    SystemOutLoggerFactory.FACTORY.getLogger(FullTest.class).setLevel(Level.Debug);
+//    SystemOutLoggerFactory.FACTORY.getLogger(FullTest.class).setLevel(Level.Trace);
   }
 }

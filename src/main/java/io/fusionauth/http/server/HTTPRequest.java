@@ -306,45 +306,74 @@ public class HTTPRequest implements Buildable<HTTPRequest> {
   }
 
   public void setPath(String path) {
+    parameters.clear();
+
     // Parse the parameters
+    char[] chars = path.toCharArray();
     int questionMark = path.indexOf('?');
     if (questionMark > 0 && questionMark != path.length() - 1) {
-      char[] chars = path.toCharArray();
       int start = questionMark + 1;
+      boolean inName = true;
       String name = null;
       String value;
       for (int i = start; i < chars.length; i++) {
-        if (chars[i] == '=') {
+        if (chars[i] == '=' && inName) {
+          // Names can't start with an equal sign
+          if (i == start) {
+            start++;
+            continue;
+          }
+
+          inName = false;
+
           try {
-            name = URLDecoder.decode(path.substring(start, i), StandardCharsets.UTF_8);
+            name = URLDecoder.decode(new String(chars, start, i - start), StandardCharsets.UTF_8);
           } catch (Exception e) {
             name = null; // Malformed
           }
 
           start = i + 1;
-        } else if (chars[i] == '&') {
+        } else if (chars[i] == '&' && !inName) {
+          inName = true;
+
           if (name == null) {
             continue; // Malformed
           }
 
-          if (start >= i) {
+          if (start > i) {
             continue; // Malformed
           }
 
           try {
-            value = URLDecoder.decode(path.substring(start, i), StandardCharsets.UTF_8);
+            if (start < i) {
+              value = URLDecoder.decode(new String(chars, start, i - start), StandardCharsets.UTF_8);
+            } else {
+              value = "";
+            }
+
             addParameter(name, value);
           } catch (Exception e) {
-            name = null; // Malformed
+            // Ignore
           }
 
           start = i + 1;
+          name = null;
         }
+      }
+
+      if (name != null && !inName) {
+        if (start < chars.length) {
+          value = URLDecoder.decode(new String(chars, start, chars.length - start), StandardCharsets.UTF_8);
+        } else {
+          value = "";
+        }
+
+        addParameter(name, value);
       }
     }
 
     // Only save the path portion
-    this.path = questionMark > 0 ? path.substring(0, questionMark) : path;
+    this.path = questionMark > 0 ? new String(chars, 0, questionMark) : path;
   }
 
   public int getPort() {

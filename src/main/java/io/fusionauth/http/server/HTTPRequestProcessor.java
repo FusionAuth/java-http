@@ -69,6 +69,7 @@ public class HTTPRequestProcessor {
     bytesRead += currentBodyBuffer.position();
 
     if (bytesRead >= contentLength && currentBodyBuffer.position() > 0) {
+      System.out.println("Pushing last buffer");
       currentBodyBuffer.flip();
       inputStream.addByteBuffer(currentBodyBuffer);
       inputStream.signalDone();
@@ -76,6 +77,7 @@ public class HTTPRequestProcessor {
     }
 
     if (!currentBodyBuffer.hasRemaining()) {
+      System.out.println("Pushing not last buffer");
       currentBodyBuffer.flip();
       inputStream.addByteBuffer(currentBodyBuffer);
       bodyBuffer();
@@ -129,7 +131,7 @@ public class HTTPRequestProcessor {
           if (buffer.hasRemaining()) {
             currentBodyBuffer = ByteBuffer.allocate(buffer.remaining());
             currentBodyBuffer.put(buffer);
-            processBodyBytes();
+            state = processBodyBytes();
           }
 
           request.setInputStream(inputStream);
