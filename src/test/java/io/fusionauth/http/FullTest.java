@@ -51,7 +51,7 @@ public class FullTest {
   static {
     System.setProperty("sun.net.http.retryPost", "false");
     System.setProperty("jdk.httpclient.allowRestrictedHeaders", "connection");
-    SystemOutLoggerFactory.FACTORY.getLogger(FullTest.class).setLevel(Level.Debug);
+    SystemOutLoggerFactory.FACTORY.getLogger(FullTest.class).setLevel(Level.Info);
   }
 
   @Test
@@ -124,6 +124,7 @@ public class FullTest {
       assertEquals(req.getContentType(), "application/json");
       assertEquals((long) req.getContentLength(), RequestBody.length());
       res.setStatus(100);
+      res.setStatusMessage("Continue");
     };
 
     try (HTTPServer server = new HTTPServer().withExpectValidator(validator).withHandler(handler).withNumberOfWorkerThreads(1).withPort(4242)) {
@@ -138,6 +139,34 @@ public class FullTest {
 
       assertEquals(response.statusCode(), 200);
       assertEquals(response.body(), ExpectedResponse);
+    }
+  }
+
+  @Test
+  public void expectReject() throws Exception {
+    HTTPHandler handler = (req, res) -> {
+      fail("Should not have been called");
+    };
+
+    ExpectValidator validator = (req, res) -> {
+      System.out.println("Validating");
+      assertEquals(req.getContentType(), "application/json");
+      assertEquals((long) req.getContentLength(), RequestBody.length());
+      res.setStatus(417);
+    };
+
+    try (HTTPServer server = new HTTPServer().withExpectValidator(validator).withHandler(handler).withNumberOfWorkerThreads(1).withPort(4242)) {
+      server.start();
+
+      var client = HttpClient.newHttpClient();
+      URI uri = URI.create("http://localhost:4242/api/system/version");
+      var response = client.send(
+          HttpRequest.newBuilder().uri(uri).header("Content-Type", "application/json").expectContinue(true).POST(BodyPublishers.ofString(RequestBody)).build(),
+          r -> BodySubscribers.ofString(StandardCharsets.UTF_8)
+      );
+
+      assertEquals(response.statusCode(), 417);
+      assertEquals(response.body(), "");
     }
   }
 

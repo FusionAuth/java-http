@@ -193,7 +193,7 @@ public class HTTP11Processor implements HTTPProcessor {
       key.attach(processor);
       key.interestOps(SelectionKey.OP_READ);
       logger.trace("(WD)");
-    } else if (state != ResponseState.Close) {
+    } else if (state == ResponseState.Close) {
       client.close();
       key.cancel();
     }

@@ -32,9 +32,13 @@ public final class HTTPTools {
    */
   public static ByteBuffer buildExpectResponsePreamble(HTTPResponse response, int maxLength) {
     ByteBufferOutputStream bbos = new ByteBufferOutputStream(1024, maxLength);
-    response.setStatusMessage("Continue");
     writeStatusLine(response, bbos);
-    response.setStatusMessage(null);
+    if (response.getStatus() != 100) {
+      bbos.write("Content-Length: 0".getBytes());
+      bbos.write(ControlBytes.CRLF);
+      bbos.write("Connection: close".getBytes());
+      bbos.write(ControlBytes.CRLF);
+    }
     bbos.write(ControlBytes.CRLF);
     return bbos.toByteBuffer();
   }
