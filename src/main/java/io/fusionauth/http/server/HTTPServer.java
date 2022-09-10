@@ -25,11 +25,10 @@ import java.nio.channels.ClosedSelectorException;
 import java.nio.channels.SelectionKey;
 import java.nio.channels.Selector;
 import java.nio.channels.ServerSocketChannel;
+import java.nio.channels.SocketChannel;
 import java.time.Duration;
 import java.util.Iterator;
 import java.util.Objects;
-import java.util.Queue;
-import java.util.concurrent.ConcurrentLinkedQueue;
 
 import io.fusionauth.http.log.Logger;
 import io.fusionauth.http.log.LoggerFactory;
@@ -37,15 +36,15 @@ import io.fusionauth.http.log.SystemOutLoggerFactory;
 import io.fusionauth.http.util.ThreadPool;
 
 public class HTTPServer extends Thread implements Closeable, Notifier {
-  private final Queue<SelectionKey> clientKeys = new ConcurrentLinkedQueue<>();
-
   private InetAddress address;
 
   private ServerSocketChannel channel;
 
-  private ClientReaperThread clientReaper;
+  private Duration clientTimeoutDuration = Duration.ofSeconds(10);
 
   private HTTPHandler handler;
+
+  private Instrumenter instrumenter;
 
   private LoggerFactory loggerFactory = SystemOutLoggerFactory.FACTORY;
 
@@ -79,7 +78,6 @@ public class HTTPServer extends Thread implements Closeable, Notifier {
   @Override
   public void close() {
     logger.info("HTTP server shutdown requested.");
-    clientReaper.shutdown();
 
     try {
       selector.close();
@@ -115,10 +113,7 @@ public class HTTPServer extends Thread implements Closeable, Notifier {
           return;
         }
 
-        int numberOfKeys = selector.select();
-        if (numberOfKeys <= 0) {
-          continue;
-        }
+        selector.select(1_000L);
 
         var keys = selector.selectedKeys();
         Iterator<SelectionKey> iterator = keys.iterator();
@@ -130,22 +125,35 @@ public class HTTPServer extends Thread implements Closeable, Notifier {
             clientChannel.configureBlocking(false);
 
             HTTPProcessor processor = new HTTP11Processor(handler, maxHeadLength, this, loggerFactory, preambleBuffer, threadPool);
-            var clientKey = clientChannel.register(selector, SelectionKey.OP_READ, processor);
+            clientChannel.register(selector, SelectionKey.OP_READ, processor);
             logger.trace("(A)");
-            clientKeys.add(clientKey);
+
+            if (instrumenter != null) {
+              instrumenter.acceptedConnection();
+            }
           } else if (key.isReadable()) {
             logger.debug("Reading from client");
             HTTPProcessor processor = (HTTP11Processor) key.attachment();
-            processor.read(key);
+            long bytes = processor.read(key);
+
+            if (instrumenter != null) {
+              instrumenter.readFromClient(bytes);
+            }
           } else if (key.isWritable()) {
             logger.debug("Writing to client");
             HTTPProcessor processor = (HTTP11Processor) key.attachment();
-            processor.write(key);
+            long bytes = processor.write(key);
+
+            if (instrumenter != null) {
+              instrumenter.wroteToClient(bytes);
+            }
           }
 
           iterator.remove();
           key = null;
         }
+
+        cleanup();
       } catch (ClosedSelectorException cse) {
         // Shut down
         break;
@@ -173,13 +181,14 @@ public class HTTPServer extends Thread implements Closeable, Notifier {
       channel.configureBlocking(false);
       channel.bind(new InetSocketAddress(address, port));
       channel.register(selector, SelectionKey.OP_ACCEPT);
+
+      if (instrumenter != null) {
+        instrumenter.serverStarted();
+      }
     } catch (IOException e) {
       logger.error("Unable to start the HTTP server due to an error opening an NIO resource. See the stack trace of the cause for the specific error.", e);
       throw new IllegalStateException("Unable to start the HTTP server due to an error opening an NIO resource. See the stack trace of the cause for the specific error.", e);
     }
-
-    clientReaper = new ClientReaperThread(clientKeys);
-    clientReaper.start();
 
     // Start the thread pool for the workers
     threadPool = new ThreadPool(numberOfWorkerThreads, "HTTP Server Worker Thread", shutdownDuration);
@@ -200,6 +209,17 @@ public class HTTPServer extends Thread implements Closeable, Notifier {
   }
 
   /**
+   * Sets the duration that the server will allow client connections to remain open. This includes Keep-Alive as well as read timeout.
+   *
+   * @param duration The duration.
+   * @return This.
+   */
+  public HTTPServer withClientTimeoutDuration(Duration duration) {
+    this.clientTimeoutDuration = duration;
+    return this;
+  }
+
+  /**
    * Sets the handler that will process the requests.
    *
    * @param handler The handler that processes the requests.
@@ -207,6 +227,17 @@ public class HTTPServer extends Thread implements Closeable, Notifier {
    */
   public HTTPServer withHandler(HTTPHandler handler) {
     this.handler = handler;
+    return this;
+  }
+
+  /**
+   * Sets an instrumenter that the server will notify when events and conditions happen.
+   *
+   * @param instrumenter The instrumenter.
+   * @return This.
+   */
+  public HTTPServer withInstrumenter(Instrumenter instrumenter) {
+    this.instrumenter = instrumenter;
     return this;
   }
 
@@ -277,5 +308,28 @@ public class HTTPServer extends Thread implements Closeable, Notifier {
   public HTTPServer withShutdownDuration(Duration duration) {
     this.shutdownDuration = duration;
     return this;
+  }
+
+  private void cleanup() {
+    long now = System.currentTimeMillis();
+    selector.keys()
+            .stream()
+            .filter(key -> key.attachment() != null)
+            .filter(key -> ((HTTPProcessor) key.attachment()).lastUsed() < now - clientTimeoutDuration.toMillis())
+            .forEach(key -> {
+              var client = (SocketChannel) key.channel();
+              try {
+                logger.debug("Closing client connection [{}] due to inactivity", client.getRemoteAddress().toString());
+              } catch (IOException e) {
+                // Ignore because we are just debugging
+              }
+
+              try {
+                key.channel().close();
+                key.cancel();
+              } catch (Throwable t) {
+                logger.error("Error while closing client connection", t);
+              }
+            });
   }
 }

@@ -34,6 +34,7 @@ import java.util.Objects;
 import io.fusionauth.http.Buildable;
 import io.fusionauth.http.Cookie;
 import io.fusionauth.http.HTTPMethod;
+import io.fusionauth.http.HTTPValues.ContentTypes;
 import io.fusionauth.http.HTTPValues.Headers;
 
 /**
@@ -97,12 +98,14 @@ public class HTTPRequest implements Buildable<HTTPRequest> {
   }
 
   public void addHeader(String name, String value) {
-    headers.computeIfAbsent(name.toLowerCase(), key -> new ArrayList<>()).add(value);
+    name = name.toLowerCase();
+    headers.computeIfAbsent(name, key -> new ArrayList<>()).add(value);
     decodeHeader(name, value);
   }
 
   public void addHeaders(String name, String... values) {
-    headers.computeIfAbsent(name.toLowerCase(), key -> new ArrayList<>()).addAll(List.of(values));
+    name = name.toLowerCase();
+    headers.computeIfAbsent(name, key -> new ArrayList<>()).addAll(List.of(values));
 
     for (String value : values) {
       decodeHeader(name, value);
@@ -110,7 +113,8 @@ public class HTTPRequest implements Buildable<HTTPRequest> {
   }
 
   public void addHeaders(String name, Collection<String> values) {
-    headers.computeIfAbsent(name.toLowerCase(), key -> new ArrayList<>()).addAll(values);
+    name = name.toLowerCase();
+    headers.computeIfAbsent(name, key -> new ArrayList<>()).addAll(values);
 
     for (String value : values) {
       decodeHeader(name, value);
@@ -336,11 +340,7 @@ public class HTTPRequest implements Buildable<HTTPRequest> {
         } else if (chars[i] == '&' && !inName) {
           inName = true;
 
-          if (name == null) {
-            continue; // Malformed
-          }
-
-          if (start > i) {
+          if (name == null || start > i) {
             continue; // Malformed
           }
 
@@ -422,12 +422,14 @@ public class HTTPRequest implements Buildable<HTTPRequest> {
   }
 
   public void setHeader(String name, String value) {
-    this.headers.put(name.toLowerCase(), new ArrayList<>(List.of(value)));
+    name = name.toLowerCase();
+    this.headers.put(name, new ArrayList<>(List.of(value)));
     decodeHeader(name, value);
   }
 
   public void setHeaders(String name, String... values) {
-    this.headers.put(name.toLowerCase(), new ArrayList<>(List.of(values)));
+    name = name.toLowerCase();
+    this.headers.put(name, new ArrayList<>(List.of(values)));
 
     for (String value : values) {
       decodeHeader(name, value);
@@ -435,7 +437,8 @@ public class HTTPRequest implements Buildable<HTTPRequest> {
   }
 
   public void setHeaders(String name, Collection<String> values) {
-    this.headers.put(name.toLowerCase(), new ArrayList<>(values));
+    name = name.toLowerCase();
+    this.headers.put(name, new ArrayList<>(values));
 
     for (String value : values) {
       decodeHeader(name, value);
@@ -460,32 +463,36 @@ public class HTTPRequest implements Buildable<HTTPRequest> {
   }
 
   private void decodeHeader(String name, String value) {
-    if (name.equals(Headers.ContentType)) {
-      this.contentType = value;
-      this.multipart = contentType.toLowerCase().startsWith("multipart/");
+    switch (name) {
+      case Headers.ContentTypeLower:
+        this.contentType = value;
+        this.multipart = contentType.toLowerCase().startsWith("multipart/");
 
-      if (multipart) {
-        int index = contentType.indexOf("boundary=");
-        this.multipartBoundary = contentType.substring(index);
+        if (multipart) {
+          int index = contentType.indexOf(ContentTypes.Boundary);
+          this.multipartBoundary = contentType.substring(index + ContentTypes.Boundary.length());
 
-        // Strip quotes if needed
-        int length = multipartBoundary.length();
-        if (multipartBoundary.charAt(0) == '"' && multipartBoundary.charAt(length - 1) == '"') {
-          multipartBoundary = multipartBoundary.substring(1, length - 1);
+          // Strip quotes if needed
+          int length = multipartBoundary.length();
+          if (multipartBoundary.charAt(0) == '"' && multipartBoundary.charAt(length - 1) == '"') {
+            multipartBoundary = multipartBoundary.substring(1, length - 1);
+          }
         }
-      }
-    } else if (name.equals(Headers.ContentLength)) {
-      if (value == null || value.isBlank()) {
-        contentLength = null;
-      } else {
-        try {
-          contentLength = Long.parseLong(value);
-        } catch (NumberFormatException e) {
+        break;
+      case Headers.ContentLengthLower:
+        if (value == null || value.isBlank()) {
           contentLength = null;
+        } else {
+          try {
+            contentLength = Long.parseLong(value);
+          } catch (NumberFormatException e) {
+            contentLength = null;
+          }
         }
-      }
-    } else if (name.equals(Headers.Cookie)) {
-      addCookies(Cookie.fromRequestHeader(value));
+        break;
+      case Headers.CookieLower:
+        addCookies(Cookie.fromRequestHeader(value));
+        break;
     }
   }
 }

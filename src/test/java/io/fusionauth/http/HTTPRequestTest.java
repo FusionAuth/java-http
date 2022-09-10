@@ -21,6 +21,7 @@ import java.util.Map;
 import io.fusionauth.http.server.HTTPRequest;
 import org.testng.annotations.Test;
 import static org.testng.Assert.assertEquals;
+import static org.testng.Assert.assertTrue;
 
 /**
  * Tests the HTTPRequest.
@@ -28,6 +29,16 @@ import static org.testng.Assert.assertEquals;
  * @author Brian Pontarelli
  */
 public class HTTPRequestTest {
+  @Test
+  public void decodeHeaders() {
+    HTTPRequest request = new HTTPRequest();
+    request.addHeader("coNTent-LENGTH", "42");
+    request.addHeader("coNTent-type", "multipart/form-data; boundary=--foobarbaz");
+    assertTrue(request.isMultipart());
+    assertEquals(request.getMultipartBoundary(), "--foobarbaz");
+    assertEquals(request.getContentLength(), (Long) 42L);
+  }
+
   @Test
   public void queryString() {
     HTTPRequest request = new HTTPRequest();

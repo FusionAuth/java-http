@@ -6,11 +6,13 @@ The goal of this project is to build a full-featured HTTP server and client in p
 requirements and roadmap are as follows:
 
 * [ ] Basic HTTP 1.1 client
-* [ ] Basic HTTP 1.1 server
+* [x] Basic HTTP 1.1 server
 * [ ] Support Keep-Alive
 * [ ] Support Expect-Continue 100
 * [ ] Support chunked request and response
 * [ ] Support streaming entity bodies
+* [ ] Support form data
+* [ ] Support multipart form data
 * [ ] Support HTTP 2 in client
 * [ ] Support HTTP 2 in server
 

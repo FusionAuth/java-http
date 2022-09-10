@@ -33,18 +33,25 @@ public interface HTTPProcessor {
   void failure(Throwable t);
 
   /**
+   * @return The instant that this processor was last used.
+   */
+  long lastUsed();
+
+  /**
    * Handles a read operation.
    *
    * @param key The selected key for a client that has written bytes to the server.
+   * @return The number of bytes read.
    * @throws IOException If any I/O operations failed.
    */
-  void read(SelectionKey key) throws IOException;
+  long read(SelectionKey key) throws IOException;
 
   /**
    * Handles a write operation.
    *
    * @param key The selected key for a client that is attempting to read bytes from the server.
+   * @return The number of bytes written.
    * @throws IOException If any I/O operations failed.
    */
-  void write(SelectionKey key) throws IOException;
+  long write(SelectionKey key) throws IOException;
 }

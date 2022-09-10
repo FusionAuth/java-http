@@ -75,7 +75,7 @@ public class HTTP11Processor implements HTTPProcessor {
 
     NonBlockingByteBufferOutputStream outputStream = new NonBlockingByteBufferOutputStream(notifier);
     this.response = new HTTPResponse(outputStream);
-    this.responseProcessor = new HTTPResponseProcessor(response, outputStream, maxHeadLength, loggerFactory);
+    this.responseProcessor = new HTTPResponseProcessor(request, response, outputStream, maxHeadLength, loggerFactory);
   }
 
   @Override
@@ -92,7 +92,7 @@ public class HTTP11Processor implements HTTPProcessor {
     lastUsed = System.currentTimeMillis();
   }
 
-  public void read(SelectionKey key) throws IOException {
+  public long read(SelectionKey key) throws IOException {
     markUsed();
 
     RequestState state = requestProcessor.state();
@@ -106,13 +106,13 @@ public class HTTP11Processor implements HTTPProcessor {
     } else {
       logger.trace("(RD1)");
       key.interestOps(SelectionKey.OP_WRITE);
-      return;
+      return 0;
     }
 
     SocketChannel client = (SocketChannel) key.channel();
     long read = client.read(buffer);
     if (read <= 0) {
-      return;
+      return 0L;
     }
 
     if (state == RequestState.Preamble) {
@@ -135,9 +135,11 @@ public class HTTP11Processor implements HTTPProcessor {
       logger.trace("(RD2)");
       key.interestOps(SelectionKey.OP_WRITE);
     }
+
+    return read;
   }
 
-  public void write(SelectionKey key) throws IOException {
+  public long write(SelectionKey key) throws IOException {
     markUsed();
 
     SocketChannel client = (SocketChannel) key.channel();
@@ -146,15 +148,19 @@ public class HTTP11Processor implements HTTPProcessor {
       ByteBuffer buffer = responseProcessor.currentBuffer();
       if (buffer == null) {
         // Nothing to write
-        return;
+        return 0L;
       }
 
       int bytes = client.write(buffer);
       if (bytes > 0) {
         responseCommitted = true;
       }
+
       logger.debug("Wrote [{}] bytes to the client", bytes);
-    } else if (state == ResponseState.Failure) {
+      return bytes;
+    }
+
+    if (state == ResponseState.Failure) {
       // If we've written at least one byte back to the client, close the connection and bail. Otherwise, the failure was noted and the
       // Preamble will contain a 500 response. Therefore, we need to reset the processor, so it writes the preamble
       if (responseCommitted) {
@@ -172,5 +178,7 @@ public class HTTP11Processor implements HTTPProcessor {
       client.close();
       key.cancel();
     }
+
+    return 0L;
   }
 }

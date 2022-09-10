@@ -17,13 +17,18 @@ package io.fusionauth.http;
 
 import java.io.IOException;
 import java.io.OutputStream;
+import java.net.HttpURLConnection;
 import java.net.URI;
 import java.net.http.HttpClient;
 import java.net.http.HttpRequest;
 import java.net.http.HttpRequest.BodyPublishers;
 import java.net.http.HttpResponse.BodySubscribers;
 import java.nio.charset.StandardCharsets;
+import java.time.Duration;
 
+import io.fusionauth.http.HTTPValues.Connections;
+import io.fusionauth.http.HTTPValues.Headers;
+import io.fusionauth.http.server.CountingInstrumenter;
 import io.fusionauth.http.server.HTTPHandler;
 import io.fusionauth.http.server.HTTPServer;
 import org.testng.annotations.Test;
@@ -39,6 +44,48 @@ public class FullTest {
   public static final String ExpectedResponse = "{\"version\":\"42\"}";
 
   public static final String RequestBody = "{\"message\":\"Hello World\"";
+
+  static {
+    System.setProperty("sun.net.http.retryPost", "false");
+    System.setProperty("jdk.httpclient.allowRestrictedHeaders", "connection");
+//    SystemOutLoggerFactory.FACTORY.getLogger(FullTest.class).setLevel(Level.Trace);
+  }
+
+  @Test
+  public void clientTimeout() {
+    HTTPHandler handler = (req, res) -> {
+      System.out.println("Handling");
+      res.setStatus(200);
+      res.setContentLength(0L);
+      res.getOutputStream().close();
+    };
+
+    try (HTTPServer server = new HTTPServer().withHandler(handler).withClientTimeoutDuration(Duration.ofSeconds(1)).withNumberOfWorkerThreads(1).withPort(4242)) {
+      server.start();
+
+      URI uri = URI.create("http://localhost:4242/api/system/version");
+      try {
+        HttpURLConnection connection = (HttpURLConnection) uri.toURL().openConnection();
+        connection.setConnectTimeout(10_000);
+        connection.setReadTimeout(10_000);
+        connection.setDoInput(true);
+        connection.setDoOutput(true);
+        connection.setRequestMethod("POST");
+        connection.addRequestProperty("Content-Length", "42");
+        connection.connect();
+        var os = connection.getOutputStream();
+        os.write("start".getBytes());
+        os.flush();
+        sleep(3_500L);
+        os.write("more".getBytes());
+        connection.getResponseCode(); // Should fail on the read
+        fail("Should have timed out");
+      } catch (Exception e) {
+        // Expected
+        e.printStackTrace();
+      }
+    }
+  }
 
   @Test
   public void handlerFailureGet() throws Exception {
@@ -96,7 +143,8 @@ public class FullTest {
       }
     };
 
-    try (HTTPServer server = new HTTPServer().withHandler(handler).withNumberOfWorkerThreads(1).withPort(4242)) {
+    CountingInstrumenter instrumenter = new CountingInstrumenter();
+    try (HTTPServer server = new HTTPServer().withHandler(handler).withInstrumenter(instrumenter).withNumberOfWorkerThreads(1).withPort(4242)) {
       server.start();
 
       var client = HttpClient.newHttpClient();
@@ -120,6 +168,44 @@ public class FullTest {
       double average = (end - start) / 10_000D;
       System.out.println("Average linear request time is [" + average + "]ms");
     }
+
+    assertEquals(instrumenter.getConnections(), 1);
+  }
+
+  @Test
+  public void performanceNoKeepAlive() throws Exception {
+    HTTPHandler handler = (req, res) -> {
+      res.setHeader("Content-Type", "text/plain");
+      res.setHeader("Content-Length", "16");
+      res.setStatus(200);
+
+      try {
+        OutputStream outputStream = res.getOutputStream();
+        outputStream.write(ExpectedResponse.getBytes());
+        outputStream.close();
+      } catch (IOException e) {
+        throw new RuntimeException(e);
+      }
+    };
+
+    CountingInstrumenter instrumenter = new CountingInstrumenter();
+    try (HTTPServer server = new HTTPServer().withHandler(handler).withInstrumenter(instrumenter).withNumberOfWorkerThreads(1).withPort(4242)) {
+      server.start();
+
+      var client = HttpClient.newHttpClient();
+      URI uri = URI.create("http://localhost:4242/api/system/version");
+      for (int i = 0; i < 500; i++) {
+        var response = client.send(
+            HttpRequest.newBuilder().uri(uri).header(Headers.Connection, Connections.Close).GET().build(),
+            r -> BodySubscribers.ofString(StandardCharsets.UTF_8)
+        );
+
+        assertEquals(response.statusCode(), 200);
+        assertEquals(response.body(), ExpectedResponse);
+      }
+    }
+
+    assertEquals(instrumenter.getConnections(), 500);
   }
 
   @Test
@@ -197,7 +283,31 @@ public class FullTest {
     }
   }
 
-  static {
-//    SystemOutLoggerFactory.FACTORY.getLogger(FullTest.class).setLevel(Level.Trace);
+  @Test
+  public void statusOnly() throws Exception {
+    HTTPHandler handler = (req, res) -> {
+      res.setStatus(200);
+    };
+
+    try (HTTPServer server = new HTTPServer().withHandler(handler).withNumberOfWorkerThreads(1).withPort(4242)) {
+      server.start();
+
+      var client = HttpClient.newHttpClient();
+      URI uri = URI.create("http://localhost:4242/api/system/version");
+      var response = client.send(
+          HttpRequest.newBuilder().uri(uri).header("Content-Type", "application/json").POST(BodyPublishers.ofString(RequestBody)).build(),
+          r -> BodySubscribers.ofString(StandardCharsets.UTF_8)
+      );
+
+      assertEquals(response.statusCode(), 200);
+    }
+  }
+
+  private void sleep(long millis) {
+    try {
+      Thread.sleep(millis);
+    } catch (InterruptedException e) {
+      // Ignore
+    }
   }
 }

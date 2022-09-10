@@ -42,6 +42,8 @@ public final class HTTPValues {
 
     public static final String ApplicationXml = "application/xml";
 
+    public static final String Boundary = "boundary=";
+
     public static final String Form = "application/x-www-form-urlencoded";
 
     public static final String Octet = "application/octet-stream";
@@ -150,9 +152,15 @@ public final class HTTPValues {
 
     public static final String ContentLength = "Content-Length";
 
+    public static final String ContentLengthLower = "content-length";
+
     public static final String ContentType = "Content-Type";
 
+    public static final String ContentTypeLower = "content-type";
+
     public static final String Cookie = "Cookie";
+
+    public static final String CookieLower = "cookie";
 
     public static final String Date = "Date";
 

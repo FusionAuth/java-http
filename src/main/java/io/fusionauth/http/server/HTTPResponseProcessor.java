@@ -17,7 +17,8 @@ package io.fusionauth.http.server;
 
 import java.nio.ByteBuffer;
 
-import io.fusionauth.http.HTTPValues;
+import io.fusionauth.http.HTTPValues.Connections;
+import io.fusionauth.http.HTTPValues.Headers;
 import io.fusionauth.http.io.NonBlockingByteBufferOutputStream;
 import io.fusionauth.http.log.Logger;
 import io.fusionauth.http.log.LoggerFactory;
@@ -35,14 +36,17 @@ public class HTTPResponseProcessor {
 
   private final NonBlockingByteBufferOutputStream outputStream;
 
+  private final HTTPRequest request;
+
   private final HTTPResponse response;
 
   private ByteBuffer preambleBuffer;
 
   private volatile ResponseState state = ResponseState.Preamble;
 
-  public HTTPResponseProcessor(HTTPResponse response, NonBlockingByteBufferOutputStream outputStream, int maxHeadLength,
-                               LoggerFactory loggerFactory) {
+  public HTTPResponseProcessor(HTTPRequest request, HTTPResponse response, NonBlockingByteBufferOutputStream outputStream,
+                               int maxHeadLength, LoggerFactory loggerFactory) {
+    this.request = request;
     this.response = response;
     this.outputStream = outputStream;
     this.maxHeadLength = maxHeadLength;
@@ -55,7 +59,7 @@ public class HTTPResponseProcessor {
     }
 
     boolean closed = outputStream.isClosed();
-    ByteBuffer buffer = outputStream.writableBuffer();
+    ByteBuffer buffer = outputStream.readableBuffer();
     if (buffer == null && !closed) {
       logger.debug("Nothing to write from the worker thread");
       return null;
@@ -113,8 +117,21 @@ public class HTTPResponseProcessor {
   }
 
   private void fillInHeaders() {
-    if (!response.containsHeader(HTTPValues.Headers.Connection)) {
-      response.setHeader(HTTPValues.Headers.Connection, HTTPValues.Connections.KeepAlive);
+    // If the client wants the connection closed, force that in the response. This will force the code above to close the connection.
+    // Otherwise, if the client asked for Keep-Alive and the server agrees, keep it. If the request asked for Keep-Alive, and the server
+    // doesn't care, keep it. Otherwise, if the client and server both don't care, set to Keep-Alive.
+    String requestConnection = request.getHeader(Headers.Connection);
+    boolean requestKeepAlive = Connections.KeepAlive.equalsIgnoreCase(requestConnection);
+    String responseConnection = response.getHeader(Headers.Connection);
+    boolean responseKeepAlive = Connections.KeepAlive.equalsIgnoreCase(responseConnection);
+    if (Connections.Close.equalsIgnoreCase(requestConnection)) {
+      response.setHeader(Headers.Connection, Connections.Close);
+    } else if ((requestKeepAlive && responseKeepAlive) || (requestKeepAlive && responseConnection == null) || (requestConnection == null && responseConnection == null)) {
+      response.setHeader(Headers.Connection, Connections.KeepAlive);
+    }
+
+    if (outputStream.isEmpty()) {
+      response.setContentLength(0L);
     }
   }
 
