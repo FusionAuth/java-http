@@ -18,8 +18,12 @@ package io.fusionauth.http.server;
 import java.nio.ByteBuffer;
 
 import io.fusionauth.http.HTTPMethod;
+import io.fusionauth.http.HTTPValues.Headers;
+import io.fusionauth.http.HTTPValues.Status;
 import io.fusionauth.http.HTTPValues.TransferEncodings;
 import io.fusionauth.http.io.ReaderBlockingByteBufferInputStream;
+import io.fusionauth.http.log.Logger;
+import io.fusionauth.http.log.LoggerFactory;
 
 /**
  * A processor that handles incoming bytes that form the HTTP request.
@@ -28,6 +32,8 @@ import io.fusionauth.http.io.ReaderBlockingByteBufferInputStream;
  */
 public class HTTPRequestProcessor {
   private final StringBuilder builder = new StringBuilder();
+
+  private final Logger logger;
 
   private final HTTPRequest request;
 
@@ -45,8 +51,9 @@ public class HTTPRequestProcessor {
 
   private RequestState state = RequestState.Preamble;
 
-  public HTTPRequestProcessor(HTTPRequest request) {
+  public HTTPRequestProcessor(HTTPRequest request, LoggerFactory loggerFactory) {
     this.request = request;
+    this.logger = loggerFactory.getLogger(HTTPRequestProcessor.class);
   }
 
   public ByteBuffer bodyBuffer() {
@@ -69,7 +76,7 @@ public class HTTPRequestProcessor {
     bytesRead += currentBodyBuffer.position();
 
     if (bytesRead >= contentLength && currentBodyBuffer.position() > 0) {
-      System.out.println("Pushing last buffer");
+      logger.debug("Pushing last buffer");
       currentBodyBuffer.flip();
       inputStream.addByteBuffer(currentBodyBuffer);
       inputStream.signalDone();
@@ -77,7 +84,7 @@ public class HTTPRequestProcessor {
     }
 
     if (!currentBodyBuffer.hasRemaining()) {
-      System.out.println("Pushing not last buffer");
+      logger.debug("Pushing not last buffer");
       currentBodyBuffer.flip();
       inputStream.addByteBuffer(currentBodyBuffer);
       bodyBuffer();
@@ -112,6 +119,14 @@ public class HTTPRequestProcessor {
 
       preambleState = nextState;
       if (preambleState == RequestPreambleState.Complete) {
+        logger.debug("Preamble successfully parsed");
+
+        if (Status.ContinueRequest.equalsIgnoreCase(request.getHeader(Headers.Expect))) {
+          logger.debug("Expect request received");
+          state = RequestState.Expect;
+          return state;
+        }
+
         // Determine the next state
         Long contentLength = request.getContentLength();
         if (contentLength != null) {
@@ -120,6 +135,8 @@ public class HTTPRequestProcessor {
 
         boolean chunked = request.getTransferEncoding() != null && request.getTransferEncoding().equalsIgnoreCase(TransferEncodings.Chunked);
         if ((contentLength != null && contentLength > 0) || chunked) {
+          logger.debug("Client indicated it was sending an entity-body in the request");
+
           state = RequestState.Body;
 
           if (chunked) {
@@ -136,12 +153,23 @@ public class HTTPRequestProcessor {
 
           request.setInputStream(inputStream);
         } else {
+          logger.debug("Client indicated it was NOT sending an entity-body in the request");
           state = RequestState.Complete;
         }
       }
     }
 
     return state;
+  }
+
+  public void resetState(RequestState state) {
+    this.state = state;
+
+    // If we are resetting to the Body state, we need to set up a new InputStream
+    if (this.state == RequestState.Body) {
+      inputStream = new ReaderBlockingByteBufferInputStream();
+      request.setInputStream(inputStream);
+    }
   }
 
   public RequestState state() {
@@ -151,6 +179,7 @@ public class HTTPRequestProcessor {
   public enum RequestState {
     Preamble,
     Body,
+    Expect,
     Complete
   }
 }

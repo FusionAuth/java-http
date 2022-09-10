@@ -42,6 +42,8 @@ public class HTTPServer extends Thread implements Closeable, Notifier {
 
   private Duration clientTimeoutDuration = Duration.ofSeconds(10);
 
+  private ExpectValidator expectValidator;
+
   private HTTPHandler handler;
 
   private Instrumenter instrumenter;
@@ -124,7 +126,7 @@ public class HTTPServer extends Thread implements Closeable, Notifier {
             var clientChannel = channel.accept();
             clientChannel.configureBlocking(false);
 
-            HTTPProcessor processor = new HTTP11Processor(handler, maxHeadLength, this, loggerFactory, preambleBuffer, threadPool);
+            HTTPProcessor processor = new HTTP11Processor(expectValidator, handler, maxHeadLength, this, loggerFactory, preambleBuffer, threadPool);
             clientChannel.register(selector, SelectionKey.OP_READ, processor);
             logger.trace("(A)");
 
@@ -216,6 +218,17 @@ public class HTTPServer extends Thread implements Closeable, Notifier {
    */
   public HTTPServer withClientTimeoutDuration(Duration duration) {
     this.clientTimeoutDuration = duration;
+    return this;
+  }
+
+  /**
+   * Sets an ExpectValidator that is used if a client sends the server a {@code Expect: 100-continue} header.
+   *
+   * @param validator The validator.
+   * @return This.
+   */
+  public HTTPServer withExpectValidator(ExpectValidator validator) {
+    this.expectValidator = validator;
     return this;
   }
 

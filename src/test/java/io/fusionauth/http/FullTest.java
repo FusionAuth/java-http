@@ -28,7 +28,10 @@ import java.time.Duration;
 
 import io.fusionauth.http.HTTPValues.Connections;
 import io.fusionauth.http.HTTPValues.Headers;
+import io.fusionauth.http.log.Level;
+import io.fusionauth.http.log.SystemOutLoggerFactory;
 import io.fusionauth.http.server.CountingInstrumenter;
+import io.fusionauth.http.server.ExpectValidator;
 import io.fusionauth.http.server.HTTPHandler;
 import io.fusionauth.http.server.HTTPServer;
 import org.testng.annotations.Test;
@@ -48,7 +51,7 @@ public class FullTest {
   static {
     System.setProperty("sun.net.http.retryPost", "false");
     System.setProperty("jdk.httpclient.allowRestrictedHeaders", "connection");
-//    SystemOutLoggerFactory.FACTORY.getLogger(FullTest.class).setLevel(Level.Trace);
+    SystemOutLoggerFactory.FACTORY.getLogger(FullTest.class).setLevel(Level.Debug);
   }
 
   @Test
@@ -84,6 +87,57 @@ public class FullTest {
         // Expected
         e.printStackTrace();
       }
+    }
+  }
+
+  @Test
+  public void expect() throws Exception {
+    HTTPHandler handler = (req, res) -> {
+      System.out.println("Handling");
+      assertEquals(req.getHeader("Content-TYPE"), "application/json"); // Mixed case
+
+      try {
+        System.out.println("Reading");
+        byte[] body = req.getInputStream().readAllBytes();
+        assertEquals(new String(body), RequestBody);
+      } catch (IOException e) {
+        fail("Unable to parse body", e);
+      }
+
+      System.out.println("Done");
+      res.setHeader("Content-Type", "text/plain");
+      res.setHeader("Content-Length", "16");
+      res.setStatus(200);
+
+      try {
+        System.out.println("Writing");
+        OutputStream outputStream = res.getOutputStream();
+        outputStream.write(ExpectedResponse.getBytes());
+        outputStream.close();
+      } catch (IOException e) {
+        throw new RuntimeException(e);
+      }
+    };
+
+    ExpectValidator validator = (req, res) -> {
+      System.out.println("Validating");
+      assertEquals(req.getContentType(), "application/json");
+      assertEquals((long) req.getContentLength(), RequestBody.length());
+      res.setStatus(100);
+    };
+
+    try (HTTPServer server = new HTTPServer().withExpectValidator(validator).withHandler(handler).withNumberOfWorkerThreads(1).withPort(4242)) {
+      server.start();
+
+      var client = HttpClient.newHttpClient();
+      URI uri = URI.create("http://localhost:4242/api/system/version");
+      var response = client.send(
+          HttpRequest.newBuilder().uri(uri).header("Content-Type", "application/json").expectContinue(true).POST(BodyPublishers.ofString(RequestBody)).build(),
+          r -> BodySubscribers.ofString(StandardCharsets.UTF_8)
+      );
+
+      assertEquals(response.statusCode(), 200);
+      assertEquals(response.body(), ExpectedResponse);
     }
   }
 

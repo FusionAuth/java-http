@@ -34,6 +34,8 @@ import io.fusionauth.http.util.ThreadPool;
  */
 @SuppressWarnings("resource")
 public class HTTP11Processor implements HTTPProcessor {
+  private final ExpectValidator expectValidator;
+
   private final HTTPHandler handler;
 
   private final Logger logger;
@@ -60,8 +62,9 @@ public class HTTP11Processor implements HTTPProcessor {
 
   private boolean responseCommitted = false;
 
-  public HTTP11Processor(HTTPHandler handler, int maxHeadLength, Notifier notifier, LoggerFactory loggerFactory, ByteBuffer preambleBuffer,
-                         ThreadPool threadPool) {
+  public HTTP11Processor(ExpectValidator validator, HTTPHandler handler, int maxHeadLength, Notifier notifier, LoggerFactory loggerFactory,
+                         ByteBuffer preambleBuffer, ThreadPool threadPool) {
+    expectValidator = validator;
     this.handler = handler;
     this.logger = loggerFactory.getLogger(HTTP11Processor.class);
     this.loggerFactory = loggerFactory;
@@ -71,7 +74,7 @@ public class HTTP11Processor implements HTTPProcessor {
     this.threadPool = threadPool;
 
     this.request = new HTTPRequest();
-    this.requestProcessor = new HTTPRequestProcessor(request);
+    this.requestProcessor = new HTTPRequestProcessor(request, loggerFactory);
 
     NonBlockingByteBufferOutputStream outputStream = new NonBlockingByteBufferOutputStream(notifier);
     this.response = new HTTPResponse(outputStream);
@@ -123,7 +126,7 @@ public class HTTP11Processor implements HTTPProcessor {
       buffer.clear();
 
       // If the next state is not preamble, that means we are done processing that and ready to handle the request in a separate thread
-      if (state != RequestState.Preamble) {
+      if (state != RequestState.Preamble && state != RequestState.Expect) {
         logger.trace("(RW)");
         threadPool.submit(new HTTPWorker(handler, loggerFactory, this, request, response));
       }
@@ -131,7 +134,16 @@ public class HTTP11Processor implements HTTPProcessor {
       state = requestProcessor.processBodyBytes();
     }
 
-    if (state == RequestState.Complete) {
+    if (state == RequestState.Expect) {
+      if (expectValidator != null) {
+        expectValidator.validate(request, response);
+      } else {
+        response.setStatus(100);
+      }
+
+      responseProcessor.resetState(ResponseState.Expect);
+      key.interestOps(SelectionKey.OP_WRITE);
+    } else if (state == RequestState.Complete) {
       logger.trace("(RD2)");
       key.interestOps(SelectionKey.OP_WRITE);
     }
@@ -144,7 +156,7 @@ public class HTTP11Processor implements HTTPProcessor {
 
     SocketChannel client = (SocketChannel) key.channel();
     ResponseState state = responseProcessor.state();
-    if (state == ResponseState.Preamble || state == ResponseState.Body) {
+    if (state == ResponseState.Expect || state == ResponseState.Preamble || state == ResponseState.Body) {
       ByteBuffer buffer = responseProcessor.currentBuffer();
       if (buffer == null) {
         // Nothing to write
@@ -160,7 +172,14 @@ public class HTTP11Processor implements HTTPProcessor {
       return bytes;
     }
 
-    if (state == ResponseState.Failure) {
+    if (state == ResponseState.Continue) {
+      // Flip back to reading and back to the preamble state, so we write the real response headers. Then start the worker thread and flip the ops
+      requestProcessor.resetState(RequestState.Body);
+      responseProcessor.resetState(ResponseState.Preamble);
+      logger.trace("(RW)");
+      threadPool.submit(new HTTPWorker(handler, loggerFactory, this, request, response));
+      key.interestOps(SelectionKey.OP_READ);
+    } else if (state == ResponseState.Failure) {
       // If we've written at least one byte back to the client, close the connection and bail. Otherwise, the failure was noted and the
       // Preamble will contain a 500 response. Therefore, we need to reset the processor, so it writes the preamble
       if (responseCommitted) {
@@ -170,7 +189,7 @@ public class HTTP11Processor implements HTTPProcessor {
         responseProcessor.resetState(ResponseState.Preamble);
       }
     } else if (state == ResponseState.KeepAlive) {
-      HTTP11Processor processor = new HTTP11Processor(handler, maxHeadLength, notifier, loggerFactory, preambleBuffer, threadPool);
+      HTTP11Processor processor = new HTTP11Processor(expectValidator, handler, maxHeadLength, notifier, loggerFactory, preambleBuffer, threadPool);
       key.attach(processor);
       key.interestOps(SelectionKey.OP_READ);
       logger.trace("(WD)");

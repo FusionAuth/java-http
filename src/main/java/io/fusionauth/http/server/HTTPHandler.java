@@ -20,6 +20,7 @@ package io.fusionauth.http.server;
  *
  * @author Brian Pontarelli
  */
+@FunctionalInterface
 public interface HTTPHandler {
   /**
    * Handles the processing of a request and filling out the response. If this method returns normally, it is assumed that the HTTP response

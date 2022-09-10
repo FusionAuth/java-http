@@ -5,16 +5,27 @@
 The goal of this project is to build a full-featured HTTP server and client in plain Java without the use of any libraries. The general
 requirements and roadmap are as follows:
 
-* [ ] Basic HTTP 1.1 client
-* [x] Basic HTTP 1.1 server
-* [ ] Support Keep-Alive
+### Server tasks
+
+* [x] Basic HTTP 1.1
+* [x] Support Keep-Alive
 * [ ] Support Expect-Continue 100
 * [ ] Support chunked request and response
 * [ ] Support streaming entity bodies
 * [ ] Support form data
 * [ ] Support multipart form data
-* [ ] Support HTTP 2 in client
-* [ ] Support HTTP 2 in server
+* [ ] Support HTTP 2
+
+### Client tasks
+
+* [ ] Basic HTTP 1.1
+* [ ] Support Keep-Alive
+* [ ] Support HTTP 2
+* [ ] Support Expect-Continue 100
+* [ ] Support chunked request and response
+* [ ] Support streaming entity bodies
+* [ ] Support form data
+* [ ] Support multipart form data
 
 ## Examples Usages:
 

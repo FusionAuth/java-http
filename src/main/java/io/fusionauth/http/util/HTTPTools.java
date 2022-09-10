@@ -30,26 +30,33 @@ public final class HTTPTools {
    * @param maxLength The maximum length of the complete HTTP response head section.
    * @return The bytes of the response head section.
    */
-  @SuppressWarnings("resource")
+  public static ByteBuffer buildExpectResponsePreamble(HTTPResponse response, int maxLength) {
+    ByteBufferOutputStream bbos = new ByteBufferOutputStream(1024, maxLength);
+    response.setStatusMessage("Continue");
+    writeStatusLine(response, bbos);
+    response.setStatusMessage(null);
+    bbos.write(ControlBytes.CRLF);
+    return bbos.toByteBuffer();
+  }
+
+  /**
+   * Builds the HTTP response head section (status line, headers, etc).
+   *
+   * @param response  The response.
+   * @param maxLength The maximum length of the complete HTTP response head section.
+   * @return The bytes of the response head section.
+   */
   public static ByteBuffer buildResponsePreamble(HTTPResponse response, int maxLength) {
     ByteBufferOutputStream bbos = new ByteBufferOutputStream(1024, maxLength);
-    bbos.write(ProtocolBytes.HTTTP1_1);
-    bbos.write(' ');
-    bbos.write(Integer.toString(response.getStatus()).getBytes());
-    bbos.write(' ');
-    if (response.getStatusMessage() != null) {
-      bbos.write(response.getStatusMessage().getBytes());
-    }
-    bbos.write(ControlBytes.CRLF);
-    response.getHeadersMap().forEach((key, values) -> {
-      values.forEach(value -> {
-        bbos.write(key.getBytes());
-        bbos.write(':');
-        bbos.write(' ');
-        bbos.write(value.getBytes());
-        bbos.write(ControlBytes.CRLF);
-      });
-    });
+    writeStatusLine(response, bbos);
+    response.getHeadersMap().forEach((key, values) ->
+        values.forEach(value -> {
+          bbos.write(key.getBytes());
+          bbos.write(':');
+          bbos.write(' ');
+          bbos.write(value.getBytes());
+          bbos.write(ControlBytes.CRLF);
+        }));
     bbos.write(ControlBytes.CRLF);
     return bbos.toByteBuffer();
   }
@@ -114,5 +121,22 @@ public final class HTTPTools {
 
   public static boolean isValueCharacter(byte ch) {
     return isURICharacter(ch) || ch == ' ' || ch == '\t' || ch == '\n';
+  }
+
+  /**
+   * Writes out the status line to the given OutputStream.
+   *
+   * @param response The response to pull the status information from.
+   * @param out      The OutputStream.
+   */
+  private static void writeStatusLine(HTTPResponse response, ByteBufferOutputStream out) {
+    out.write(ProtocolBytes.HTTTP1_1);
+    out.write(' ');
+    out.write(Integer.toString(response.getStatus()).getBytes());
+    out.write(' ');
+    if (response.getStatusMessage() != null) {
+      out.write(response.getStatusMessage().getBytes());
+    }
+    out.write(ControlBytes.CRLF);
   }
 }

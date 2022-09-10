@@ -54,43 +54,74 @@ public class HTTPResponseProcessor {
   }
 
   public synchronized ByteBuffer currentBuffer() {
-    if (state != ResponseState.Preamble && state != ResponseState.Body) {
-      return null;
-    }
-
-    boolean closed = outputStream.isClosed();
     ByteBuffer buffer = outputStream.readableBuffer();
-    if (buffer == null && !closed) {
-      logger.debug("Nothing to write from the worker thread");
-      return null;
-    }
+    boolean closed = outputStream.isClosed();
 
-    if (preambleBuffer == null) {
-      logger.debug("The worker thread has bytes to write or has closed the stream, but the preamble hasn't been sent yet. Generating preamble");
-      fillInHeaders();
-      preambleBuffer = HTTPTools.buildResponsePreamble(response, maxHeadLength);
-      logger.debug("Preamble is [{}] bytes long", preambleBuffer.remaining());
-      if (logger.isDebuggable()) {
-        logger.debug("Preamble is [\n{}\n]", new String(preambleBuffer.array(), 0, preambleBuffer.remaining()));
+    if (state == ResponseState.Preamble || state == ResponseState.Expect) {
+      // We can't write the preamble under normal conditions if the worker thread is still working. Expect handling is different and the
+      // client is waiting for a pre-canned response
+      if (state != ResponseState.Expect && buffer == null && !closed) {
+        return null;
+      }
+
+      // Construct the preamble if needed and return it if there is any bytes left
+      if (preambleBuffer == null) {
+        logger.debug("The worker thread has bytes to write or has closed the stream, but the preamble hasn't been sent yet. Generating preamble");
+        if (state == ResponseState.Preamble) {
+          fillInHeaders();
+          preambleBuffer = HTTPTools.buildResponsePreamble(response, maxHeadLength);
+        } else if (state == ResponseState.Expect) {
+          preambleBuffer = HTTPTools.buildExpectResponsePreamble(response, maxHeadLength);
+        }
+
+        logger.debug("Preamble is [{}] bytes long", preambleBuffer.remaining());
+        if (logger.isDebuggable()) {
+          logger.debug("Preamble is [\n{}\n]", new String(preambleBuffer.array(), 0, preambleBuffer.remaining()));
+        }
+      }
+
+      if (preambleBuffer.hasRemaining()) {
+        logger.debug("Still writing preamble");
+        logger.trace("(WP)");
+        return preambleBuffer;
+      }
+
+      // Reset the buffer in case we need to write another preamble (i.e. for expect)
+      preambleBuffer = null;
+
+      // If expect and preamble done, figure out stage to be Continue or Close
+      if (state == ResponseState.Expect) {
+        logger.debug("Expect response written");
+        if (response.getStatus() == 100) {
+          logger.debug("Continuing");
+          state = ResponseState.Continue;
+        } else {
+          logger.debug("Closing");
+          state = ResponseState.Close;
+        }
+      } else {
+        // If not expect, next stage is Body
+        state = ResponseState.Body;
+      }
+    } else if (state == ResponseState.Body) {
+      if (buffer != null) {
+        logger.debug("Writing back bytes");
+        logger.trace("(WB)");
+        return buffer;
+      }
+
+      if (closed) {
+        // No more bytes and the stream is closed, figure out if we should Keep-Alive or Close
+        state = response.isKeepAlive() ? ResponseState.KeepAlive : ResponseState.Close;
+        logger.debug("No more bytes from worker thread. Changing state to [{}]", state);
+        logger.trace("(WL)");
+      } else {
+        // Just some debugging
+        logger.debug("Nothing to write from the worker thread but the OutputStream isn't closed");
       }
     }
 
-    if (preambleBuffer.hasRemaining()) {
-      logger.debug("Still writing preamble");
-      logger.trace("(WP)");
-      return preambleBuffer;
-    }
-
-    if (buffer == null) {
-      state = response.isKeepAlive() ? ResponseState.KeepAlive : ResponseState.Close;
-      logger.debug("No more bytes from worker thread. Changing state to [{}]", state);
-      logger.trace("(WL)");
-      return null;
-    }
-
-    logger.debug("Writing back bytes");
-    logger.trace("(WB)");
-    return buffer;
+    return null;
   }
 
   public synchronized void failure() {
@@ -140,6 +171,8 @@ public class HTTPResponseProcessor {
     Body,
     KeepAlive,
     Close,
+    Expect,
+    Continue,
     Failure
   }
 }
