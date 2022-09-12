@@ -126,7 +126,7 @@ public class HTTPServer extends Thread implements Closeable, Notifier {
             var clientChannel = channel.accept();
             clientChannel.configureBlocking(false);
 
-            HTTPProcessor processor = new HTTP11Processor(expectValidator, handler, maxHeadLength, this, loggerFactory, preambleBuffer, threadPool);
+            HTTPProcessor processor = new HTTP11Processor(expectValidator, handler, instrumenter, maxHeadLength, this, loggerFactory, preambleBuffer, threadPool);
             clientChannel.register(selector, SelectionKey.OP_READ, processor);
             logger.trace("(A)");
 

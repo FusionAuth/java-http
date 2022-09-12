@@ -9,9 +9,12 @@ requirements and roadmap are as follows:
 
 * [x] Basic HTTP 1.1
 * [x] Support Keep-Alive
-* [ ] Support Expect-Continue 100
-* [ ] Support chunked request and response
-* [ ] Support streaming entity bodies
+* [x] Support Expect-Continue 100
+* [x] Support chunked request
+* [ ] Support chunked response
+* [ ] Support trailers
+* [ ] Support compression
+* [ ] Support streaming entity bodies (via chunking likely)
 * [ ] Support form data
 * [ ] Support multipart form data
 * [ ] Support HTTP 2

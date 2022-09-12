@@ -13,40 +13,33 @@
  * either express or implied. See the License for the specific
  * language governing permissions and limitations under the License.
  */
-package io.fusionauth.http.server;
+package io.fusionauth.http.body;
+
+import java.nio.ByteBuffer;
+import java.util.function.Consumer;
 
 /**
- * A generic interface that allows the HTTP Server to be instrumented.
+ * A body parser that handles request/response body processing based on either Content-Length or chunked data.
  *
  * @author Brian Pontarelli
  */
-public interface Instrumenter {
+public interface BodyProcessor {
   /**
-   * Called when a new client connection is accepted.
+   * @return The current buffer that the selector should use for reading.
    */
-  void acceptedConnection();
+  ByteBuffer currentBuffer();
 
   /**
-   * Called when a client sends in chunked request data.
+   * @return True if the body processing is complete.
    */
-  void chunkedRequest();
+  boolean isComplete();
 
   /**
-   * Called when bytes are read from a client.
+   * Called after bytes are read into the current buffer in order to process the bytes read.
    *
-   * @param bytes The number of bytes read.
+   * @param consumer A consumer of finished ByteBuffers.
    */
-  void readFromClient(long bytes);
+  void processBuffer(Consumer<ByteBuffer> consumer);
 
-  /**
-   * Called when the server is started.
-   */
-  void serverStarted();
-
-  /**
-   * Called when bytes are written to a client.
-   *
-   * @param bytes The number of bytes written.
-   */
-  void wroteToClient(long bytes);
+  long totalBytesProcessed();
 }

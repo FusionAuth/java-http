@@ -15,7 +15,9 @@
  */
 package io.fusionauth.http;
 
+import java.io.ByteArrayInputStream;
 import java.io.IOException;
+import java.io.InputStream;
 import java.io.OutputStream;
 import java.net.HttpURLConnection;
 import java.net.URI;
@@ -25,6 +27,8 @@ import java.net.http.HttpRequest.BodyPublishers;
 import java.net.http.HttpResponse.BodySubscribers;
 import java.nio.charset.StandardCharsets;
 import java.time.Duration;
+import java.util.concurrent.atomic.AtomicBoolean;
+import java.util.function.Supplier;
 
 import io.fusionauth.http.HTTPValues.Connections;
 import io.fusionauth.http.HTTPValues.Headers;
@@ -36,6 +40,7 @@ import io.fusionauth.http.server.HTTPHandler;
 import io.fusionauth.http.server.HTTPServer;
 import org.testng.annotations.Test;
 import static org.testng.Assert.assertEquals;
+import static org.testng.Assert.assertTrue;
 import static org.testng.Assert.fail;
 
 /**
@@ -52,6 +57,49 @@ public class FullTest {
     System.setProperty("sun.net.http.retryPost", "false");
     System.setProperty("jdk.httpclient.allowRestrictedHeaders", "connection");
     SystemOutLoggerFactory.FACTORY.getLogger(FullTest.class).setLevel(Level.Info);
+  }
+
+  @Test
+  public void chunkedRequest() throws Exception {
+    HTTPHandler handler = (req, res) -> {
+      assertTrue(req.isChunked());
+
+      try {
+        byte[] body = req.getInputStream().readAllBytes();
+        assertEquals(new String(body), RequestBody);
+      } catch (IOException e) {
+        fail("Unable to parse body", e);
+      }
+
+      res.setHeader("Content-Type", "text/plain");
+      res.setHeader("Content-Length", "16");
+      res.setStatus(200);
+
+      try {
+        OutputStream outputStream = res.getOutputStream();
+        outputStream.write(ExpectedResponse.getBytes());
+        outputStream.close();
+      } catch (IOException e) {
+        throw new RuntimeException(e);
+      }
+    };
+
+    CountingInstrumenter instrumenter = new CountingInstrumenter();
+    try (HTTPServer server = new HTTPServer().withHandler(handler).withInstrumenter(instrumenter).withNumberOfWorkerThreads(1).withPort(4242)) {
+      server.start();
+
+      var client = HttpClient.newHttpClient();
+      URI uri = URI.create("http://localhost:4242/api/system/version");
+      Supplier<InputStream> supplier = () -> new ByteArrayInputStream(RequestBody.getBytes());
+      var response = client.send(
+          HttpRequest.newBuilder().uri(uri).header("Content-Type", "application/json").POST(BodyPublishers.ofInputStream(supplier)).build(),
+          r -> BodySubscribers.ofString(StandardCharsets.UTF_8)
+      );
+
+      assertEquals(response.statusCode(), 200);
+      assertEquals(response.body(), ExpectedResponse);
+      assertEquals(instrumenter.getChunkedRequests(), 1);
+    }
   }
 
   @Test
@@ -119,8 +167,10 @@ public class FullTest {
       }
     };
 
+    AtomicBoolean validated = new AtomicBoolean(false);
     ExpectValidator validator = (req, res) -> {
       System.out.println("Validating");
+      validated.set(true);
       assertEquals(req.getContentType(), "application/json");
       assertEquals((long) req.getContentLength(), RequestBody.length());
       res.setStatus(100);
@@ -139,6 +189,7 @@ public class FullTest {
 
       assertEquals(response.statusCode(), 200);
       assertEquals(response.body(), ExpectedResponse);
+      assertTrue(validated.get());
     }
   }
 

@@ -36,6 +36,7 @@ import io.fusionauth.http.Cookie;
 import io.fusionauth.http.HTTPMethod;
 import io.fusionauth.http.HTTPValues.ContentTypes;
 import io.fusionauth.http.HTTPValues.Headers;
+import io.fusionauth.http.HTTPValues.TransferEncodings;
 
 /**
  * An HTTP request that is received by the HTTP server. This contains all the relevant information from the request including any file
@@ -404,6 +405,10 @@ public class HTTPRequest implements Buildable<HTTPRequest> {
 
   public String getTransferEncoding() {
     return getHeader(Headers.TransferEncoding);
+  }
+
+  public boolean isChunked() {
+    return getTransferEncoding() != null && getTransferEncoding().equalsIgnoreCase(TransferEncodings.Chunked);
   }
 
   public boolean isMultipart() {

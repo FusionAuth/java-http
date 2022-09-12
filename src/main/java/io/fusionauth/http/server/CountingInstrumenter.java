@@ -25,6 +25,8 @@ public class CountingInstrumenter implements Instrumenter {
 
   private long bytesWritten;
 
+  private long chunkedRequests;
+
   private int connections;
 
   private int startedCount;
@@ -34,12 +36,21 @@ public class CountingInstrumenter implements Instrumenter {
     connections++;
   }
 
+  @Override
+  public void chunkedRequest() {
+    chunkedRequests++;
+  }
+
   public long getBytesRead() {
     return bytesRead;
   }
 
   public long getBytesWritten() {
     return bytesWritten;
+  }
+
+  public long getChunkedRequests() {
+    return chunkedRequests;
   }
 
   public int getConnections() {

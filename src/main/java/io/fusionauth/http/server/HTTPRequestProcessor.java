@@ -20,7 +20,9 @@ import java.nio.ByteBuffer;
 import io.fusionauth.http.HTTPMethod;
 import io.fusionauth.http.HTTPValues.Headers;
 import io.fusionauth.http.HTTPValues.Status;
-import io.fusionauth.http.HTTPValues.TransferEncodings;
+import io.fusionauth.http.body.BodyProcessor;
+import io.fusionauth.http.body.ChunkedBodyProcessor;
+import io.fusionauth.http.body.ContentLengthBodyProcessor;
 import io.fusionauth.http.io.ReaderBlockingByteBufferInputStream;
 import io.fusionauth.http.log.Logger;
 import io.fusionauth.http.log.LoggerFactory;
@@ -37,11 +39,7 @@ public class HTTPRequestProcessor {
 
   private final HTTPRequest request;
 
-  private long bytesRead;
-
-  private long contentLength;
-
-  private ByteBuffer currentBodyBuffer;
+  private BodyProcessor bodyProcessor;
 
   private String headerName;
 
@@ -57,37 +55,15 @@ public class HTTPRequestProcessor {
   }
 
   public ByteBuffer bodyBuffer() {
-    // If there is still space left, return the current buffer
-    if (currentBodyBuffer != null && currentBodyBuffer.hasRemaining()) {
-      return currentBodyBuffer;
-    }
-
-    // There isn't any space left, so let's feed the current buffer to the InputStream
-    if (currentBodyBuffer != null) {
-      inputStream.addByteBuffer(currentBodyBuffer);
-    }
-
-    // Create a new buffer and return it. This will also be hit if currentBodyBuffer is null
-    currentBodyBuffer = ByteBuffer.allocate(1024);
-    return currentBodyBuffer;
+    return bodyProcessor.currentBuffer();
   }
 
   public RequestState processBodyBytes() {
-    bytesRead += currentBodyBuffer.position();
+    bodyProcessor.processBuffer(inputStream);
 
-    if (bytesRead >= contentLength && currentBodyBuffer.position() > 0) {
-      logger.debug("Pushing last buffer");
-      currentBodyBuffer.flip();
-      inputStream.addByteBuffer(currentBodyBuffer);
+    if (bodyProcessor.isComplete()) {
       inputStream.signalDone();
       return RequestState.Complete;
-    }
-
-    if (!currentBodyBuffer.hasRemaining()) {
-      logger.debug("Pushing not last buffer");
-      currentBodyBuffer.flip();
-      inputStream.addByteBuffer(currentBodyBuffer);
-      bodyBuffer();
     }
 
     return RequestState.Body;
@@ -121,33 +97,21 @@ public class HTTPRequestProcessor {
       if (preambleState == RequestPreambleState.Complete) {
         logger.debug("Preamble successfully parsed");
 
-        if (Status.ContinueRequest.equalsIgnoreCase(request.getHeader(Headers.Expect))) {
-          logger.debug("Expect request received");
-          state = RequestState.Expect;
-          return state;
-        }
-
-        // Determine the next state
+        // Determine if there is a body and if we should handle it. Even if we are in an expect request, the body will be coming, so we need
+        // to prepare for it here
         Long contentLength = request.getContentLength();
-        if (contentLength != null) {
-          this.contentLength = contentLength;
-        }
-
-        boolean chunked = request.getTransferEncoding() != null && request.getTransferEncoding().equalsIgnoreCase(TransferEncodings.Chunked);
-        if ((contentLength != null && contentLength > 0) || chunked) {
+        if ((contentLength != null && contentLength > 0) || request.isChunked()) {
           logger.debug("Client indicated it was sending an entity-body in the request");
 
           state = RequestState.Body;
 
-          if (chunked) {
-            throw new IllegalStateException("Chunking not supported yet");
-          }
+          int size = Math.max(buffer.remaining(), 1024);
+          bodyProcessor = (contentLength != null) ? new ContentLengthBodyProcessor(size, contentLength) : new ChunkedBodyProcessor(size);
 
           // Create the input stream and add any body data that is left over in the buffer
           inputStream = new ReaderBlockingByteBufferInputStream();
           if (buffer.hasRemaining()) {
-            currentBodyBuffer = ByteBuffer.allocate(buffer.remaining());
-            currentBodyBuffer.put(buffer);
+            bodyProcessor.currentBuffer().put(buffer);
             state = processBodyBytes();
           }
 
@@ -155,6 +119,13 @@ public class HTTPRequestProcessor {
         } else {
           logger.debug("Client indicated it was NOT sending an entity-body in the request");
           state = RequestState.Complete;
+        }
+
+        // If we are expecting, set the state and bail
+        if (Status.ContinueRequest.equalsIgnoreCase(request.getHeader(Headers.Expect))) {
+          logger.debug("Expect request received");
+          state = RequestState.Expect;
+          return state;
         }
       }
     }
@@ -164,12 +135,6 @@ public class HTTPRequestProcessor {
 
   public void resetState(RequestState state) {
     this.state = state;
-
-    // If we are resetting to the Body state, we need to set up a new InputStream
-    if (this.state == RequestState.Body) {
-      inputStream = new ReaderBlockingByteBufferInputStream();
-      request.setInputStream(inputStream);
-    }
   }
 
   public RequestState state() {

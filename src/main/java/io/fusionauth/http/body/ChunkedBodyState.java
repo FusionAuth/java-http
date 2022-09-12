@@ -35,17 +35,25 @@ public enum ChunkedBodyState {
   ChunkSizeCR {
     public ChunkedBodyState next(byte ch, long length, long bytesRead) {
       if (ch == '\n') {
-        return Chunk;
+        return ChunkSizeLF;
       }
 
       throw new ParseException();
     }
   },
 
+  ChunkSizeLF {
+    public ChunkedBodyState next(byte ch, long length, long bytesRead) {
+      return Chunk;
+    }
+  },
+
   Chunk {
     @Override
     public ChunkedBodyState next(byte ch, long length, long bytesRead) {
-      if (bytesRead == length && ch == '\r') {
+      if (bytesRead < length) {
+        return Chunk;
+      } else if (bytesRead == length && ch == '\r') {
         return ChunkCR;
       }
 
@@ -57,7 +65,20 @@ public enum ChunkedBodyState {
     @Override
     public ChunkedBodyState next(byte ch, long length, long bytesRead) {
       if (ch == '\n') {
-        return length == 0 ? Complete : ChunkSize;
+        return length == 0 ? Complete : ChunkLF;
+      }
+
+      throw new ParseException();
+    }
+  },
+
+  ChunkLF {
+    @Override
+    public ChunkedBodyState next(byte ch, long length, long bytesRead) {
+      if (length == 0) {
+        return Complete;
+      } else if (HTTPTools.isHexadecimalCharacter(ch)) {
+        return ChunkSize;
       }
 
       throw new ParseException();

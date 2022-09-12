@@ -38,6 +38,8 @@ public class HTTP11Processor implements HTTPProcessor {
 
   private final HTTPHandler handler;
 
+  private final Instrumenter instrumenter;
+
   private final Logger logger;
 
   private final LoggerFactory loggerFactory;
@@ -62,10 +64,11 @@ public class HTTP11Processor implements HTTPProcessor {
 
   private boolean responseCommitted = false;
 
-  public HTTP11Processor(ExpectValidator validator, HTTPHandler handler, int maxHeadLength, Notifier notifier, LoggerFactory loggerFactory,
-                         ByteBuffer preambleBuffer, ThreadPool threadPool) {
+  public HTTP11Processor(ExpectValidator validator, HTTPHandler handler, Instrumenter instrumenter, int maxHeadLength, Notifier notifier,
+                         LoggerFactory loggerFactory, ByteBuffer preambleBuffer, ThreadPool threadPool) {
     expectValidator = validator;
     this.handler = handler;
+    this.instrumenter = instrumenter;
     this.logger = loggerFactory.getLogger(HTTP11Processor.class);
     this.loggerFactory = loggerFactory;
     this.maxHeadLength = maxHeadLength;
@@ -127,6 +130,10 @@ public class HTTP11Processor implements HTTPProcessor {
 
       // If the next state is not preamble, that means we are done processing that and ready to handle the request in a separate thread
       if (state != RequestState.Preamble && state != RequestState.Expect) {
+        if (request.isChunked()) {
+          instrumenter.chunkedRequest();
+        }
+        
         logger.trace("(RW)");
         threadPool.submit(new HTTPWorker(handler, loggerFactory, this, request, response));
       }
@@ -189,7 +196,7 @@ public class HTTP11Processor implements HTTPProcessor {
         responseProcessor.resetState(ResponseState.Preamble);
       }
     } else if (state == ResponseState.KeepAlive) {
-      HTTP11Processor processor = new HTTP11Processor(expectValidator, handler, maxHeadLength, notifier, loggerFactory, preambleBuffer, threadPool);
+      HTTP11Processor processor = new HTTP11Processor(expectValidator, handler, instrumenter, maxHeadLength, notifier, loggerFactory, preambleBuffer, threadPool);
       key.attach(processor);
       key.interestOps(SelectionKey.OP_READ);
       logger.trace("(WD)");

@@ -19,6 +19,7 @@ import java.io.InputStream;
 import java.nio.ByteBuffer;
 import java.util.concurrent.BlockingQueue;
 import java.util.concurrent.LinkedBlockingQueue;
+import java.util.function.Consumer;
 
 /**
  * This InputStream uses ByteBuffers read by the Server processor and piped into this class. Those ByteBuffers are then fed to the reader of
@@ -28,7 +29,7 @@ import java.util.concurrent.LinkedBlockingQueue;
  *
  * @author Brian Pontarelli
  */
-public class ReaderBlockingByteBufferInputStream extends InputStream {
+public class ReaderBlockingByteBufferInputStream extends InputStream implements Consumer<ByteBuffer> {
   private static final ByteBuffer Last = ByteBuffer.allocate(0);
 
   // Shared between writer and reader threads and the reader blocks
@@ -37,7 +38,8 @@ public class ReaderBlockingByteBufferInputStream extends InputStream {
   // Only used by the reader thread
   private ByteBuffer currentBuffer;
 
-  public void addByteBuffer(ByteBuffer buffer) {
+  @Override
+  public void accept(ByteBuffer buffer) {
     if (!buffers.offer(buffer)) {
       throw new IllegalStateException("The LinkedBlockingQueue is borked. It should never reject an offer() operation.");
     }
@@ -68,7 +70,7 @@ public class ReaderBlockingByteBufferInputStream extends InputStream {
   }
 
   public void signalDone() {
-    addByteBuffer(Last);
+    accept(Last);
   }
 
   private void poll() {
