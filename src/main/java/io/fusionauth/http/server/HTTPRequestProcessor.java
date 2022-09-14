@@ -35,6 +35,8 @@ import io.fusionauth.http.log.LoggerFactory;
 public class HTTPRequestProcessor {
   private final StringBuilder builder = new StringBuilder();
 
+  private final Instrumenter instrumenter;
+
   private final Logger logger;
 
   private final HTTPRequest request;
@@ -49,8 +51,9 @@ public class HTTPRequestProcessor {
 
   private RequestState state = RequestState.Preamble;
 
-  public HTTPRequestProcessor(HTTPRequest request, LoggerFactory loggerFactory) {
+  public HTTPRequestProcessor(HTTPRequest request, Instrumenter instrumenter, LoggerFactory loggerFactory) {
     this.request = request;
+    this.instrumenter = instrumenter;
     this.logger = loggerFactory.getLogger(HTTPRequestProcessor.class);
   }
 
@@ -106,7 +109,12 @@ public class HTTPRequestProcessor {
           state = RequestState.Body;
 
           int size = Math.max(buffer.remaining(), 1024);
-          bodyProcessor = (contentLength != null) ? new ContentLengthBodyProcessor(size, contentLength) : new ChunkedBodyProcessor(size);
+          if (contentLength != null) {
+            bodyProcessor = new ContentLengthBodyProcessor(size, contentLength);
+          } else {
+            bodyProcessor = new ChunkedBodyProcessor(size);
+            instrumenter.chunkedRequest();
+          }
 
           // Create the input stream and add any body data that is left over in the buffer
           inputStream = new ReaderBlockingByteBufferInputStream();

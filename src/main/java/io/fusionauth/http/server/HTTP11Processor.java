@@ -77,11 +77,11 @@ public class HTTP11Processor implements HTTPProcessor {
     this.threadPool = threadPool;
 
     this.request = new HTTPRequest();
-    this.requestProcessor = new HTTPRequestProcessor(request, loggerFactory);
+    this.requestProcessor = new HTTPRequestProcessor(request, instrumenter, loggerFactory);
 
     NonBlockingByteBufferOutputStream outputStream = new NonBlockingByteBufferOutputStream(notifier);
-    this.response = new HTTPResponse(outputStream);
-    this.responseProcessor = new HTTPResponseProcessor(request, response, outputStream, maxHeadLength, loggerFactory);
+    this.response = new HTTPResponse(outputStream, request);
+    this.responseProcessor = new HTTPResponseProcessor(request, response, instrumenter, outputStream, maxHeadLength, loggerFactory);
   }
 
   @Override
@@ -130,10 +130,6 @@ public class HTTP11Processor implements HTTPProcessor {
 
       // If the next state is not preamble, that means we are done processing that and ready to handle the request in a separate thread
       if (state != RequestState.Preamble && state != RequestState.Expect) {
-        if (request.isChunked()) {
-          instrumenter.chunkedRequest();
-        }
-
         logger.trace("(RW)");
         threadPool.submit(new HTTPWorker(handler, loggerFactory, this, request, response));
       }

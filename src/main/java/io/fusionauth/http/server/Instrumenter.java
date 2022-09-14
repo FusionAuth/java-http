@@ -32,6 +32,11 @@ public interface Instrumenter {
   void chunkedRequest();
 
   /**
+   * Called when a client sends in chunked request data.
+   */
+  void chunkedResponse();
+
+  /**
    * Called when bytes are read from a client.
    *
    * @param bytes The number of bytes read.

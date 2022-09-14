@@ -35,6 +35,18 @@ public final class HTTPValues {
   }
 
   /**
+   * Content encodings
+   */
+  public static final class ContentEncodings {
+    public static final String Deflate = "deflate";
+
+    public static final String Gzip = "gzip";
+
+    private ContentEncodings() {
+    }
+  }
+
+  /**
    * Content types.
    */
   public static final class ContentTypes {
@@ -103,6 +115,8 @@ public final class HTTPValues {
    * Header names.
    */
   public static final class Headers {
+    public static final String AcceptEncoding = "Accept-Encoding";
+
     /**
      * The Access-Control-Allow-Credentials header indicates whether the response to request can be exposed when the omit credentials flag
      * is unset. When part of the response to a preflight request it indicates that the actual request can include user credentials.
@@ -151,6 +165,8 @@ public final class HTTPValues {
     public static final String CacheControl = "Cache-Control";
 
     public static final String Connection = "Connection";
+
+    public static final String ContentEncoding = "Content-Encoding";
 
     public static final String ContentLength = "Content-Length";
 

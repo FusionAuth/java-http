@@ -18,6 +18,7 @@ package io.fusionauth.http;
 import java.util.List;
 import java.util.Map;
 
+import io.fusionauth.http.HTTPValues.Headers;
 import io.fusionauth.http.server.HTTPRequest;
 import org.testng.annotations.Test;
 import static org.testng.Assert.assertEquals;
@@ -29,6 +30,13 @@ import static org.testng.Assert.assertTrue;
  * @author Brian Pontarelli
  */
 public class HTTPRequestTest {
+  @Test
+  public void acceptEncoding() {
+    HTTPRequest request = new HTTPRequest();
+    request.addHeader(Headers.AcceptEncoding, "foo, bar  , baz");
+    assertEquals(request.getAcceptEncoding(), List.of("foo", "bar", "baz"));
+  }
+
   @Test
   public void decodeHeaders() {
     HTTPRequest request = new HTTPRequest();

@@ -15,6 +15,7 @@
  */
 package io.fusionauth.http.server;
 
+import java.io.IOException;
 import java.io.OutputStream;
 import java.io.OutputStreamWriter;
 import java.io.Writer;
@@ -27,11 +28,15 @@ import java.util.HashMap;
 import java.util.List;
 import java.util.Map;
 import java.util.stream.Collectors;
+import java.util.zip.DeflaterOutputStream;
+import java.util.zip.GZIPOutputStream;
 
 import io.fusionauth.http.Cookie;
 import io.fusionauth.http.HTTPValues.Connections;
+import io.fusionauth.http.HTTPValues.ContentEncodings;
 import io.fusionauth.http.HTTPValues.Headers;
 import io.fusionauth.http.HTTPValues.Status;
+import io.fusionauth.http.io.NonBlockingByteBufferOutputStream;
 
 /**
  * An HTTP response that the server sends back to a client. The handler that processes the HTTP request can fill out this object and the
@@ -44,16 +49,24 @@ public class HTTPResponse {
 
   private final Map<String, List<String>> headers = new HashMap<>();
 
-  private final OutputStream outputStream;
+  private final NonBlockingByteBufferOutputStream originalOutputStream;
+
+  private final HTTPRequest request;
+
+  private boolean compress;
 
   private Throwable exception;
+
+  private OutputStream outputStream;
 
   private int status = 200;
 
   private String statusMessage;
 
-  public HTTPResponse(OutputStream outputStream) {
+  public HTTPResponse(NonBlockingByteBufferOutputStream outputStream, HTTPRequest request) {
     this.outputStream = outputStream;
+    this.originalOutputStream = outputStream;
+    this.request = request;
   }
 
   public void addCookie(Cookie cookie) {
@@ -172,6 +185,40 @@ public class HTTPResponse {
   public Writer getWriter() {
     Charset charset = getCharset();
     return new OutputStreamWriter(getOutputStream(), charset);
+  }
+
+  public boolean isCompress() {
+    return compress;
+  }
+
+  public void setCompress(boolean compress) {
+    if (outputStream instanceof NonBlockingByteBufferOutputStream nbbbos) {
+      if (!nbbbos.isEmpty()) {
+        throw new IllegalStateException("The HTTPResponse can't be set for compression because bytes have already been written to it");
+      }
+    }
+
+    if (compress) {
+      for (String encoding : request.getAcceptEncoding()) {
+        if (encoding.equalsIgnoreCase(ContentEncodings.Gzip)) {
+          try {
+            outputStream = new GZIPOutputStream(originalOutputStream);
+            setHeader(Headers.ContentEncoding, ContentEncodings.Gzip);
+            this.compress = true;
+            break;
+          } catch (IOException e) {
+            throw new RuntimeException(e);
+          }
+        } else if (encoding.equalsIgnoreCase(ContentEncodings.Deflate)) {
+          outputStream = new DeflaterOutputStream(originalOutputStream);
+          setHeader(Headers.ContentEncoding, ContentEncodings.Deflate);
+          this.compress = true;
+          break;
+        }
+      }
+    } else {
+      outputStream = originalOutputStream;
+    }
   }
 
   /**

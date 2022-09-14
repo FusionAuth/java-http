@@ -34,6 +34,8 @@ import io.fusionauth.http.util.HTTPTools;
  * @author Brian Pontarelli
  */
 public class HTTPResponseProcessor {
+  private final Instrumenter instrumenter;
+
   private final Logger logger;
 
   private final int maxHeadLength;
@@ -50,10 +52,11 @@ public class HTTPResponseProcessor {
 
   private volatile ResponseState state = ResponseState.Preamble;
 
-  public HTTPResponseProcessor(HTTPRequest request, HTTPResponse response, NonBlockingByteBufferOutputStream outputStream,
-                               int maxHeadLength, LoggerFactory loggerFactory) {
+  public HTTPResponseProcessor(HTTPRequest request, HTTPResponse response, Instrumenter instrumenter,
+                               NonBlockingByteBufferOutputStream outputStream, int maxHeadLength, LoggerFactory loggerFactory) {
     this.request = request;
     this.response = response;
+    this.instrumenter = instrumenter;
     this.outputStream = outputStream;
     this.maxHeadLength = maxHeadLength;
     this.logger = loggerFactory.getLogger(HTTPRequestProcessor.class);
@@ -84,8 +87,14 @@ public class HTTPResponseProcessor {
 
         // Figure out the body processor
         Long contentLength = response.getContentLength();
-        if ((contentLength != null && contentLength > 0) || !outputStream.isEmpty()) {
-          bodyProcessor = contentLength != null ? new ContentLengthBodyProcessor(outputStream) : new ChunkedBodyProcessor(outputStream);
+        if (contentLength != null && contentLength > 0) {
+          bodyProcessor = new ContentLengthBodyProcessor(outputStream);
+        } else if (!outputStream.isEmpty()) {
+          bodyProcessor = new ChunkedBodyProcessor(outputStream);
+
+          if (instrumenter != null) {
+            instrumenter.chunkedResponse();
+          }
         }
       }
 

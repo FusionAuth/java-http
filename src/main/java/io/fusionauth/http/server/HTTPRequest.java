@@ -56,6 +56,8 @@ public class HTTPRequest implements Buildable<HTTPRequest> {
 
   private final Map<String, List<String>> parameters = new HashMap<>(0);
 
+  private List<String> acceptEncoding;
+
   private Long contentLength;
 
   private String contentType;
@@ -152,6 +154,28 @@ public class HTTPRequest implements Buildable<HTTPRequest> {
 
   public void deleteCookie(String name) {
     cookies.remove(name);
+  }
+
+  public List<String> getAcceptEncoding() {
+    if (acceptEncoding == null) {
+      acceptEncoding = new ArrayList<>();
+
+      String header = getHeader(Headers.AcceptEncoding);
+      if (header == null || header.isBlank()) {
+        return acceptEncoding;
+      }
+
+      String[] values = header.split("\\s*,\\s*");
+      for (String value : values) {
+        if (value.isBlank()) {
+          continue;
+        }
+
+        acceptEncoding.add(value.trim());
+      }
+    }
+
+    return acceptEncoding;
   }
 
   public String getBaseURL() {

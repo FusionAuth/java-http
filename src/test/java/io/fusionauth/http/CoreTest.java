@@ -15,9 +15,7 @@
  */
 package io.fusionauth.http;
 
-import java.io.ByteArrayInputStream;
 import java.io.IOException;
-import java.io.InputStream;
 import java.io.OutputStream;
 import java.net.HttpURLConnection;
 import java.net.URI;
@@ -26,24 +24,17 @@ import java.net.http.HttpRequest;
 import java.net.http.HttpRequest.BodyPublishers;
 import java.net.http.HttpResponse.BodySubscribers;
 import java.nio.charset.StandardCharsets;
-import java.nio.file.Files;
-import java.nio.file.Path;
-import java.nio.file.Paths;
 import java.time.Duration;
-import java.util.concurrent.atomic.AtomicBoolean;
-import java.util.function.Supplier;
 
 import io.fusionauth.http.HTTPValues.Connections;
 import io.fusionauth.http.HTTPValues.Headers;
 import io.fusionauth.http.log.Level;
 import io.fusionauth.http.log.SystemOutLoggerFactory;
 import io.fusionauth.http.server.CountingInstrumenter;
-import io.fusionauth.http.server.ExpectValidator;
 import io.fusionauth.http.server.HTTPHandler;
 import io.fusionauth.http.server.HTTPServer;
 import org.testng.annotations.Test;
 import static org.testng.Assert.assertEquals;
-import static org.testng.Assert.assertTrue;
 import static org.testng.Assert.fail;
 
 /**
@@ -51,7 +42,7 @@ import static org.testng.Assert.fail;
  *
  * @author Brian Pontarelli
  */
-public class FullTest {
+public class CoreTest {
   public static final String ExpectedResponse = "{\"version\":\"42\"}";
 
   public static final String RequestBody = "{\"message\":\"Hello World\"";
@@ -59,113 +50,7 @@ public class FullTest {
   static {
     System.setProperty("sun.net.http.retryPost", "false");
     System.setProperty("jdk.httpclient.allowRestrictedHeaders", "connection");
-    SystemOutLoggerFactory.FACTORY.getLogger(FullTest.class).setLevel(Level.Info);
-  }
-
-  @Test
-  public void chunkedRequest() throws Exception {
-    HTTPHandler handler = (req, res) -> {
-      assertTrue(req.isChunked());
-
-      try {
-        byte[] body = req.getInputStream().readAllBytes();
-        assertEquals(new String(body), RequestBody);
-      } catch (IOException e) {
-        fail("Unable to parse body", e);
-      }
-
-      res.setHeader("Content-Type", "text/plain");
-      res.setHeader("Content-Length", "16");
-      res.setStatus(200);
-
-      try {
-        OutputStream outputStream = res.getOutputStream();
-        outputStream.write(ExpectedResponse.getBytes());
-        outputStream.close();
-      } catch (IOException e) {
-        throw new RuntimeException(e);
-      }
-    };
-
-    CountingInstrumenter instrumenter = new CountingInstrumenter();
-    try (HTTPServer server = new HTTPServer().withHandler(handler).withInstrumenter(instrumenter).withNumberOfWorkerThreads(1).withPort(4242)) {
-      server.start();
-
-      var client = HttpClient.newHttpClient();
-      URI uri = URI.create("http://localhost:4242/api/system/version");
-      Supplier<InputStream> supplier = () -> new ByteArrayInputStream(RequestBody.getBytes());
-      var response = client.send(
-          HttpRequest.newBuilder().uri(uri).header("Content-Type", "application/json").POST(BodyPublishers.ofInputStream(supplier)).build(),
-          r -> BodySubscribers.ofString(StandardCharsets.UTF_8)
-      );
-
-      assertEquals(response.statusCode(), 200);
-      assertEquals(response.body(), ExpectedResponse);
-      assertEquals(instrumenter.getChunkedRequests(), 1);
-    }
-  }
-
-  @Test
-  public void chunkedResponse() throws Exception {
-    HTTPHandler handler = (req, res) -> {
-      res.setHeader("Content-Type", "text/plain");
-      res.setStatus(200);
-
-      try {
-        OutputStream outputStream = res.getOutputStream();
-        outputStream.write(ExpectedResponse.getBytes());
-        outputStream.close();
-      } catch (IOException e) {
-        throw new RuntimeException(e);
-      }
-    };
-
-    CountingInstrumenter instrumenter = new CountingInstrumenter();
-    try (HTTPServer server = new HTTPServer().withHandler(handler).withInstrumenter(instrumenter).withNumberOfWorkerThreads(1).withPort(4242)) {
-      server.start();
-
-      var client = HttpClient.newHttpClient();
-      URI uri = URI.create("http://localhost:4242/api/system/version");
-      var response = client.send(
-          HttpRequest.newBuilder().uri(uri).header("Content-Type", "application/json").GET().build(),
-          r -> BodySubscribers.ofString(StandardCharsets.UTF_8)
-      );
-
-      assertEquals(response.statusCode(), 200);
-      assertEquals(response.body(), ExpectedResponse);
-    }
-  }
-
-  @Test
-  public void chunkedResponseStreamingFile() throws Exception {
-    Path file = Paths.get("src/test/java/io/fusionauth/http/FullTest.java");
-    HTTPHandler handler = (req, res) -> {
-      res.setHeader("Content-Type", "text/plain");
-      res.setStatus(200);
-
-      try (InputStream is = Files.newInputStream(file)) {
-        OutputStream outputStream = res.getOutputStream();
-        is.transferTo(outputStream);
-        outputStream.close();
-      } catch (IOException e) {
-        throw new RuntimeException(e);
-      }
-    };
-
-    CountingInstrumenter instrumenter = new CountingInstrumenter();
-    try (HTTPServer server = new HTTPServer().withHandler(handler).withInstrumenter(instrumenter).withNumberOfWorkerThreads(1).withPort(4242)) {
-      server.start();
-
-      var client = HttpClient.newHttpClient();
-      URI uri = URI.create("http://localhost:4242/api/system/version");
-      var response = client.send(
-          HttpRequest.newBuilder().uri(uri).header("Content-Type", "application/json").GET().build(),
-          r -> BodySubscribers.ofString(StandardCharsets.UTF_8)
-      );
-
-      assertEquals(response.statusCode(), 200);
-      assertEquals(response.body(), Files.readString(file));
-    }
+    SystemOutLoggerFactory.FACTORY.getLogger(CoreTest.class).setLevel(Level.Info);
   }
 
   @Test
@@ -201,89 +86,6 @@ public class FullTest {
         // Expected
         e.printStackTrace();
       }
-    }
-  }
-
-  @Test
-  public void expect() throws Exception {
-    HTTPHandler handler = (req, res) -> {
-      System.out.println("Handling");
-      assertEquals(req.getHeader("Content-TYPE"), "application/json"); // Mixed case
-
-      try {
-        System.out.println("Reading");
-        byte[] body = req.getInputStream().readAllBytes();
-        assertEquals(new String(body), RequestBody);
-      } catch (IOException e) {
-        fail("Unable to parse body", e);
-      }
-
-      System.out.println("Done");
-      res.setHeader("Content-Type", "text/plain");
-      res.setHeader("Content-Length", "16");
-      res.setStatus(200);
-
-      try {
-        System.out.println("Writing");
-        OutputStream outputStream = res.getOutputStream();
-        outputStream.write(ExpectedResponse.getBytes());
-        outputStream.close();
-      } catch (IOException e) {
-        throw new RuntimeException(e);
-      }
-    };
-
-    AtomicBoolean validated = new AtomicBoolean(false);
-    ExpectValidator validator = (req, res) -> {
-      System.out.println("Validating");
-      validated.set(true);
-      assertEquals(req.getContentType(), "application/json");
-      assertEquals((long) req.getContentLength(), RequestBody.length());
-      res.setStatus(100);
-      res.setStatusMessage("Continue");
-    };
-
-    try (HTTPServer server = new HTTPServer().withExpectValidator(validator).withHandler(handler).withNumberOfWorkerThreads(1).withPort(4242)) {
-      server.start();
-
-      var client = HttpClient.newHttpClient();
-      URI uri = URI.create("http://localhost:4242/api/system/version");
-      var response = client.send(
-          HttpRequest.newBuilder().uri(uri).header("Content-Type", "application/json").expectContinue(true).POST(BodyPublishers.ofString(RequestBody)).build(),
-          r -> BodySubscribers.ofString(StandardCharsets.UTF_8)
-      );
-
-      assertEquals(response.statusCode(), 200);
-      assertEquals(response.body(), ExpectedResponse);
-      assertTrue(validated.get());
-    }
-  }
-
-  @Test
-  public void expectReject() throws Exception {
-    HTTPHandler handler = (req, res) -> {
-      fail("Should not have been called");
-    };
-
-    ExpectValidator validator = (req, res) -> {
-      System.out.println("Validating");
-      assertEquals(req.getContentType(), "application/json");
-      assertEquals((long) req.getContentLength(), RequestBody.length());
-      res.setStatus(417);
-    };
-
-    try (HTTPServer server = new HTTPServer().withExpectValidator(validator).withHandler(handler).withNumberOfWorkerThreads(1).withPort(4242)) {
-      server.start();
-
-      var client = HttpClient.newHttpClient();
-      URI uri = URI.create("http://localhost:4242/api/system/version");
-      var response = client.send(
-          HttpRequest.newBuilder().uri(uri).header("Content-Type", "application/json").expectContinue(true).POST(BodyPublishers.ofString(RequestBody)).build(),
-          r -> BodySubscribers.ofString(StandardCharsets.UTF_8)
-      );
-
-      assertEquals(response.statusCode(), 417);
-      assertEquals(response.body(), "");
     }
   }
 
@@ -332,50 +134,6 @@ public class FullTest {
     HTTPHandler handler = (req, res) -> {
       res.setHeader("Content-Type", "text/plain");
       res.setHeader("Content-Length", "16");
-      res.setStatus(200);
-
-      try {
-        OutputStream outputStream = res.getOutputStream();
-        outputStream.write(ExpectedResponse.getBytes());
-        outputStream.close();
-      } catch (IOException e) {
-        throw new RuntimeException(e);
-      }
-    };
-
-    CountingInstrumenter instrumenter = new CountingInstrumenter();
-    try (HTTPServer server = new HTTPServer().withHandler(handler).withInstrumenter(instrumenter).withNumberOfWorkerThreads(1).withPort(4242)) {
-      server.start();
-
-      var client = HttpClient.newHttpClient();
-      URI uri = URI.create("http://localhost:4242/api/system/version");
-      long start = System.currentTimeMillis();
-      for (int i = 0; i < 100_000; i++) {
-        var response = client.send(
-            HttpRequest.newBuilder().uri(uri).GET().build(),
-            r -> BodySubscribers.ofString(StandardCharsets.UTF_8)
-        );
-
-        assertEquals(response.statusCode(), 200);
-        assertEquals(response.body(), ExpectedResponse);
-
-        if (i % 1_000 == 0) {
-          System.out.println(i);
-        }
-      }
-
-      long end = System.currentTimeMillis();
-      double average = (end - start) / 10_000D;
-      System.out.println("Average linear request time is [" + average + "]ms");
-    }
-
-    assertEquals(instrumenter.getConnections(), 1);
-  }
-
-  @Test
-  public void performanceChunked() throws Exception {
-    HTTPHandler handler = (req, res) -> {
-      res.setHeader("Content-Type", "text/plain");
       res.setStatus(200);
 
       try {
