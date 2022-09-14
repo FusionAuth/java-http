@@ -13,13 +13,13 @@
  * either express or implied. See the License for the specific
  * language governing permissions and limitations under the License.
  */
-package io.fusionauth.http.body;
+package io.fusionauth.http.body.request;
 
 import java.nio.ByteBuffer;
 import java.util.function.Consumer;
 
 /**
- * A body parser that handles request/response body processing based on either Content-Length or chunked data.
+ * A body parser that handles request body processing based on either Content-Length or chunked data.
  *
  * @author Brian Pontarelli
  */

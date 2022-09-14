@@ -133,7 +133,7 @@ public class HTTP11Processor implements HTTPProcessor {
         if (request.isChunked()) {
           instrumenter.chunkedRequest();
         }
-        
+
         logger.trace("(RW)");
         threadPool.submit(new HTTPWorker(handler, loggerFactory, this, request, response));
       }
@@ -164,13 +164,13 @@ public class HTTP11Processor implements HTTPProcessor {
     SocketChannel client = (SocketChannel) key.channel();
     ResponseState state = responseProcessor.state();
     if (state == ResponseState.Expect || state == ResponseState.Preamble || state == ResponseState.Body) {
-      ByteBuffer buffer = responseProcessor.currentBuffer();
+      ByteBuffer[] buffer = responseProcessor.currentBuffer();
       if (buffer == null) {
         // Nothing to write
         return 0L;
       }
 
-      int bytes = client.write(buffer);
+      long bytes = client.write(buffer);
       if (bytes > 0) {
         responseCommitted = true;
       }

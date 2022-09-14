@@ -13,7 +13,7 @@
  * either express or implied. See the License for the specific
  * language governing permissions and limitations under the License.
  */
-package io.fusionauth.http.body;
+package io.fusionauth.http.body.request;
 
 import io.fusionauth.http.server.ParseException;
 import io.fusionauth.http.util.HTTPTools;

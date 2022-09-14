@@ -19,6 +19,10 @@ import java.nio.ByteBuffer;
 
 import io.fusionauth.http.HTTPValues.Connections;
 import io.fusionauth.http.HTTPValues.Headers;
+import io.fusionauth.http.HTTPValues.TransferEncodings;
+import io.fusionauth.http.body.response.BodyProcessor;
+import io.fusionauth.http.body.response.ChunkedBodyProcessor;
+import io.fusionauth.http.body.response.ContentLengthBodyProcessor;
 import io.fusionauth.http.io.NonBlockingByteBufferOutputStream;
 import io.fusionauth.http.log.Logger;
 import io.fusionauth.http.log.LoggerFactory;
@@ -40,7 +44,9 @@ public class HTTPResponseProcessor {
 
   private final HTTPResponse response;
 
-  private ByteBuffer preambleBuffer;
+  private BodyProcessor bodyProcessor;
+
+  private ByteBuffer[] preambleBuffers;
 
   private volatile ResponseState state = ResponseState.Preamble;
 
@@ -53,41 +59,44 @@ public class HTTPResponseProcessor {
     this.logger = loggerFactory.getLogger(HTTPRequestProcessor.class);
   }
 
-  public synchronized ByteBuffer currentBuffer() {
-    ByteBuffer buffer = outputStream.readableBuffer();
-    boolean closed = outputStream.isClosed();
-
+  public synchronized ByteBuffer[] currentBuffer() {
     if (state == ResponseState.Preamble || state == ResponseState.Expect) {
       // We can't write the preamble under normal conditions if the worker thread is still working. Expect handling is different and the
       // client is waiting for a pre-canned response
-      if (state != ResponseState.Expect && buffer == null && !closed) {
+      if (state != ResponseState.Expect && outputStream.readableBuffer() == null && !outputStream.isClosed()) {
         return null;
       }
 
       // Construct the preamble if needed and return it if there is any bytes left
-      if (preambleBuffer == null) {
+      if (preambleBuffers == null) {
         logger.debug("The worker thread has bytes to write or has closed the stream, but the preamble hasn't been sent yet. Generating preamble");
         if (state == ResponseState.Preamble) {
           fillInHeaders();
-          preambleBuffer = HTTPTools.buildResponsePreamble(response, maxHeadLength);
+          preambleBuffers = new ByteBuffer[]{HTTPTools.buildResponsePreamble(response, maxHeadLength)};
         } else if (state == ResponseState.Expect) {
-          preambleBuffer = HTTPTools.buildExpectResponsePreamble(response, maxHeadLength);
+          preambleBuffers = new ByteBuffer[]{HTTPTools.buildExpectResponsePreamble(response, maxHeadLength)};
         }
 
-        logger.debug("Preamble is [{}] bytes long", preambleBuffer.remaining());
+        logger.debug("Preamble is [{}] bytes long", preambleBuffers[0].remaining());
         if (logger.isDebuggable()) {
-          logger.debug("Preamble is [\n{}\n]", new String(preambleBuffer.array(), 0, preambleBuffer.remaining()));
+          logger.debug("Preamble is [\n{}\n]", new String(preambleBuffers[0].array(), 0, preambleBuffers[0].remaining()));
+        }
+
+        // Figure out the body processor
+        Long contentLength = response.getContentLength();
+        if ((contentLength != null && contentLength > 0) || !outputStream.isEmpty()) {
+          bodyProcessor = contentLength != null ? new ContentLengthBodyProcessor(outputStream) : new ChunkedBodyProcessor(outputStream);
         }
       }
 
-      if (preambleBuffer.hasRemaining()) {
+      if (preambleBuffers[0].hasRemaining()) {
         logger.debug("Still writing preamble");
         logger.trace("(WP)");
-        return preambleBuffer;
+        return preambleBuffers;
       }
 
       // Reset the buffer in case we need to write another preamble (i.e. for expect)
-      preambleBuffer = null;
+      preambleBuffers = null;
 
       // If expect and preamble done, figure out stage to be Continue or Close
       if (state == ResponseState.Expect) {
@@ -104,13 +113,15 @@ public class HTTPResponseProcessor {
         state = ResponseState.Body;
       }
     } else if (state == ResponseState.Body) {
+      ByteBuffer[] buffer = bodyProcessor.currentBuffers();
       if (buffer != null) {
         logger.debug("Writing back bytes");
         logger.trace("(WB)");
         return buffer;
       }
 
-      if (closed) {
+      boolean complete = bodyProcessor.isComplete();
+      if (complete) {
         // No more bytes and the stream is closed, figure out if we should Keep-Alive or Close
         state = response.isKeepAlive() ? ResponseState.KeepAlive : ResponseState.Close;
         logger.debug("No more bytes from worker thread. Changing state to [{}]", state);
@@ -132,7 +143,7 @@ public class HTTPResponseProcessor {
     response.clearHeaders();
     response.setContentLength(0L);
 
-    preambleBuffer = null;
+    preambleBuffers = null;
 
     outputStream.clear();
     outputStream.close();
@@ -161,8 +172,11 @@ public class HTTPResponseProcessor {
       response.setHeader(Headers.Connection, Connections.KeepAlive);
     }
 
-    if (outputStream.isEmpty()) {
+    Long contentLength = response.getContentLength();
+    if (contentLength == null && outputStream.isEmpty()) {
       response.setContentLength(0L);
+    } else if (contentLength == null) {
+      response.setHeader(Headers.TransferEncoding, TransferEncodings.Chunked);
     }
   }
 

@@ -11,10 +11,10 @@ requirements and roadmap are as follows:
 * [x] Support Keep-Alive
 * [x] Support Expect-Continue 100
 * [x] Support chunked request
-* [ ] Support chunked response
+* [x] Support chunked response
+* [x] Support streaming entity bodies (via chunking likely)
 * [ ] Support trailers
 * [ ] Support compression
-* [ ] Support streaming entity bodies (via chunking likely)
 * [ ] Support form data
 * [ ] Support multipart form data
 * [ ] Support HTTP 2

@@ -57,6 +57,8 @@ public final class HTTPValues {
   public static final class ControlBytes {
     public static final byte[] CRLF = "\r\n".getBytes();
 
+    public static final byte[] FinalChunkBytes = "0\r\n\r\n".getBytes();
+
     private ControlBytes() {
     }
   }
@@ -242,7 +244,7 @@ public final class HTTPValues {
 
   public static final class Status {
     public static final String ContinueRequest = "100-continue";
-    
+
     public static final int MovedPermanently = 301;
 
     public static final int MovedTemporarily = 302;
