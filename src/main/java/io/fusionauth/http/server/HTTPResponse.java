@@ -118,8 +118,8 @@ public class HTTPResponse {
     return null;
   }
 
-  public void setContentLength(Long length) {
-    setHeader(Headers.ContentLength, length.toString());
+  public void setContentLength(long length) {
+    setHeader(Headers.ContentLength, Long.toString(length));
   }
 
   public String getContentType() {

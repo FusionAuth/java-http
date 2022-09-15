@@ -14,8 +14,9 @@ requirements and roadmap are as follows:
 * [x] Support chunked response
 * [x] Support streaming entity bodies (via chunking likely)
 * [x] Support compression
+* [x] Support cookies in request and response
+* [x] Clean up HTTPRequest
 * [ ] Support trailers
-* [ ] Support cookies in request and response
 * [ ] Support form data
 * [ ] Support multipart form data
 * [ ] Support HTTP 2

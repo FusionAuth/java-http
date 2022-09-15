@@ -40,6 +40,15 @@ public class SystemOutLogger implements Logger {
   }
 
   @Override
+  public void debug(String message, Throwable throwable) {
+    if (level.ordinal() <= Level.Debug.ordinal()) {
+      System.out.println(message);
+      throwable.printStackTrace(System.out);
+      System.out.flush();
+    }
+  }
+
+  @Override
   public void error(String message, Throwable throwable) {
     if (level.ordinal() <= Level.Error.ordinal()) {
       System.out.println(message);

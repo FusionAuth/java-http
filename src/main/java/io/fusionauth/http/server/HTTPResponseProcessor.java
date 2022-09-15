@@ -17,12 +17,14 @@ package io.fusionauth.http.server;
 
 import java.nio.ByteBuffer;
 
+import io.fusionauth.http.Cookie;
 import io.fusionauth.http.HTTPValues.Connections;
 import io.fusionauth.http.HTTPValues.Headers;
 import io.fusionauth.http.HTTPValues.TransferEncodings;
 import io.fusionauth.http.body.response.BodyProcessor;
 import io.fusionauth.http.body.response.ChunkedBodyProcessor;
 import io.fusionauth.http.body.response.ContentLengthBodyProcessor;
+import io.fusionauth.http.body.response.EmptyBodyProcessor;
 import io.fusionauth.http.io.NonBlockingByteBufferOutputStream;
 import io.fusionauth.http.log.Logger;
 import io.fusionauth.http.log.LoggerFactory;
@@ -95,6 +97,8 @@ public class HTTPResponseProcessor {
           if (instrumenter != null) {
             instrumenter.chunkedResponse();
           }
+        } else {
+          bodyProcessor = new EmptyBodyProcessor();
         }
       }
 
@@ -186,6 +190,11 @@ public class HTTPResponseProcessor {
       response.setContentLength(0L);
     } else if (contentLength == null) {
       response.setHeader(Headers.TransferEncoding, TransferEncodings.Chunked);
+    }
+
+    for (Cookie cookie : response.getCookies()) {
+      String value = cookie.toResponseHeader();
+      response.setHeader(Headers.SetCookie, value);
     }
   }
 

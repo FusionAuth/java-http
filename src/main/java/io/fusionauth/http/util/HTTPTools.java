@@ -16,6 +16,8 @@
 package io.fusionauth.http.util;
 
 import java.nio.ByteBuffer;
+import java.util.LinkedList;
+import java.util.List;
 
 import io.fusionauth.http.HTTPValues.ControlBytes;
 import io.fusionauth.http.HTTPValues.ProtocolBytes;
@@ -66,19 +68,6 @@ public final class HTTPTools {
   }
 
   /**
-   * Determines if the given character (byte) is an allowed HTTP multipart boundary character.
-   * <p>
-   * Covered by https://www.w3.org/Protocols/rfc1341/7_2_Multipart.html
-   *
-   * @param ch The character as a byte since HTTP is ASCII.
-   * @return True if the character is a multipart boundary character.
-   */
-  public static boolean isBoundaryCharacter(byte ch) {
-    return ch == '\'' || ch == '(' || ch == ')' || ch == '+' || ch == '_' || ch == ',' || ch == '-' || ch == '.' || ch == '/' || ch == ':' ||
-        ch == '=' || ch == '?' || (ch >= 'A' && ch <= 'Z') || (ch >= 'a' && ch <= 'z') || (ch >= '0' && ch <= '9');
-  }
-
-  /**
    * Determines if the given character (byte) is a digit (i.e. 0-9)
    *
    * @param ch The character as a byte since HTTP is ASCII.
@@ -125,6 +114,41 @@ public final class HTTPTools {
 
   public static boolean isValueCharacter(byte ch) {
     return isURICharacter(ch) || ch == ' ' || ch == '\t' || ch == '\n';
+  }
+
+  /**
+   * Parses an HTTP header value that is a standard semicolon separated list of values.
+   *
+   * @param value The header value.
+   * @return The list of values in the header.
+   */
+  public static List<String> parseHeaderValue(String value) {
+    List<String> parts = new LinkedList<>();
+    char[] chars = value.toCharArray();
+    boolean inQuote = false;
+    int start = 0;
+    for (int i = 0; i < chars.length; i++) {
+      char c = chars[i];
+      if (!inQuote && c == ';') {
+        parts.add(new String(chars, start, i - start));
+        start = -1;
+      } else if (!inQuote && !Character.isWhitespace(c) && start == -1) {
+        start = i;
+      } else if (!inQuote && c == '"') {
+        inQuote = true;
+      } else if (inQuote && c == '\\' && i < chars.length - 2 && chars[i + 1] == '"') {
+        i++; // Skip the next quote character since it is escaped
+      } else if (inQuote && c == '"') {
+        inQuote = false;
+      }
+    }
+
+    // Add any final part
+    if (start != -1) {
+      parts.add(new String(chars, start, chars.length - start));
+    }
+
+    return parts;
   }
 
   /**

@@ -54,9 +54,13 @@ public final class HTTPValues {
 
     public static final String ApplicationXml = "application/xml";
 
-    public static final String Boundary = "boundary=";
+    public static final String BoundaryPrefix = "boundary=";
+
+    public static final String CharsetPrefix = "charset=";
 
     public static final String Form = "application/x-www-form-urlencoded";
+
+    public static final String MultipartPrefix = "multipart/";
 
     public static final String Octet = "application/octet-stream";
 
@@ -116,6 +120,8 @@ public final class HTTPValues {
    */
   public static final class Headers {
     public static final String AcceptEncoding = "Accept-Encoding";
+
+    public static final String AcceptLanguage = "Accept-Language";
 
     /**
      * The Access-Control-Allow-Credentials header indicates whether the response to request can be exposed when the omit credentials flag

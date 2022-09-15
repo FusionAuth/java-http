@@ -121,7 +121,7 @@ public class CoreTest {
       var client = HttpClient.newHttpClient();
       URI uri = URI.create("http://localhost:4242/api/system/version");
       var response = client.send(
-          HttpRequest.newBuilder().uri(uri).header("Content-Type", "application/json").POST(BodyPublishers.ofString(RequestBody)).build(),
+          HttpRequest.newBuilder().uri(uri).header(Headers.ContentType, "application/json").POST(BodyPublishers.ofString(RequestBody)).build(),
           r -> BodySubscribers.ofString(StandardCharsets.UTF_8)
       );
 
@@ -132,7 +132,7 @@ public class CoreTest {
   @Test
   public void performance() throws Exception {
     HTTPHandler handler = (req, res) -> {
-      res.setHeader("Content-Type", "text/plain");
+      res.setHeader(Headers.ContentType, "text/plain");
       res.setHeader("Content-Length", "16");
       res.setStatus(200);
 
@@ -177,7 +177,7 @@ public class CoreTest {
   @Test
   public void performanceNoKeepAlive() throws Exception {
     HTTPHandler handler = (req, res) -> {
-      res.setHeader("Content-Type", "text/plain");
+      res.setHeader(Headers.ContentType, "text/plain");
       res.setHeader("Content-Length", "16");
       res.setStatus(200);
 
@@ -213,7 +213,7 @@ public class CoreTest {
   @Test
   public void simpleGet() throws Exception {
     HTTPHandler handler = (req, res) -> {
-      res.setHeader("Content-Type", "text/plain");
+      res.setHeader(Headers.ContentType, "text/plain");
       res.setHeader("Content-Length", "16");
       res.setStatus(200);
 
@@ -245,7 +245,7 @@ public class CoreTest {
   public void simplePost() throws Exception {
     HTTPHandler handler = (req, res) -> {
       System.out.println("Handling");
-      assertEquals(req.getHeader("Content-TYPE"), "application/json"); // Mixed case
+      assertEquals(req.getHeader(Headers.ContentType), "application/json"); // Mixed case
 
       try {
         System.out.println("Reading");
@@ -256,7 +256,7 @@ public class CoreTest {
       }
 
       System.out.println("Done");
-      res.setHeader("Content-Type", "text/plain");
+      res.setHeader(Headers.ContentType, "text/plain");
       res.setHeader("Content-Length", "16");
       res.setStatus(200);
 
@@ -276,7 +276,7 @@ public class CoreTest {
       var client = HttpClient.newHttpClient();
       URI uri = URI.create("http://localhost:4242/api/system/version");
       var response = client.send(
-          HttpRequest.newBuilder().uri(uri).header("Content-Type", "application/json").POST(BodyPublishers.ofString(RequestBody)).build(),
+          HttpRequest.newBuilder().uri(uri).header(Headers.ContentType, "application/json").POST(BodyPublishers.ofString(RequestBody)).build(),
           r -> BodySubscribers.ofString(StandardCharsets.UTF_8)
       );
 
@@ -297,7 +297,7 @@ public class CoreTest {
       var client = HttpClient.newHttpClient();
       URI uri = URI.create("http://localhost:4242/api/system/version");
       var response = client.send(
-          HttpRequest.newBuilder().uri(uri).header("Content-Type", "application/json").POST(BodyPublishers.ofString(RequestBody)).build(),
+          HttpRequest.newBuilder().uri(uri).header(Headers.ContentType, "application/json").POST(BodyPublishers.ofString(RequestBody)).build(),
           r -> BodySubscribers.ofString(StandardCharsets.UTF_8)
       );
 

@@ -25,6 +25,7 @@ import java.net.http.HttpResponse.BodySubscribers;
 import java.nio.charset.StandardCharsets;
 import java.util.concurrent.atomic.AtomicBoolean;
 
+import io.fusionauth.http.HTTPValues.Headers;
 import io.fusionauth.http.log.Level;
 import io.fusionauth.http.log.SystemOutLoggerFactory;
 import io.fusionauth.http.server.ExpectValidator;
@@ -55,7 +56,7 @@ public class ExpectTest {
   public void expect() throws Exception {
     HTTPHandler handler = (req, res) -> {
       System.out.println("Handling");
-      assertEquals(req.getHeader("Content-TYPE"), "application/json"); // Mixed case
+      assertEquals(req.getHeader(Headers.ContentType), "application/json"); // Mixed case
 
       try {
         System.out.println("Reading");
@@ -66,7 +67,7 @@ public class ExpectTest {
       }
 
       System.out.println("Done");
-      res.setHeader("Content-Type", "text/plain");
+      res.setHeader(Headers.ContentType, "text/plain");
       res.setHeader("Content-Length", "16");
       res.setStatus(200);
 
@@ -96,7 +97,7 @@ public class ExpectTest {
       var client = HttpClient.newHttpClient();
       URI uri = URI.create("http://localhost:4242/api/system/version");
       var response = client.send(
-          HttpRequest.newBuilder().uri(uri).header("Content-Type", "application/json").expectContinue(true).POST(BodyPublishers.ofString(RequestBody)).build(),
+          HttpRequest.newBuilder().uri(uri).header(Headers.ContentType, "application/json").expectContinue(true).POST(BodyPublishers.ofString(RequestBody)).build(),
           r -> BodySubscribers.ofString(StandardCharsets.UTF_8)
       );
 
@@ -123,7 +124,7 @@ public class ExpectTest {
       var client = HttpClient.newHttpClient();
       URI uri = URI.create("http://localhost:4242/api/system/version");
       var response = client.send(
-          HttpRequest.newBuilder().uri(uri).header("Content-Type", "application/json").expectContinue(true).POST(BodyPublishers.ofString(RequestBody)).build(),
+          HttpRequest.newBuilder().uri(uri).header(Headers.ContentType, "application/json").expectContinue(true).POST(BodyPublishers.ofString(RequestBody)).build(),
           r -> BodySubscribers.ofString(StandardCharsets.UTF_8)
       );
 

@@ -19,6 +19,7 @@ import java.io.Closeable;
 import java.io.IOException;
 import java.net.InetAddress;
 import java.net.InetSocketAddress;
+import java.net.SocketException;
 import java.net.UnknownHostException;
 import java.nio.ByteBuffer;
 import java.nio.channels.ClosedSelectorException;
@@ -159,6 +160,16 @@ public class HTTPServer extends Thread implements Closeable, Notifier {
       } catch (ClosedSelectorException cse) {
         // Shut down
         break;
+      } catch (SocketException se) {
+        logger.debug("A socket exception was thrown during processing. These are pretty common.", se);
+
+        if (key != null) {
+          try (var ignore = key.channel()) {
+            key.cancel();
+          } catch (Throwable t) {
+            logger.error("An exception was thrown while trying to cancel a SelectionKey and close a channel with a client due to an exception being thrown for that specific client. Enable debug logging to see the error", t);
+          }
+        }
       } catch (Throwable t) {
         logger.error("An exception was thrown during processing", t);
 
@@ -166,7 +177,7 @@ public class HTTPServer extends Thread implements Closeable, Notifier {
           try (var ignore = key.channel()) {
             key.cancel();
           } catch (Throwable t2) {
-            logger.error("An exception was thrown while trying to cancel a SelectionKey and close a channel with a client", t2);
+            logger.error("An exception was thrown while trying to cancel a SelectionKey and close a channel with a client due to an exception being thrown for that specific client. Enable debug logging to see the error", t2);
           }
         }
       }

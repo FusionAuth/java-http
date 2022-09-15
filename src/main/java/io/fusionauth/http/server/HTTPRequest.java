@@ -25,11 +25,14 @@ import java.time.format.DateTimeFormatter;
 import java.util.ArrayList;
 import java.util.Arrays;
 import java.util.Collection;
+import java.util.Comparator;
 import java.util.HashMap;
 import java.util.List;
 import java.util.Locale;
+import java.util.Locale.LanguageRange;
 import java.util.Map;
 import java.util.Objects;
+import java.util.stream.Collectors;
 
 import io.fusionauth.http.Buildable;
 import io.fusionauth.http.Cookie;
@@ -37,6 +40,7 @@ import io.fusionauth.http.HTTPMethod;
 import io.fusionauth.http.HTTPValues.ContentTypes;
 import io.fusionauth.http.HTTPValues.Headers;
 import io.fusionauth.http.HTTPValues.TransferEncodings;
+import io.fusionauth.http.util.HTTPTools;
 
 /**
  * An HTTP request that is received by the HTTP server. This contains all the relevant information from the request including any file
@@ -47,6 +51,7 @@ import io.fusionauth.http.HTTPValues.TransferEncodings;
  *
  * @author Brian Pontarelli
  */
+@SuppressWarnings("unused")
 public class HTTPRequest implements Buildable<HTTPRequest> {
   private final Map<String, Cookie> cookies = new HashMap<>();
 
@@ -54,7 +59,7 @@ public class HTTPRequest implements Buildable<HTTPRequest> {
 
   private final List<Locale> locales = new ArrayList<>();
 
-  private final Map<String, List<String>> parameters = new HashMap<>(0);
+  private final Map<String, List<String>> queryParameters = new HashMap<>();
 
   private List<String> acceptEncoding;
 
@@ -136,20 +141,20 @@ public class HTTPRequest implements Buildable<HTTPRequest> {
     this.locales.addAll(locales);
   }
 
-  public void addParameter(String name, String value) {
-    parameters.computeIfAbsent(name, key -> new ArrayList<>()).add(value);
+  public void addQueryParameter(String name, String value) {
+    queryParameters.computeIfAbsent(name, key -> new ArrayList<>()).add(value);
   }
 
-  public void addParameters(String name, String... values) {
-    parameters.computeIfAbsent(name, key -> new ArrayList<>()).addAll(List.of(values));
+  public void addQueryParameters(String name, String... values) {
+    queryParameters.computeIfAbsent(name, key -> new ArrayList<>()).addAll(List.of(values));
   }
 
-  public void addParameters(String name, Collection<String> values) {
-    parameters.computeIfAbsent(name, key -> new ArrayList<>()).addAll(values);
+  public void addQueryParameters(String name, Collection<String> values) {
+    queryParameters.computeIfAbsent(name, key -> new ArrayList<>()).addAll(values);
   }
 
-  public void addParameters(Map<String, List<String>> params) {
-    params.forEach(this::addParameters);
+  public void addQueryParameters(Map<String, List<String>> params) {
+    params.forEach(this::addQueryParameters);
   }
 
   public void deleteCookie(String name) {
@@ -179,7 +184,8 @@ public class HTTPRequest implements Buildable<HTTPRequest> {
   }
 
   public String getBaseURL() {
-    // Setting the wrong value in the X-Forwarded-Proto header seems to be a common issue that causes an exception during URI.create. Assuming request.getScheme() is not the problem and it is related to the proxy configuration.
+    // Setting the wrong value in the X-Forwarded-Proto header seems to be a common issue that causes an exception during URI.create.
+    // Assuming request.getScheme() is not the problem, and it is related to the proxy configuration.
     String scheme = getScheme().toLowerCase();
     if (!scheme.equalsIgnoreCase("http") && !scheme.equalsIgnoreCase("https")) {
       throw new IllegalArgumentException("The request scheme is invalid. Only http or https are valid schemes. The X-Forwarded-Proto header has a value of [" + getHeader(Headers.XForwardedProto) + "], this is likely an issue in your proxy configuration.");
@@ -312,30 +318,12 @@ public class HTTPRequest implements Buildable<HTTPRequest> {
     return multipartBoundary;
   }
 
-  public String getParameterValue(String key) {
-    List<String> values = parameters.get(key);
-    return (values != null && values.size() > 0) ? values.get(0) : null;
-  }
-
-  public List<String> getParameterValues(String key) {
-    return parameters.get(key);
-  }
-
-  public Map<String, List<String>> getParameters() {
-    return parameters;
-  }
-
-  public void setParameters(Map<String, List<String>> parameters) {
-    this.parameters.clear();
-    this.parameters.putAll(parameters);
-  }
-
   public String getPath() {
     return path;
   }
 
   public void setPath(String path) {
-    parameters.clear();
+    queryParameters.clear();
 
     // Parse the parameters
     char[] chars = path.toCharArray();
@@ -376,7 +364,7 @@ public class HTTPRequest implements Buildable<HTTPRequest> {
               value = "";
             }
 
-            addParameter(name, value);
+            addQueryParameter(name, value);
           } catch (Exception e) {
             // Ignore
           }
@@ -393,7 +381,7 @@ public class HTTPRequest implements Buildable<HTTPRequest> {
           value = "";
         }
 
-        addParameter(name, value);
+        addQueryParameter(name, value);
       }
     }
 
@@ -416,6 +404,24 @@ public class HTTPRequest implements Buildable<HTTPRequest> {
 
   public void setProtocol(String protocol) {
     this.protocol = protocol;
+  }
+
+  public String getQueryParameterValue(String key) {
+    List<String> values = queryParameters.get(key);
+    return (values != null && values.size() > 0) ? values.get(0) : null;
+  }
+
+  public List<String> getQueryParameterValues(String key) {
+    return queryParameters.get(key);
+  }
+
+  public Map<String, List<String>> getQueryParameters() {
+    return queryParameters;
+  }
+
+  public void setQueryParameters(Map<String, List<String>> parameters) {
+    this.queryParameters.clear();
+    this.queryParameters.putAll(parameters);
   }
 
   public String getScheme() {
@@ -474,17 +480,17 @@ public class HTTPRequest implements Buildable<HTTPRequest> {
     }
   }
 
-  public void setParameter(String name, String value) {
-    setParameters(name, value);
+  public void setQueryParameter(String name, String value) {
+    setQueryParameters(name, value);
   }
 
-  public void setParameters(String name, String... values) {
-    setParameters(name, new ArrayList<>(List.of(values)));
+  public void setQueryParameters(String name, String... values) {
+    setQueryParameters(name, new ArrayList<>(List.of(values)));
   }
 
-  public void setParameters(String name, Collection<String> values) {
+  public void setQueryParameters(String name, Collection<String> values) {
     List<String> list = new ArrayList<>();
-    this.parameters.put(name, list);
+    this.queryParameters.put(name, list);
 
     values.stream()
           .filter(Objects::nonNull)
@@ -493,20 +499,41 @@ public class HTTPRequest implements Buildable<HTTPRequest> {
 
   private void decodeHeader(String name, String value) {
     switch (name) {
+      case Headers.AcceptLanguage:
+        addLocales(LanguageRange.parse(value) // Default to English
+                                .stream()
+                                .sorted(Comparator.comparing(LanguageRange::getWeight).reversed())
+                                .map(LanguageRange::getRange)
+                                .map(Locale::forLanguageTag)
+                                .collect(Collectors.toList()));
+        break;
       case Headers.ContentTypeLower:
         this.contentType = value;
-        this.multipart = contentType.toLowerCase().startsWith("multipart/");
+        this.encoding = null;
+        this.multipart = false;
 
-        if (multipart) {
-          int index = contentType.indexOf(ContentTypes.Boundary);
-          this.multipartBoundary = contentType.substring(index + ContentTypes.Boundary.length());
+        List<String> parts = HTTPTools.parseHeaderValue(value);
+        for (String part : parts) {
+          String lower = part.toLowerCase();
+          if (lower.startsWith(ContentTypes.MultipartPrefix)) {
+            this.multipart = true;
+          }
 
-          // Strip quotes if needed
-          int length = multipartBoundary.length();
-          if (multipartBoundary.charAt(0) == '"' && multipartBoundary.charAt(length - 1) == '"') {
-            multipartBoundary = multipartBoundary.substring(1, length - 1);
+          if (lower.startsWith(ContentTypes.BoundaryPrefix)) {
+            this.multipartBoundary = part.substring(ContentTypes.BoundaryPrefix.length());
+
+            // Strip quotes if needed
+            int length = multipartBoundary.length();
+            if (multipartBoundary.charAt(0) == '"' && multipartBoundary.charAt(length - 1) == '"') {
+              multipartBoundary = multipartBoundary.substring(1, length - 1);
+            }
+          }
+
+          if (lower.startsWith(ContentTypes.CharsetPrefix)) {
+            encoding = Charset.forName(part.substring(ContentTypes.CharsetPrefix.length()));
           }
         }
+
         break;
       case Headers.ContentLengthLower:
         if (value == null || value.isBlank()) {

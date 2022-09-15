@@ -30,6 +30,7 @@ import java.nio.file.Path;
 import java.nio.file.Paths;
 import java.util.function.Supplier;
 
+import io.fusionauth.http.HTTPValues.Headers;
 import io.fusionauth.http.log.Level;
 import io.fusionauth.http.log.SystemOutLoggerFactory;
 import io.fusionauth.http.server.CountingInstrumenter;
@@ -68,7 +69,7 @@ public class ChunkedTest {
         fail("Unable to parse body", e);
       }
 
-      res.setHeader("Content-Type", "text/plain");
+      res.setHeader(Headers.ContentType, "text/plain");
       res.setHeader("Content-Length", "16");
       res.setStatus(200);
 
@@ -89,7 +90,7 @@ public class ChunkedTest {
       URI uri = URI.create("http://localhost:4242/api/system/version");
       Supplier<InputStream> supplier = () -> new ByteArrayInputStream(RequestBody.getBytes());
       var response = client.send(
-          HttpRequest.newBuilder().uri(uri).header("Content-Type", "application/json").POST(BodyPublishers.ofInputStream(supplier)).build(),
+          HttpRequest.newBuilder().uri(uri).header(Headers.ContentType, "application/json").POST(BodyPublishers.ofInputStream(supplier)).build(),
           r -> BodySubscribers.ofString(StandardCharsets.UTF_8)
       );
 
@@ -102,7 +103,7 @@ public class ChunkedTest {
   @Test
   public void chunkedResponse() throws Exception {
     HTTPHandler handler = (req, res) -> {
-      res.setHeader("Content-Type", "text/plain");
+      res.setHeader(Headers.ContentType, "text/plain");
       res.setStatus(200);
 
       try {
@@ -121,7 +122,7 @@ public class ChunkedTest {
       var client = HttpClient.newHttpClient();
       URI uri = URI.create("http://localhost:4242/api/system/version");
       var response = client.send(
-          HttpRequest.newBuilder().uri(uri).header("Content-Type", "application/json").GET().build(),
+          HttpRequest.newBuilder().uri(uri).header(Headers.ContentType, "application/json").GET().build(),
           r -> BodySubscribers.ofString(StandardCharsets.UTF_8)
       );
 
@@ -135,7 +136,7 @@ public class ChunkedTest {
   public void chunkedResponseStreamingFile() throws Exception {
     Path file = Paths.get("src/test/java/io/fusionauth/http/ChunkedTest.java");
     HTTPHandler handler = (req, res) -> {
-      res.setHeader("Content-Type", "text/plain");
+      res.setHeader(Headers.ContentType, "text/plain");
       res.setStatus(200);
 
       try (InputStream is = Files.newInputStream(file)) {
@@ -154,7 +155,7 @@ public class ChunkedTest {
       var client = HttpClient.newHttpClient();
       URI uri = URI.create("http://localhost:4242/api/system/version");
       var response = client.send(
-          HttpRequest.newBuilder().uri(uri).header("Content-Type", "application/json").GET().build(),
+          HttpRequest.newBuilder().uri(uri).header(Headers.ContentType, "application/json").GET().build(),
           r -> BodySubscribers.ofString(StandardCharsets.UTF_8)
       );
 
@@ -167,7 +168,7 @@ public class ChunkedTest {
   @Test
   public void performanceChunked() throws Exception {
     HTTPHandler handler = (req, res) -> {
-      res.setHeader("Content-Type", "text/plain");
+      res.setHeader(Headers.ContentType, "text/plain");
       res.setStatus(200);
 
       try {

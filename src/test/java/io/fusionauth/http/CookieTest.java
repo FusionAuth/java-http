@@ -15,10 +15,21 @@
  */
 package io.fusionauth.http;
 
+import java.net.CookieManager;
+import java.net.HttpCookie;
+import java.net.URI;
+import java.net.http.HttpClient;
+import java.net.http.HttpRequest;
+import java.net.http.HttpResponse.BodySubscribers;
+import java.nio.charset.StandardCharsets;
 import java.time.ZoneOffset;
 import java.time.ZonedDateTime;
 import java.util.List;
 
+import io.fusionauth.http.Cookie.SameSite;
+import io.fusionauth.http.HTTPValues.Headers;
+import io.fusionauth.http.server.HTTPHandler;
+import io.fusionauth.http.server.HTTPServer;
 import org.testng.annotations.Test;
 import static org.testng.Assert.assertEquals;
 import static org.testng.Assert.assertFalse;
@@ -207,6 +218,69 @@ public class CookieTest {
     // Borked cookie
     cookie = Cookie.fromResponseHeader("=a");
     assertNull(cookie);
+  }
+
+  @Test
+  public void roundTripMultiple() throws Exception {
+    HTTPHandler handler = (req, res) -> {
+      assertEquals(req.getPath(), "/cookies");
+      assertEquals(req.getCookie("request").value, "request-value");
+      assertEquals(req.getCookie("request-2").value, "request-value-2");
+
+      res.addCookie(new Cookie("response", "response-value").with(c -> c.setSameSite(SameSite.Lax)));
+      res.addCookie(new Cookie("response-2", "response-value-2").with(c -> c.setMaxAge(42L)));
+      res.setStatus(200);
+    };
+
+    try (var server = new HTTPServer().withHandler(handler).withPort(4242)) {
+      server.start();
+
+      CookieManager cookieHandler = new CookieManager();
+      var client = HttpClient.newBuilder().cookieHandler(cookieHandler).build();
+      URI uri = URI.create("http://localhost:4242/cookies");
+      var response = client.send(
+          HttpRequest.newBuilder().uri(uri).header(Headers.Cookie, "request=request-value").header(Headers.Cookie, "request-2=request-value-2").header(Headers.ContentType, "application/json").GET().build(),
+          r -> BodySubscribers.ofString(StandardCharsets.UTF_8)
+      );
+
+      List<HttpCookie> cookies = cookieHandler.getCookieStore().get(URI.create("http://localhost:4242/cookies"));
+      assertEquals(response.statusCode(), 200);
+      assertEquals(cookies.size(), 2);
+      assertEquals(cookies.stream().filter(c -> c.getName().equals("response")).findFirst().orElseThrow().getValue(), "response-value");
+      assertEquals(cookies.stream().filter(c -> c.getName().equals("response-2")).findFirst().orElseThrow().getValue(), "response-value-2");
+      assertTrue(response.headers().allValues("Set-Cookie").contains("response=response-value; SameSite=Lax"));
+      assertTrue(response.headers().allValues("Set-Cookie").contains("response-2=response-value-2; Max-Age=42"));
+    }
+  }
+
+  @Test
+  public void roundTripSingle() throws Exception {
+    HTTPHandler handler = (req, res) -> {
+      assertEquals(req.getPath(), "/cookies");
+      assertEquals(req.getCookie("request").value, "request-value");
+
+      res.addCookie(new Cookie("response", "response-value").with(c -> c.setSameSite(SameSite.Lax)));
+      res.setStatus(200);
+    };
+
+    try (var server = new HTTPServer().withHandler(handler).withPort(4242)) {
+      server.start();
+
+      CookieManager cookieHandler = new CookieManager();
+      var client = HttpClient.newBuilder().cookieHandler(cookieHandler).build();
+      URI uri = URI.create("http://localhost:4242/cookies");
+      var response = client.send(
+          HttpRequest.newBuilder().uri(uri).header(Headers.Cookie, "request=request-value").header(Headers.ContentType, "application/json").GET().build(),
+          r -> BodySubscribers.ofString(StandardCharsets.UTF_8)
+      );
+
+      List<HttpCookie> cookies = cookieHandler.getCookieStore().get(URI.create("http://localhost:4242/cookies"));
+      assertEquals(response.statusCode(), 200);
+      assertEquals(cookies.size(), 1);
+      assertEquals(cookies.get(0).getName(), "response");
+      assertEquals(cookies.get(0).getValue(), "response-value");
+      assertEquals(response.headers().firstValue("Set-Cookie").orElse(null), "response=response-value; SameSite=Lax");
+    }
   }
 
   @Test

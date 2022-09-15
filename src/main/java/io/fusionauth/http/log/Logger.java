@@ -38,6 +38,14 @@ public interface Logger {
   void debug(String message, Object... values);
 
   /**
+   * Logs a debug message and stack trace or exception message.
+   *
+   * @param message   The message.
+   * @param throwable The exception for the stack trace or message.
+   */
+  void debug(String message, Throwable throwable);
+
+  /**
    * Logs an error message and stack trace or exception message.
    *
    * @param message   The message.

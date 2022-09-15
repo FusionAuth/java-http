@@ -55,7 +55,7 @@ public class CompressionTest {
   public void compressDeflate(boolean chunked) throws Exception {
     HTTPHandler handler = (req, res) -> {
       res.setCompress(true);
-      res.setHeader("Content-Type", "text/plain");
+      res.setHeader(Headers.ContentType, "text/plain");
       res.setStatus(200);
 
       if (!chunked) {
@@ -92,7 +92,7 @@ public class CompressionTest {
   public void compressGzip(boolean chunked) throws Exception {
     HTTPHandler handler = (req, res) -> {
       res.setCompress(true);
-      res.setHeader("Content-Type", "text/plain");
+      res.setHeader(Headers.ContentType, "text/plain");
       res.setStatus(200);
 
       if (!chunked) {
@@ -129,7 +129,7 @@ public class CompressionTest {
   public void requestedButNotAccepted(boolean chunked) throws Exception {
     HTTPHandler handler = (req, res) -> {
       res.setCompress(true);
-      res.setHeader("Content-Type", "text/plain");
+      res.setHeader(Headers.ContentType, "text/plain");
       res.setStatus(200);
 
       if (!chunked) {
