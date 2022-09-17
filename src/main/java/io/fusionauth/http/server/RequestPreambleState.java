@@ -15,6 +15,7 @@
  */
 package io.fusionauth.http.server;
 
+import io.fusionauth.http.ParseException;
 import io.fusionauth.http.util.HTTPTools;
 
 /**

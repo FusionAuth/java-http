@@ -26,7 +26,7 @@ import io.fusionauth.http.io.NonBlockingByteBufferOutputStream;
  * @author Brian Pontarelli
  */
 public class ChunkedBodyProcessor implements BodyProcessor {
-  private final ByteBuffer[] Final = new ByteBuffer[]{ByteBuffer.wrap(ControlBytes.FinalChunkBytes)};
+  private final ByteBuffer[] Final = new ByteBuffer[]{ByteBuffer.wrap(ControlBytes.HeaderTerminator)};
 
   private final ByteBuffer Trailer = ByteBuffer.wrap(ControlBytes.CRLF);
 

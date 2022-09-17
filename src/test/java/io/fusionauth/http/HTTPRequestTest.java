@@ -56,54 +56,54 @@ public class HTTPRequestTest {
     HTTPRequest request = new HTTPRequest();
     request.setPath("/path?name=value");
     assertEquals(request.getPath(), "/path");
-    assertEquals(request.getQueryParameters(), Map.of("name", List.of("value")));
+    assertEquals(request.getURLParameters(), Map.of("name", List.of("value")));
 
     request.setPath("/path?name=value&name1=value1");
     assertEquals(request.getPath(), "/path");
-    assertEquals(request.getQueryParameters(), Map.of("name", List.of("value"), "name1", List.of("value1")));
+    assertEquals(request.getURLParameters(), Map.of("name", List.of("value"), "name1", List.of("value1")));
 
     request.setPath("/path?name+space=value+space&name1+space=value1+space");
     assertEquals(request.getPath(), "/path");
-    assertEquals(request.getQueryParameters(), Map.of("name space", List.of("value space"), "name1 space", List.of("value1 space")));
+    assertEquals(request.getURLParameters(), Map.of("name space", List.of("value space"), "name1 space", List.of("value1 space")));
 
     request.setPath("/path?name");
     assertEquals(request.getPath(), "/path");
-    assertEquals(request.getQueryParameters(), Map.of());
+    assertEquals(request.getURLParameters(), Map.of());
 
     request.setPath("/path?name==");
     assertEquals(request.getPath(), "/path");
-    assertEquals(request.getQueryParameters(), Map.of("name", List.of("=")));
+    assertEquals(request.getURLParameters(), Map.of("name", List.of("=")));
 
     request.setPath("/path?==");
     assertEquals(request.getPath(), "/path");
-    assertEquals(request.getQueryParameters(), Map.of());
+    assertEquals(request.getURLParameters(), Map.of());
 
     request.setPath("/path?==name=value");
     assertEquals(request.getPath(), "/path");
-    assertEquals(request.getQueryParameters(), Map.of("name", List.of("value")));
+    assertEquals(request.getURLParameters(), Map.of("name", List.of("value")));
 
     request.setPath("/path?name=a=b=c");
     assertEquals(request.getPath(), "/path");
-    assertEquals(request.getQueryParameters(), Map.of("name", List.of("a=b=c")));
+    assertEquals(request.getURLParameters(), Map.of("name", List.of("a=b=c")));
 
     request.setPath("/path?name&&");
     assertEquals(request.getPath(), "/path");
-    assertEquals(request.getQueryParameters(), Map.of());
+    assertEquals(request.getURLParameters(), Map.of());
 
     request.setPath("/path?name=&");
     assertEquals(request.getPath(), "/path");
-    assertEquals(request.getQueryParameters(), Map.of("name", List.of("")));
+    assertEquals(request.getURLParameters(), Map.of("name", List.of("")));
 
     request.setPath("/path?name=%26&");
     assertEquals(request.getPath(), "/path");
-    assertEquals(request.getQueryParameters(), Map.of("name", List.of("&")));
+    assertEquals(request.getURLParameters(), Map.of("name", List.of("&")));
 
     request.setPath("/path?name%3D=%26&");
     assertEquals(request.getPath(), "/path");
-    assertEquals(request.getQueryParameters(), Map.of("name=", List.of("&")));
+    assertEquals(request.getURLParameters(), Map.of("name=", List.of("&")));
 
     request.setPath("/path?name=");
     assertEquals(request.getPath(), "/path");
-    assertEquals(request.getQueryParameters(), Map.of("name", List.of("")));
+    assertEquals(request.getURLParameters(), Map.of("name", List.of("")));
   }
 }

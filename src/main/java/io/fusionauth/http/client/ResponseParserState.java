@@ -18,6 +18,7 @@ package io.fusionauth.http.client;
 import java.util.List;
 import java.util.Map;
 
+import io.fusionauth.http.ParseException;
 import io.fusionauth.http.util.HTTPTools;
 
 public enum ResponseParserState {

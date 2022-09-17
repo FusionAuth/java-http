@@ -13,7 +13,26 @@
  * either express or implied. See the License for the specific
  * language governing permissions and limitations under the License.
  */
-package io.fusionauth.http.client;
+package io.fusionauth.http;
 
+/**
+ * An exception that is thrown when an HTTP message fails to parse correctly due to an invalid character or similar issue.
+ *
+ * @author Brian Pontarelli
+ */
 public class ParseException extends RuntimeException {
+  public ParseException() {
+  }
+
+  public ParseException(String message) {
+    super(message);
+  }
+
+  public ParseException(String message, Throwable cause) {
+    super(message, cause);
+  }
+
+  public ParseException(Throwable cause) {
+    super(cause);
+  }
 }

@@ -54,9 +54,9 @@ public final class HTTPValues {
 
     public static final String ApplicationXml = "application/xml";
 
-    public static final String BoundaryPrefix = "boundary=";
+    public static final String BoundaryParameter = "boundary";
 
-    public static final String CharsetPrefix = "charset=";
+    public static final String CharsetParameter = "charset";
 
     public static final String Form = "application/x-www-form-urlencoded";
 
@@ -71,9 +71,23 @@ public final class HTTPValues {
   }
 
   public static final class ControlBytes {
-    public static final byte[] CRLF = "\r\n".getBytes();
+    public static final byte CR = '\r';
 
-    public static final byte[] FinalChunkBytes = "0\r\n\r\n".getBytes();
+    public static final byte Dash = '-';
+
+    public static final byte LF = '\n';
+
+    public static final byte[] CRLF = {CR, LF};
+
+    public static final byte[] HeaderTerminator = {CR, LF, CR, LF};
+
+    public static final byte[] MultipartBoundaryPrefix = {CR, LF, Dash, Dash};
+
+    public static final byte[] MultipartTerminator = {Dash, Dash};
+
+    public static final byte Zero = '0';
+
+    public static final byte[] MultipartFinalChunkBytes = {Zero, CR, LF, CR, LF};
 
     private ControlBytes() {
     }
@@ -171,6 +185,8 @@ public final class HTTPValues {
     public static final String CacheControl = "Cache-Control";
 
     public static final String Connection = "Connection";
+
+    public static final String ContentDispositionLower = "content-disposition";
 
     public static final String ContentEncoding = "Content-Encoding";
 

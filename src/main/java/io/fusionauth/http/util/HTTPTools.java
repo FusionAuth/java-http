@@ -15,16 +15,49 @@
  */
 package io.fusionauth.http.util;
 
+import java.net.URLDecoder;
 import java.nio.ByteBuffer;
+import java.nio.charset.Charset;
+import java.nio.charset.IllegalCharsetNameException;
+import java.nio.charset.StandardCharsets;
+import java.util.HashMap;
 import java.util.LinkedList;
 import java.util.List;
+import java.util.Map;
 
 import io.fusionauth.http.HTTPValues.ControlBytes;
 import io.fusionauth.http.HTTPValues.ProtocolBytes;
+import io.fusionauth.http.ParseException;
 import io.fusionauth.http.io.ByteBufferOutputStream;
 import io.fusionauth.http.server.HTTPResponse;
 
 public final class HTTPTools {
+  /**
+   * Compares {@code count} first bytes in the given arrays.
+   *
+   * @param first  The first array to compare.
+   * @param second The second array to compare.
+   * @param count  The number of bytes to be compared.
+   * @return {@code true} if {@code count} first bytes in the arrays are equal.
+   */
+  public static boolean arraysEquals(final byte[] first, final byte[] second, final int count) {
+    if (first == second) {
+      return true;
+    }
+
+    if (first == null || second == null || first.length < count || second.length < count) {
+      return false;
+    }
+
+    for (int i = 0; i < count; i++) {
+      if (first[i] != second[i]) {
+        return false;
+      }
+    }
+
+    return true;
+  }
+
   /**
    * Builds the HTTP response head section (status line, headers, etc).
    *
@@ -117,20 +150,94 @@ public final class HTTPTools {
   }
 
   /**
+   * Parses URL encoded data either from a URL parameter list in the query string or the form body.
+   *
+   * @param data   The data as a character array.
+   * @param start  The start index to start parsing from.
+   * @param length The length to parse.
+   * @param result The result Map to put the value into.
+   */
+  public static void parseEncodedData(byte[] data, int start, int length, Map<String, List<String>> result) {
+    boolean inName = true;
+    String name = null;
+    String value;
+    for (int i = start; i < length; i++) {
+      if (data[i] == '=' && inName) {
+        // Names can't start with an equal sign
+        if (i == start) {
+          start++;
+          continue;
+        }
+
+        inName = false;
+
+        try {
+          name = URLDecoder.decode(new String(data, start, i - start), StandardCharsets.UTF_8);
+        } catch (Exception e) {
+          name = null; // Malformed
+        }
+
+        start = i + 1;
+      } else if (data[i] == '&' && !inName) {
+        inName = true;
+
+        if (name == null || start > i) {
+          continue; // Malformed
+        }
+
+        try {
+          if (start < i) {
+            value = URLDecoder.decode(new String(data, start, i - start), StandardCharsets.UTF_8);
+          } else {
+            value = "";
+          }
+
+          result.computeIfAbsent(name, key -> new LinkedList<>()).add(value);
+        } catch (Exception e) {
+          // Ignore
+        }
+
+        start = i + 1;
+        name = null;
+      }
+    }
+
+    if (name != null && !inName) {
+      if (start < length) {
+        value = URLDecoder.decode(new String(data, start, length - start), StandardCharsets.UTF_8);
+      } else {
+        value = "";
+      }
+
+      result.computeIfAbsent(name, key -> new LinkedList<>()).add(value);
+    }
+  }
+
+  /**
    * Parses an HTTP header value that is a standard semicolon separated list of values.
    *
    * @param value The header value.
-   * @return The list of values in the header.
+   * @return The HeaderValue record.
    */
-  public static List<String> parseHeaderValue(String value) {
-    List<String> parts = new LinkedList<>();
+  public static HeaderValue parseHeaderValue(String value) {
+    String headerValue = null;
+    Map<String, String> parameters = null;
     char[] chars = value.toCharArray();
     boolean inQuote = false;
     int start = 0;
     for (int i = 0; i < chars.length; i++) {
       char c = chars[i];
       if (!inQuote && c == ';') {
-        parts.add(new String(chars, start, i - start));
+        if (headerValue == null) {
+          headerValue = new String(chars, start, i - start);
+        } else {
+          if (parameters == null) {
+            parameters = new HashMap<>();
+          }
+
+          parseHeaderParameter(chars, start, i, parameters);
+        }
+
         start = -1;
       } else if (!inQuote && !Character.isWhitespace(c) && start == -1) {
         start = i;
@@ -145,10 +252,87 @@ public final class HTTPTools {
 
     // Add any final part
     if (start != -1) {
-      parts.add(new String(chars, start, chars.length - start));
+      if (headerValue == null) {
+        headerValue = new String(chars, start, chars.length - start);
+      } else {
+        if (parameters == null) {
+          parameters = new HashMap<>();
+        }
+
+        parseHeaderParameter(chars, start, chars.length, parameters);
+      }
     }
 
-    return parts;
+    if (headerValue == null) {
+      throw new ParseException("Unable to parse a parameterized HTTP header [" + value + "]");
+    }
+
+    if (parameters == null) {
+      parameters = Map.of();
+    }
+
+    return new HeaderValue(headerValue, parameters);
+  }
+
+  private static void parseHeaderParameter(char[] chars, int start, int end, Map<String, String> parameters) {
+    boolean encoded = false;
+    Charset charset = null;
+    String name = null;
+    for (int i = start; i < end; i++) {
+      if (name == null && chars[i] == '*') {
+        encoded = true;
+        name = new String(chars, start, i - start).toLowerCase();
+        start = i + 2;
+      } else if (name == null && chars[i] == '=') {
+        name = new String(chars, start, i - start).toLowerCase();
+        start = i + 1;
+      } else if (name != null && encoded && charset == null && chars[i] == '\'') {
+        String charsetName = new String(chars, start, i - start);
+        try {
+          charset = Charset.forName(charsetName);
+        } catch (IllegalCharsetNameException e) {
+          charset = StandardCharsets.UTF_8; // Fallback to UTF-8
+        }
+        start = i + 1;
+      } else if (name != null && encoded && charset != null && chars[i] == '\'') {
+        start = i + 1;
+      }
+    }
+
+    // This is an invalid parameter, but we won't fail here
+    if (start >= end) {
+      if (name != null) {
+        parameters.put(name, "");
+      }
+
+      return;
+    }
+
+    if (chars[start] == '"') {
+      start++;
+    }
+
+    if (chars[end - 1] == '"') {
+      end--;
+    }
+
+    String encodedValue = new String(chars, start, end - start);
+    String value;
+    if (charset != null) {
+      value = URLDecoder.decode(encodedValue, charset);
+    } else {
+      value = URLDecoder.decode(encodedValue, StandardCharsets.UTF_8);
+    }
+
+    if (name == null) {
+      name = value;
+      value = "";
+    }
+
+    // Prefer the encoded version
+    if (!parameters.containsKey(name) || encoded) {
+      parameters.put(name, value);
+    }
   }
 
   /**
@@ -166,5 +350,14 @@ public final class HTTPTools {
       out.write(response.getStatusMessage().getBytes());
     }
     out.write(ControlBytes.CRLF);
+  }
+
+  /**
+   * A record that stores a parameterized header value.
+   *
+   * @param value      The initial value of the header.
+   * @param parameters The parameters.
+   */
+  public record HeaderValue(String value, Map<String, String> parameters) {
   }
 }

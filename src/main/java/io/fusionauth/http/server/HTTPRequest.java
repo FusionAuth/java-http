@@ -15,8 +15,8 @@
  */
 package io.fusionauth.http.server;
 
+import java.io.IOException;
 import java.io.InputStream;
-import java.net.URLDecoder;
 import java.nio.charset.Charset;
 import java.nio.charset.StandardCharsets;
 import java.time.Instant;
@@ -27,6 +27,7 @@ import java.util.Arrays;
 import java.util.Collection;
 import java.util.Comparator;
 import java.util.HashMap;
+import java.util.LinkedList;
 import java.util.List;
 import java.util.Locale;
 import java.util.Locale.LanguageRange;
@@ -40,7 +41,9 @@ import io.fusionauth.http.HTTPMethod;
 import io.fusionauth.http.HTTPValues.ContentTypes;
 import io.fusionauth.http.HTTPValues.Headers;
 import io.fusionauth.http.HTTPValues.TransferEncodings;
+import io.fusionauth.http.body.BodyException;
 import io.fusionauth.http.util.HTTPTools;
+import io.fusionauth.http.util.HTTPTools.HeaderValue;
 
 /**
  * An HTTP request that is received by the HTTP server. This contains all the relevant information from the request including any file
@@ -55,19 +58,27 @@ import io.fusionauth.http.util.HTTPTools;
 public class HTTPRequest implements Buildable<HTTPRequest> {
   private final Map<String, Cookie> cookies = new HashMap<>();
 
+  private final List<FileInfo> files = new LinkedList<>();
+
   private final Map<String, List<String>> headers = new HashMap<>();
 
-  private final List<Locale> locales = new ArrayList<>();
+  private final List<Locale> locales = new LinkedList<>();
 
-  private final Map<String, List<String>> queryParameters = new HashMap<>();
+  private final Map<String, List<String>> urlParameters = new HashMap<>();
 
   private List<String> acceptEncoding;
+
+  private byte[] bodyBytes;
+
+  private Map<String, List<String>> combinedParameters;
 
   private Long contentLength;
 
   private String contentType;
 
   private Charset encoding = StandardCharsets.UTF_8;
+
+  private Map<String, List<String>> formData;
 
   private String host;
 
@@ -141,20 +152,24 @@ public class HTTPRequest implements Buildable<HTTPRequest> {
     this.locales.addAll(locales);
   }
 
-  public void addQueryParameter(String name, String value) {
-    queryParameters.computeIfAbsent(name, key -> new ArrayList<>()).add(value);
+  public void addURLParameter(String name, String value) {
+    urlParameters.computeIfAbsent(name, key -> new ArrayList<>()).add(value);
+    combinedParameters = null;
   }
 
-  public void addQueryParameters(String name, String... values) {
-    queryParameters.computeIfAbsent(name, key -> new ArrayList<>()).addAll(List.of(values));
+  public void addURLParameters(String name, String... values) {
+    urlParameters.computeIfAbsent(name, key -> new ArrayList<>()).addAll(List.of(values));
+    combinedParameters = null;
   }
 
-  public void addQueryParameters(String name, Collection<String> values) {
-    queryParameters.computeIfAbsent(name, key -> new ArrayList<>()).addAll(values);
+  public void addURLParameters(String name, Collection<String> values) {
+    urlParameters.computeIfAbsent(name, key -> new ArrayList<>()).addAll(values);
+    combinedParameters = null;
   }
 
-  public void addQueryParameters(Map<String, List<String>> params) {
-    params.forEach(this::addQueryParameters);
+  public void addURLParameters(Map<String, List<String>> params) {
+    params.forEach(this::addURLParameters);
+    combinedParameters = null;
   }
 
   public void deleteCookie(String name) {
@@ -208,6 +223,20 @@ public class HTTPRequest implements Buildable<HTTPRequest> {
     return uri;
   }
 
+  public byte[] getBodyBytes() throws BodyException {
+    if (bodyBytes == null && inputStream != null) {
+      try {
+        bodyBytes = inputStream.readAllBytes();
+      } catch (IOException e) {
+        throw new BodyException("Unable to read the HTTP request body bytes", e);
+      }
+    } else {
+      bodyBytes = new byte[0];
+    }
+
+    return bodyBytes;
+  }
+
   public Charset getCharacterEncoding() {
     return encoding;
   }
@@ -243,6 +272,33 @@ public class HTTPRequest implements Buildable<HTTPRequest> {
   public Instant getDateHeader(String key) {
     String header = getHeader(key);
     return header != null ? ZonedDateTime.parse(header, DateTimeFormatter.RFC_1123_DATE_TIME).toInstant() : null;
+  }
+
+  /**
+   * Processes the HTTP request body completely if the {@code Content-Type} header is equal to {@link ContentTypes#Form}. If this method is
+   * called multiple times, the body is only processed the first time. This is not thread-safe, so you need to ensure you protect against
+   * multiple threads calling this method concurrently.
+   * <p>
+   * If the {@code Content-Type} is not {@link ContentTypes#Form}, this will always return an empty Map.
+   * <p>
+   * If the InputStream is not ready or complete, this will block until all the bytes are read from the client.
+   *
+   * @return The Form data body.
+   */
+  public Map<String, List<String>> getFormData() {
+    if (formData == null) {
+      formData = new HashMap<>();
+
+      String contentType = getContentType();
+      if (contentType.equalsIgnoreCase(ContentTypes.Form)) {
+        byte[] body = getBodyBytes();
+        HTTPTools.parseEncodedData(body, 0, body.length, formData);
+      } else if (isMultipart()) {
+        throw new IllegalStateException("Not implemented yet");
+      }
+    }
+
+    return formData;
   }
 
   public String getHeader(String key) {
@@ -296,6 +352,8 @@ public class HTTPRequest implements Buildable<HTTPRequest> {
 
   public void setInputStream(InputStream inputStream) {
     this.inputStream = inputStream;
+    combinedParameters = null;
+    formData = null;
   }
 
   public Locale getLocale() {
@@ -318,71 +376,39 @@ public class HTTPRequest implements Buildable<HTTPRequest> {
     return multipartBoundary;
   }
 
+  /**
+   * Combines the URL parameters and the form data that might exist in the body of the HTTP request. The Map returned is not linked back to
+   * the URL parameters or form data. Changing it will not impact either of those Maps. If this method is called multiple times, the merging
+   * of all the data is only done the first time and then cached. This is not thread-safe, so you need to ensure you protect against
+   * multiple threads calling this method concurrently.
+   *
+   * @return The combined parameters.
+   */
+  public Map<String, List<String>> getParameters() {
+    if (combinedParameters == null) {
+      combinedParameters = new HashMap<>();
+      getURLParameters().forEach((name, values) -> combinedParameters.put(name, new LinkedList<>(values)));
+      getFormData().forEach((name, value) -> combinedParameters.merge(name, value, (first, second) -> {
+        first.addAll(second);
+        return first;
+      }));
+    }
+
+    return combinedParameters;
+  }
+
   public String getPath() {
     return path;
   }
 
   public void setPath(String path) {
-    queryParameters.clear();
+    urlParameters.clear();
 
     // Parse the parameters
-    char[] chars = path.toCharArray();
+    byte[] chars = path.getBytes(StandardCharsets.UTF_8);
     int questionMark = path.indexOf('?');
     if (questionMark > 0 && questionMark != path.length() - 1) {
-      int start = questionMark + 1;
-      boolean inName = true;
-      String name = null;
-      String value;
-      for (int i = start; i < chars.length; i++) {
-        if (chars[i] == '=' && inName) {
-          // Names can't start with an equal sign
-          if (i == start) {
-            start++;
-            continue;
-          }
-
-          inName = false;
-
-          try {
-            name = URLDecoder.decode(new String(chars, start, i - start), StandardCharsets.UTF_8);
-          } catch (Exception e) {
-            name = null; // Malformed
-          }
-
-          start = i + 1;
-        } else if (chars[i] == '&' && !inName) {
-          inName = true;
-
-          if (name == null || start > i) {
-            continue; // Malformed
-          }
-
-          try {
-            if (start < i) {
-              value = URLDecoder.decode(new String(chars, start, i - start), StandardCharsets.UTF_8);
-            } else {
-              value = "";
-            }
-
-            addQueryParameter(name, value);
-          } catch (Exception e) {
-            // Ignore
-          }
-
-          start = i + 1;
-          name = null;
-        }
-      }
-
-      if (name != null && !inName) {
-        if (start < chars.length) {
-          value = URLDecoder.decode(new String(chars, start, chars.length - start), StandardCharsets.UTF_8);
-        } else {
-          value = "";
-        }
-
-        addQueryParameter(name, value);
-      }
+      HTTPTools.parseEncodedData(chars, questionMark + 1, chars.length, urlParameters);
     }
 
     // Only save the path portion
@@ -406,24 +432,6 @@ public class HTTPRequest implements Buildable<HTTPRequest> {
     this.protocol = protocol;
   }
 
-  public String getQueryParameterValue(String key) {
-    List<String> values = queryParameters.get(key);
-    return (values != null && values.size() > 0) ? values.get(0) : null;
-  }
-
-  public List<String> getQueryParameterValues(String key) {
-    return queryParameters.get(key);
-  }
-
-  public Map<String, List<String>> getQueryParameters() {
-    return queryParameters;
-  }
-
-  public void setQueryParameters(Map<String, List<String>> parameters) {
-    this.queryParameters.clear();
-    this.queryParameters.putAll(parameters);
-  }
-
   public String getScheme() {
     String xScheme = getHeader(Headers.XForwardedProto);
     return xScheme == null ? scheme : xScheme;
@@ -435,6 +443,24 @@ public class HTTPRequest implements Buildable<HTTPRequest> {
 
   public String getTransferEncoding() {
     return getHeader(Headers.TransferEncoding);
+  }
+
+  public String getURLParameter(String key) {
+    List<String> values = urlParameters.get(key);
+    return (values != null && values.size() > 0) ? values.get(0) : null;
+  }
+
+  public List<String> getURLParameters(String key) {
+    return urlParameters.get(key);
+  }
+
+  public Map<String, List<String>> getURLParameters() {
+    return urlParameters;
+  }
+
+  public void setURLParameters(Map<String, List<String>> parameters) {
+    this.urlParameters.clear();
+    this.urlParameters.putAll(parameters);
   }
 
   public boolean isChunked() {
@@ -480,21 +506,23 @@ public class HTTPRequest implements Buildable<HTTPRequest> {
     }
   }
 
-  public void setQueryParameter(String name, String value) {
-    setQueryParameters(name, value);
+  public void setURLParameter(String name, String value) {
+    setURLParameters(name, value);
   }
 
-  public void setQueryParameters(String name, String... values) {
-    setQueryParameters(name, new ArrayList<>(List.of(values)));
+  public void setURLParameters(String name, String... values) {
+    setURLParameters(name, new ArrayList<>(List.of(values)));
   }
 
-  public void setQueryParameters(String name, Collection<String> values) {
+  public void setURLParameters(String name, Collection<String> values) {
     List<String> list = new ArrayList<>();
-    this.queryParameters.put(name, list);
+    this.urlParameters.put(name, list);
 
     values.stream()
           .filter(Objects::nonNull)
           .forEach(list::add);
+
+    combinedParameters = null;
   }
 
   private void decodeHeader(String name, String value) {
@@ -512,26 +540,15 @@ public class HTTPRequest implements Buildable<HTTPRequest> {
         this.encoding = null;
         this.multipart = false;
 
-        List<String> parts = HTTPTools.parseHeaderValue(value);
-        for (String part : parts) {
-          String lower = part.toLowerCase();
-          if (lower.startsWith(ContentTypes.MultipartPrefix)) {
-            this.multipart = true;
-          }
+        HeaderValue headerValue = HTTPTools.parseHeaderValue(value);
+        if (headerValue.value().startsWith(ContentTypes.MultipartPrefix)) {
+          this.multipart = true;
+          this.multipartBoundary = headerValue.parameters().get(ContentTypes.BoundaryParameter);
+        }
 
-          if (lower.startsWith(ContentTypes.BoundaryPrefix)) {
-            this.multipartBoundary = part.substring(ContentTypes.BoundaryPrefix.length());
-
-            // Strip quotes if needed
-            int length = multipartBoundary.length();
-            if (multipartBoundary.charAt(0) == '"' && multipartBoundary.charAt(length - 1) == '"') {
-              multipartBoundary = multipartBoundary.substring(1, length - 1);
-            }
-          }
-
-          if (lower.startsWith(ContentTypes.CharsetPrefix)) {
-            encoding = Charset.forName(part.substring(ContentTypes.CharsetPrefix.length()));
-          }
+        String charset = headerValue.parameters().get(ContentTypes.CharsetParameter);
+        if (charset != null) {
+          encoding = Charset.forName(charset);
         }
 
         break;

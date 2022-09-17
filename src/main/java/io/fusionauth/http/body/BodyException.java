@@ -13,30 +13,19 @@
  * either express or implied. See the License for the specific
  * language governing permissions and limitations under the License.
  */
-package io.fusionauth.http.server;
+package io.fusionauth.http.body;
 
 /**
- * An exception that is thrown when an HTTP message fails to parse correctly due to an invalid character or similar issue.
+ * Exception that is thrown if any HTTP body fails to be read and/or processed.
  *
  * @author Brian Pontarelli
  */
-public class ParseException extends RuntimeException {
-  public ParseException() {
-  }
-
-  public ParseException(String message) {
+public class BodyException extends RuntimeException {
+  public BodyException(String message) {
     super(message);
   }
 
-  public ParseException(String message, Throwable cause) {
+  public BodyException(String message, Throwable cause) {
     super(message, cause);
-  }
-
-  public ParseException(Throwable cause) {
-    super(cause);
-  }
-
-  protected ParseException(String message, Throwable cause, boolean enableSuppression, boolean writableStackTrace) {
-    super(message, cause, enableSuppression, writableStackTrace);
   }
 }

@@ -15,7 +15,7 @@
  */
 package io.fusionauth.http.body.request;
 
-import io.fusionauth.http.server.ParseException;
+import io.fusionauth.http.ParseException;
 import io.fusionauth.http.util.HTTPTools;
 
 public enum ChunkedBodyState {

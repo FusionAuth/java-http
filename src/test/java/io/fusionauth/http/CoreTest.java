@@ -62,7 +62,10 @@ public class CoreTest {
       res.getOutputStream().close();
     };
 
-    try (HTTPServer server = new HTTPServer().withHandler(handler).withClientTimeoutDuration(Duration.ofSeconds(1)).withNumberOfWorkerThreads(1).withPort(4242)) {
+    try (HTTPServer server = new HTTPServer().withHandler(handler)
+                                             .withClientTimeoutDuration(Duration.ofSeconds(1))
+                                             .withNumberOfWorkerThreads(1)
+                                             .withPort(4242)) {
       server.start();
 
       URI uri = URI.create("http://localhost:4242/api/system/version");
