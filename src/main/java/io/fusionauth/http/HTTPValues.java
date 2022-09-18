@@ -129,6 +129,12 @@ public final class HTTPValues {
     }
   }
 
+  public static final class DispositionParameters {
+    public static final String filename = "filename";
+
+    public static final String name = "name";
+  }
+
   /**
    * Header names.
    */

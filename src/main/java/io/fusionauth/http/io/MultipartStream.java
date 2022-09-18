@@ -15,14 +15,23 @@
  */
 package io.fusionauth.http.io;
 
+import java.io.ByteArrayOutputStream;
+import java.io.Closeable;
 import java.io.IOException;
 import java.io.InputStream;
+import java.io.OutputStream;
+import java.nio.charset.Charset;
+import java.nio.charset.StandardCharsets;
+import java.nio.file.Files;
+import java.nio.file.Path;
 import java.util.HashMap;
 import java.util.LinkedList;
 import java.util.List;
 import java.util.Map;
 
+import io.fusionauth.http.HTTPValues.ContentTypes;
 import io.fusionauth.http.HTTPValues.ControlBytes;
+import io.fusionauth.http.HTTPValues.DispositionParameters;
 import io.fusionauth.http.HTTPValues.Headers;
 import io.fusionauth.http.ParseException;
 import io.fusionauth.http.server.FileInfo;
@@ -31,58 +40,26 @@ import io.fusionauth.http.util.HTTPTools;
 import io.fusionauth.http.util.HTTPTools.HeaderValue;
 
 /**
- * Copied from Apache Commons (see the license above) but modified heavily to simplify and work better with Java HTTP.
+ * Handles the multipart body encoding and file uploads.
+ *
+ * @author Brian Pontarelli
  */
-@SuppressWarnings("resource")
 public class MultipartStream {
-  /**
-   * The byte sequence that partitions the stream.
-   */
   private final byte[] boundary;
 
-  /**
-   * The table for Knuth-Morris-Pratt search algorithm.
-   */
-  private final int[] boundaryTable;
-
-  /**
-   * The length of the buffer used for processing the request.
-   */
-  private final int bufSize;
-
-  /**
-   * The buffer used for processing the request.
-   */
   private final byte[] buffer;
 
-  /**
-   * The input stream from which data is read.
-   */
   private final InputStream input;
 
-  /**
-   * The amount of data, in bytes, that must be kept in the buffer in order to detect delimiters reliably.
-   */
-  private final int keepRegion;
-
-  /**
-   * The length of the boundary token plus the leading {@code CRLF--}.
-   */
   private int boundaryLength;
 
-  /**
-   * The index of first valid character in the buffer.
-   * <p>
-   * 0 <= head < bufSize
-   */
-  private int head;
+  private int boundaryStart;
 
-  /**
-   * The index of last valid character in the buffer + 1.
-   * <br>
-   * 0 <= tail <= bufSize
-   */
-  private int tail;
+  private int current;
+
+  private int end;
+
+  private int partialBoundary;
 
   /**
    * Constructs a {@code MultipartStream} with a custom size buffer.
@@ -97,29 +74,26 @@ public class MultipartStream {
    */
   public MultipartStream(final InputStream input, final byte[] boundary, final int bufSize) {
     if (boundary == null) {
-      throw new IllegalArgumentException("boundary may not be null");
+      throw new IllegalArgumentException("Boundary cannot be null.");
     }
 
-    // We prepend CR/LF to the boundary to chop trailing CR/LF from body-data tokens.
-    this.boundaryLength = boundary.length + ControlBytes.MultipartBoundaryPrefix.length;
-    if (bufSize < this.boundaryLength + 1) {
-      throw new IllegalArgumentException("The buffer size specified for the MultipartStream is too small");
+    // We prepend CR/LF to the boundary to chop trailing CRLF from body-data tokens.
+    if (bufSize < boundary.length * 2) {
+      throw new IllegalArgumentException("The buffer size specified for the MultipartStream is too small. Must be double the boundary length.");
     }
 
     this.input = input;
-    this.bufSize = Math.max(bufSize, boundaryLength * 2);
-    this.buffer = new byte[this.bufSize];
+    this.buffer = new byte[bufSize];
+    this.boundary = new byte[boundary.length + 4]; // CRLF--<boundary> (then we manually handle CRLF or --)
+    this.boundaryStart = 2; // Initially we start after the CRLF
+    this.boundaryLength = boundary.length + 2; // Initially we only analyze the boundary plus the dashes
 
-    this.boundary = new byte[this.boundaryLength];
-    this.boundaryTable = new int[this.boundaryLength + 1];
-    this.keepRegion = this.boundary.length;
+    // Set up the full boundary
+    System.arraycopy(ControlBytes.MultipartBoundaryPrefix, 0, this.boundary, 0, 4);
+    System.arraycopy(boundary, 0, this.boundary, 4, boundary.length);
 
-    System.arraycopy(ControlBytes.MultipartBoundaryPrefix, 0, this.boundary, 0, ControlBytes.MultipartBoundaryPrefix.length);
-    System.arraycopy(boundary, 0, this.boundary, ControlBytes.MultipartBoundaryPrefix.length, boundary.length);
-    computeBoundaryTable();
-
-    head = 0;
-    tail = 0;
+    current = 0;
+    end = 0;
   }
 
   /**
@@ -131,13 +105,29 @@ public class MultipartStream {
    * @throws ParseException If the input is not a proper multipart body and could not be processed.
    */
   public void process(Map<String, List<String>> parameters, List<FileInfo> files) throws IOException, ParseException {
-    boolean hasMore = initialize();
+    // Initialize the buffer with enough bytes to analyze one boundary
+    if (!reload(boundaryLength + 2)) {
+      throw new ParseException("Invalid multipart body. The body is empty.");
+    }
 
-    Map<String, List<HeaderValue>> headers = new HashMap<>();
+    current = findBoundary();
+    if (current == -1) {
+      throw new ParseException("Invalid multipart body. The body doesn't contain any boundaries.");
+    }
+
+    // Close this boundary
+    boolean hasMore = closeBoundary();
+
+    // Reset the boundary and the search table
+    boundaryStart = 0;
+    boundaryLength = boundary.length;
+
+    // Loop
+    Map<String, HeaderValue> headers = new HashMap<>();
     while (hasMore) {
       readHeaders(headers);
-      readBodyData(headers, parameters, files);
-      hasMore = readBoundary();
+      readPart(headers, parameters, files);
+      hasMore = closeBoundary();
 
       if (hasMore) {
         headers.clear();
@@ -146,148 +136,100 @@ public class MultipartStream {
   }
 
   /**
-   * Compute the table used for Knuth-Morris-Pratt search algorithm.
+   * Closes a boundary by reading 2 more bytes. If those bytes are CRLF, then there are more parts. If they are --, then the body is
+   * complete.
+   *
+   * @return True if there are more parts.
+   * @throws IOException    If any I/O operation failed.
+   * @throws ParseException If the input is not a proper multipart body and could not be processed.
    */
-  private void computeBoundaryTable() {
-    int position = 2;
-    int candidate = 0;
+  private boolean closeBoundary() throws IOException {
+    current += boundaryLength;
 
-    boundaryTable[0] = -1;
-    boundaryTable[1] = 0;
+    // Read the next two bytes
+    byte one = readByte();
+    byte two = readByte();
 
-    while (position <= boundaryLength) {
-      if (boundary[position - 1] == boundary[candidate]) {
-        boundaryTable[position] = candidate + 1;
-        candidate++;
-        position++;
-      } else if (candidate > 0) {
-        candidate = boundaryTable[candidate];
-      } else {
-        boundaryTable[position] = 0;
-        position++;
-      }
+    // Determine if there are more parts
+    boolean hasMore;
+    if (one == '-' && two == '-') {
+      hasMore = false;
+    } else if (one == '\r' && two == '\n') {
+      hasMore = true;
+    } else {
+      throw new ParseException("Unexpected characters [" + new String(new byte[]{one, two}) + "] follow a boundary.");
     }
+
+    return hasMore;
   }
 
   /**
-   * Searches for the {@code boundary} in the {@code buffer} region delimited by {@code head} and {@code tail}.
+   * Searches for the {@code boundary} in the current {@code buffer} region. At the same time, if a partial boundary is found, this sets the
+   * {@code partialBoundary} field.
    *
    * @return The position of the boundary found, counting from the beginning of the {@code buffer}, or {@code -1} if not found.
    */
-  private int findSeparator() {
-    int bufferPos = this.head;
-    int tablePos = 0;
+  private int findBoundary() {
+    int bufferIndex = current;
+    int boundaryIndex = boundaryStart;
+    int checkIndex;
 
-    while (bufferPos < this.tail) {
-      while (tablePos >= 0 && buffer[bufferPos] != boundary[tablePos]) {
-        tablePos = boundaryTable[tablePos];
+    while (bufferIndex < end) {
+      // Run ahead and find the start
+      while (bufferIndex < end && buffer[bufferIndex] != boundary[boundaryIndex]) {
+        bufferIndex++;
       }
 
-      bufferPos++;
-      tablePos++;
-
-      if (tablePos == boundaryLength) {
-        return bufferPos - boundaryLength;
+      // Found the start
+      if (bufferIndex < end) {
+        partialBoundary = bufferIndex;
+      } else {
+        partialBoundary = -1;
       }
+
+      // Compare until we complete the boundary, find a miss, or exhaust the buffer
+      checkIndex = bufferIndex;
+      while (checkIndex < end && boundaryIndex < boundaryLength && buffer[checkIndex] == boundary[boundaryIndex]) {
+        checkIndex++;
+        boundaryIndex++;
+      }
+
+      // Found a match
+      if (boundaryIndex == boundaryLength) {
+        partialBoundary = -1;
+        return bufferIndex;
+      }
+
+      // Hit the end of the input but the match was valid
+      if (checkIndex == end) {
+        return -1;
+      }
+
+      // Restart because we fell through due to a mismatch
+      boundaryIndex = 0;
+      bufferIndex++;
+      partialBoundary = -1;
     }
 
     return -1;
   }
 
   /**
-   * Finds the beginning of the first part.
-   *
-   * @return True if the input has at least one part, false if there are no parts.
-   * @throws IOException    If any I/O operation failed.
-   * @throws ParseException If the input is not a proper multipart body and could not be processed.
-   */
-  private boolean initialize() throws IOException, ParseException {
-    // First boundary may be not preceded with a CRLF.
-    System.arraycopy(boundary, 2, boundary, 0, boundary.length - 2);
-    boundaryLength = boundary.length - 2;
-    computeBoundaryTable();
-
-    boolean hasParts = readBoundary();
-
-    // Restore boundary
-    System.arraycopy(boundary, 0, boundary, 2, boundary.length - 2);
-    boundaryLength = boundary.length;
-    boundary[0] = ControlBytes.CR;
-    boundary[1] = ControlBytes.LF;
-    computeBoundaryTable();
-
-    return hasParts;
-  }
-
-  /**
-   * Reads a single body and based on the headers, determines if it is a parameter or a file.
-   *
-   * @throws IOException    If any I/O operation failed.
-   * @throws ParseException If the input is not a proper multipart body and could not be processed.
-   */
-  private void readBodyData(Map<String, List<HeaderValue>> headers, Map<String, List<String>> parameters, List<FileInfo> files)
-      throws IOException, ParseException {
-    String name;
-    String filename;
-    if (headers.containsKey(Headers.ContentDispositionLower)) {
-//      HTTPTools.parseHeaderValue()
-    }
-//    return inputStream.transferTo(output);
-  }
-
-  /**
-   * Skips a {@code boundary} token, and checks whether more {@code encapsulations} are contained in the stream.
-   *
-   * @return {@code true} if there are more encapsulations in this stream; {@code false} otherwise.
-   * @throws IOException If the stream couldn't be read or was not a valid multipart body.
-   */
-  private boolean readBoundary() throws IOException {
-    final byte[] marker = new byte[2];
-    final boolean nextChunk;
-
-    head += boundaryLength;
-    marker[0] = readByte();
-    if (marker[0] == ControlBytes.LF) {
-      // Work around IE5 Mac bug with input type=image.
-      // Because the boundary delimiter, not including the trailing
-      // CRLF, must not appear within any file (RFC 2046, section
-      // 5.1.1), we know the missing CR is due to a buggy browser
-      // rather than a file containing something similar to a
-      // boundary.
-      return true;
-    }
-
-    marker[1] = readByte();
-    if (HTTPTools.arraysEquals(marker, ControlBytes.MultipartTerminator, 2)) {
-      nextChunk = false;
-    } else if (HTTPTools.arraysEquals(marker, ControlBytes.CRLF, 2)) {
-      nextChunk = true;
-    } else {
-      throw new ParseException("Unexpected characters follow a boundary");
-    }
-
-    return nextChunk;
-  }
-
-  /**
-   * Reads a byte from the {@code buffer}, and refills it as necessary.
+   * Reads a byte from the {@code buffer}, and reloads it as necessary.
    *
    * @return The next byte from the input stream.
-   * @throws IOException If any I/O operation failed.
+   * @throws IOException    If any I/O operation failed.
+   * @throws ParseException If the input is not a proper multipart body and could not be processed.
    */
   private byte readByte() throws IOException {
-    // Buffer depleted ?
-    if (head == tail) {
-      head = 0;
-      // Refill.
-      tail = input.read(buffer, head, bufSize);
-      if (tail == -1) {
-        // No more data available.
-        throw new IOException("No more data is available");
+    // Buffer depleted ? - reload at will
+    if (current == end) {
+      if (!reload(1)) {
+        throw new ParseException("Invalid multipart body. Ran out of data while processing.");
       }
     }
 
-    return buffer[head++];
+    return buffer[current++];
   }
 
   /**
@@ -296,7 +238,7 @@ public class MultipartStream {
    * @throws IOException    If any I/O operation failed.
    * @throws ParseException If the input is not a proper multipart body and could not be processed.
    */
-  private void readHeaders(Map<String, List<HeaderValue>> headers) throws IOException, ParseException {
+  private void readHeaders(Map<String, HeaderValue> headers) throws IOException, ParseException {
     var state = RequestPreambleState.HeaderName;
     var build = new StringBuilder();
     String headerName = null;
@@ -308,8 +250,7 @@ public class MultipartStream {
       if (nextState != state) {
         switch (state) {
           case HeaderName -> headerName = build.toString().toLowerCase();
-          case HeaderValue ->
-              headers.computeIfAbsent(headerName, key -> new LinkedList<>()).add(HTTPTools.parseHeaderValue(build.toString()));
+          case HeaderValue -> headers.put(headerName, HTTPTools.parseHeaderValue(build.toString()));
         }
 
         // If the next state is storing, reset the builder
@@ -327,211 +268,175 @@ public class MultipartStream {
   }
 
   /**
-   * An {@link InputStream} for reading an items contents.
+   * Reads a single body and based on the headers, determines if it is a parameter or a file.
+   *
+   * @throws IOException    If any I/O operation failed.
+   * @throws ParseException If the input is not a proper multipart body and could not be processed.
    */
-  public class ItemInputStream extends InputStream {
-    /**
-     * Offset when converting negative bytes to integers.
-     */
-    private static final int BYTE_POSITIVE_OFFSET = 256;
-
-    /**
-     * Whether the stream is already closed.
-     */
-    private boolean closed;
-
-    /**
-     * The number of bytes, which must be hold, because they might be a part of the boundary.
-     */
-    private int pad;
-
-    /**
-     * The current offset in the buffer.
-     */
-    private int pos;
-
-    /**
-     * Creates a new instance.
-     */
-    ItemInputStream() {
-      findSeparator();
+  private void readPart(Map<String, HeaderValue> headers, Map<String, List<String>> parameters, List<FileInfo> files)
+      throws IOException, ParseException {
+    HeaderValue disposition = headers.get(Headers.ContentDispositionLower);
+    if (disposition == null) {
+      throw new ParseException("Invalid multipart body. A part is missing a [Content-Disposition] header.");
     }
 
-    /**
-     * Returns the number of bytes, which are currently available, without blocking.
-     *
-     * @return Number of bytes in the buffer.
-     */
-    @Override
-    public int available() {
-      if (pos == -1) {
-        return tail - head - pad;
-      }
-      return pos - head;
+    String name = disposition.parameters().get(DispositionParameters.name);
+    if (name == null) {
+      throw new ParseException("Invalid multipart body. A part is missing a name parameter in the [Content-Disposition] header.");
     }
 
-    /**
-     * Closes the input stream.
-     *
-     * @throws IOException An I/O error occurred.
-     */
-    @Override
-    public void close() throws IOException {
-      close(false);
+    String filename = disposition.parameters().get(DispositionParameters.filename);
+    boolean isFile = filename != null;
+    HeaderValue contentType = headers.get(Headers.ContentTypeLower);
+    String contentTypeString = contentType != null ? contentType.value() : "application/octet-stream";
+    String encodingString = contentType != null ? contentType.parameters().get(ContentTypes.CharsetParameter) : null;
+    Charset encoding = encodingString != null ? Charset.forName(encodingString) : StandardCharsets.UTF_8;
+
+    PartProcessor processor;
+    if (isFile) {
+      processor = new FilePartProcessor(contentTypeString, encoding, filename, name);
+    } else {
+      processor = new ParameterPartProcessor(encoding);
     }
 
-    /**
-     * Closes the input stream.
-     *
-     * @param closeUnderlying Whether to close the underlying stream (hard close)
-     * @throws IOException An I/O error occurred.
-     */
-    public void close(boolean closeUnderlying) throws IOException {
-      if (closed) {
-        return;
-      }
-
-      if (closeUnderlying) {
-        closed = true;
-        input.close();
-      } else {
-        for (; ; ) {
-          int available = available();
-          if (available == 0) {
-            available = makeAvailable();
-            if (available == 0) {
-              break;
-            }
+    try (processor) {
+      int boundaryIndex;
+      do {
+        boundaryIndex = findBoundary();
+        if (boundaryIndex == -1) {
+          // Process up to the partial boundary match or the rest of the buffer
+          if (partialBoundary == -1) {
+            processor.process(current, end);
+          } else {
+            processor.process(current, partialBoundary);
           }
 
-          skip(available);
+          reload(boundary.length + 2); // Minimum is at least a full boundary
+        } else {
+          processor.process(current, boundaryIndex);
+          current = boundaryIndex;
         }
-      }
+      } while (boundaryIndex == -1);
 
-      closed = true;
+      if (isFile) {
+        files.add(processor.toFileInfo());
+      } else {
+        parameters.computeIfAbsent(name, key -> new LinkedList<>()).add(processor.toValue());
+      }
+    }
+  }
+
+  private boolean reload(int minimumToLoad) throws IOException {
+    // Move data that needs to be retained
+    int start = 0;
+    if (partialBoundary > 0) {
+      System.arraycopy(buffer, partialBoundary, buffer, 0, end - partialBoundary);
+      start = end - partialBoundary;
+      end -= partialBoundary;
+      partialBoundary = -1;
+      minimumToLoad = boundaryLength + 2; // If we have a partial, we need at least enough for the rest of the boundary
+    } else {
+      end = 0;
     }
 
-    /**
-     * Reads bytes into the given buffer.
-     *
-     * @param b   The destination buffer, where to write to.
-     * @param off Offset of the first byte in the buffer.
-     * @param len Maximum number of bytes to read.
-     * @return Number of bytes, which have been actually read, or -1 for EOF.
-     * @throws IOException An I/O error occurred.
-     */
+    current = 0;
+
+    // Load until we have enough
+    while (end - current < minimumToLoad) {
+      end += input.read(buffer, start, buffer.length - start);
+      if (end == -1) {
+        return false;
+      }
+
+      start += end;
+    }
+
+    return true;
+  }
+
+  /**
+   * An interface to assist with processing body bytes from a part into a String or a FileInfo.
+   */
+  private interface PartProcessor extends Closeable {
+    void process(int start, int end) throws IOException;
+
+    FileInfo toFileInfo() throws IOException;
+
+    String toValue();
+  }
+
+  private class FilePartProcessor implements PartProcessor {
+    private final String contentType;
+
+    private final Charset encoding;
+
+    private final String filename;
+
+    private final String name;
+
+    private final OutputStream output;
+
+    private final Path path;
+
+    private FilePartProcessor(String contentType, Charset encoding, String filename, String name) throws IOException {
+      this.contentType = contentType;
+      this.encoding = encoding;
+      this.filename = filename;
+      this.name = name;
+      this.path = Files.createTempFile("java-http", "file-upload");
+      this.output = Files.newOutputStream(this.path);
+    }
+
     @Override
-    public int read(final byte[] b, final int off, final int len) throws IOException {
-      if (closed) {
-        throw new IOException();
-      }
-
-      if (len == 0) {
-        return 0;
-      }
-
-      int res = available();
-      if (res == 0) {
-        res = makeAvailable();
-        if (res == 0) {
-          return -1;
-        }
-      }
-
-      res = Math.min(res, len);
-      System.arraycopy(buffer, head, b, off, res);
-      head += res;
-      return res;
+    public void close() throws IOException {
+      output.close();
     }
 
-    /**
-     * Returns the next byte in the stream.
-     *
-     * @return The next byte in the stream, as a non-negative integer, or -1 for EOF.
-     * @throws IOException An I/O error occurred.
-     */
     @Override
-    public int read() throws IOException {
-      if (closed) {
-        throw new IOException();
-      }
-
-      if (available() == 0 && makeAvailable() == 0) {
-        return -1;
-      }
-
-      final int b = buffer[head++];
-      return (b >= 0) ? b : b + BYTE_POSITIVE_OFFSET;
+    public void process(int start, int end) throws IOException {
+      output.write(buffer, start, end - start);
     }
 
-    /**
-     * Skips the given number of bytes.
-     *
-     * @param bytes Number of bytes to skip.
-     * @return The number of bytes, which have actually been skipped.
-     * @throws IOException An I/O error occurred.
-     */
     @Override
-    public long skip(final long bytes) throws IOException {
-      if (closed) {
-        throw new IOException();
-      }
-
-      int av = available();
-      if (av == 0) {
-        av = makeAvailable();
-        if (av == 0) {
-          return 0;
-        }
-      }
-      final long res = Math.min(av, bytes);
-      head += res;
-      return res;
+    public FileInfo toFileInfo() throws IOException {
+      output.close();
+      return new FileInfo(path, filename, name, contentType, encoding);
     }
 
-    /**
-     * Called for finding the separator.
-     */
-    private void findSeparator() {
-      pos = MultipartStream.this.findSeparator();
-      if (pos == -1) {
-        pad = Math.min(tail - head, keepRegion);
+    @Override
+    public String toValue() {
+      throw new UnsupportedOperationException();
+    }
+  }
+
+  private class ParameterPartProcessor implements PartProcessor {
+    private final Charset encoding;
+
+    private final ByteArrayOutputStream output = new ByteArrayOutputStream();
+
+    private ParameterPartProcessor(Charset encoding) {
+      this.encoding = encoding;
+    }
+
+    @Override
+    public void close() {
+    }
+
+    @Override
+    public void process(int start, int end) {
+      if (start < end) {
+        output.write(buffer, start, end - start);
       }
     }
 
-    /**
-     * Attempts to read more data.
-     *
-     * @return Number of available bytes
-     * @throws IOException An I/O error occurred.
-     */
-    private int makeAvailable() throws IOException {
-      if (pos != -1) {
-        return 0;
-      }
+    @Override
+    public FileInfo toFileInfo() {
+      throw new UnsupportedOperationException();
+    }
 
-      // Move the data to the beginning of the buffer.
-      System.arraycopy(buffer, tail - pad, buffer, 0, pad);
-
-      // Refill buffer with new data.
-      head = 0;
-      tail = pad;
-
-      for (; ; ) {
-        final int bytesRead = input.read(buffer, tail, bufSize - tail);
-        if (bytesRead == -1) {
-          throw new ParseException("Unable to parse multipart body because it isn't valid");
-        }
-
-        tail += bytesRead;
-
-        findSeparator();
-        final int av = available();
-
-        if (av > 0 || pos != -1) {
-          return av;
-        }
-      }
+    @Override
+    public String toValue() {
+      return output.toString(encoding);
     }
   }
 }

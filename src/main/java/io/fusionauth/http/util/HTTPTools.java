@@ -33,32 +33,6 @@ import io.fusionauth.http.server.HTTPResponse;
 
 public final class HTTPTools {
   /**
-   * Compares {@code count} first bytes in the given arrays.
-   *
-   * @param first  The first array to compare.
-   * @param second The second array to compare.
-   * @param count  The number of bytes to be compared.
-   * @return {@code true} if {@code count} first bytes in the arrays are equal.
-   */
-  public static boolean arraysEquals(final byte[] first, final byte[] second, final int count) {
-    if (first == second) {
-      return true;
-    }
-
-    if (first == null || second == null || first.length < count || second.length < count) {
-      return false;
-    }
-
-    for (int i = 0; i < count; i++) {
-      if (first[i] != second[i]) {
-        return false;
-      }
-    }
-
-    return true;
-  }
-
-  /**
    * Builds the HTTP response head section (status line, headers, etc).
    *
    * @param response  The response.

@@ -15,6 +15,7 @@
  */
 package io.fusionauth.http.server;
 
+import java.nio.charset.Charset;
 import java.nio.file.Path;
 
 /**
@@ -31,15 +32,22 @@ public class FileInfo {
 
   public final String name;
 
-  public FileInfo(Path file, String fileName, String name, String contentType) {
+  private final Charset encoding;
+
+  public FileInfo(Path file, String fileName, String name, String contentType, Charset encoding) {
     this.file = file;
     this.fileName = fileName;
     this.name = name;
     this.contentType = contentType;
+    this.encoding = encoding;
   }
 
   public String getContentType() {
     return contentType;
+  }
+
+  public Charset getEncoding() {
+    return encoding;
   }
 
   public Path getFile() {
