@@ -27,52 +27,34 @@ import java.nio.channels.SelectionKey;
 import java.nio.channels.Selector;
 import java.nio.channels.ServerSocketChannel;
 import java.nio.channels.SocketChannel;
+import java.nio.file.Path;
 import java.time.Duration;
 import java.util.Iterator;
 import java.util.Objects;
 
 import io.fusionauth.http.log.Logger;
 import io.fusionauth.http.log.LoggerFactory;
-import io.fusionauth.http.log.SystemOutLoggerFactory;
 import io.fusionauth.http.util.ThreadPool;
 
 public class HTTPServer extends Thread implements Closeable, Notifier {
-  private InetAddress address;
-
   private ServerSocketChannel channel;
 
-  private Duration clientTimeoutDuration = Duration.ofSeconds(10);
+  private HTTPServerConfiguration configuration = new HTTPServerConfiguration();
 
-  private ExpectValidator expectValidator;
+  private HTTPContext context;
 
-  private HTTPHandler handler;
-
-  private Instrumenter instrumenter;
-
-  private LoggerFactory loggerFactory = SystemOutLoggerFactory.FACTORY;
-
-  private Logger logger = loggerFactory.getLogger(HTTPServer.class);
-
-  private int maxHeadLength;
-
-  private int numberOfWorkerThreads = 40;
-
-  private int port = 8080;
+  private Logger logger = configuration.getLoggerFactory().getLogger(HTTPServer.class);
 
   // This is shared across all worker, processors, etc.
   private ByteBuffer preambleBuffer;
 
-  private int preambleBufferSize = 4096;
-
   private Selector selector;
-
-  private Duration shutdownDuration = Duration.ofSeconds(10);
 
   private ThreadPool threadPool;
 
   public HTTPServer() {
     try {
-      this.address = InetAddress.getByName("::");
+      this.configuration.withBindAddress(InetAddress.getByName("::"));
     } catch (UnknownHostException e) {
       throw new IllegalStateException(e);
     }
@@ -101,6 +83,13 @@ public class HTTPServer extends Thread implements Closeable, Notifier {
     }
   }
 
+  /**
+   * @return The HTTP Context or null if the server hasn't been started yet.
+   */
+  public HTTPContext getContext() {
+    return context;
+  }
+
   @Override
   public void notifyNow() {
     // Wake-up! Time to put on a little make-up!
@@ -108,6 +97,7 @@ public class HTTPServer extends Thread implements Closeable, Notifier {
   }
 
   public void run() {
+    Instrumenter instrumenter = configuration.getInstrumenter();
     while (true) {
       SelectionKey key = null;
       try {
@@ -123,11 +113,10 @@ public class HTTPServer extends Thread implements Closeable, Notifier {
         while (iterator.hasNext()) {
           key = iterator.next();
           if (key.isAcceptable()) {
-            logger.debug("Accepting incoming connection");
             var clientChannel = channel.accept();
             clientChannel.configureBlocking(false);
 
-            HTTPProcessor processor = new HTTP11Processor(expectValidator, handler, instrumenter, maxHeadLength, this, loggerFactory, preambleBuffer, threadPool);
+            HTTPProcessor processor = new HTTP11Processor(configuration, this, preambleBuffer, threadPool);
             clientChannel.register(selector, SelectionKey.OP_READ, processor);
             logger.trace("(A)");
 
@@ -135,7 +124,7 @@ public class HTTPServer extends Thread implements Closeable, Notifier {
               instrumenter.acceptedConnection();
             }
           } else if (key.isReadable()) {
-            logger.debug("Reading from client");
+            logger.trace("(R)");
             HTTPProcessor processor = (HTTP11Processor) key.attachment();
             long bytes = processor.read(key);
 
@@ -143,7 +132,7 @@ public class HTTPServer extends Thread implements Closeable, Notifier {
               instrumenter.readFromClient(bytes);
             }
           } else if (key.isWritable()) {
-            logger.debug("Writing to client");
+            logger.trace("(W)");
             HTTPProcessor processor = (HTTP11Processor) key.attachment();
             long bytes = processor.write(key);
 
@@ -186,15 +175,17 @@ public class HTTPServer extends Thread implements Closeable, Notifier {
 
   @Override
   public synchronized void start() {
-    preambleBuffer = ByteBuffer.allocate(preambleBufferSize);
+    preambleBuffer = ByteBuffer.allocate(configuration.getPreambleBufferSize());
+    context = new HTTPContext(configuration.getBaseDir());
 
     try {
       selector = Selector.open();
       channel = ServerSocketChannel.open();
       channel.configureBlocking(false);
-      channel.bind(new InetSocketAddress(address, port));
+      channel.bind(new InetSocketAddress(configuration.getAddress(), configuration.getPort()));
       channel.register(selector, SelectionKey.OP_ACCEPT);
 
+      Instrumenter instrumenter = configuration.getInstrumenter();
       if (instrumenter != null) {
         instrumenter.serverStarted();
       }
@@ -204,133 +195,165 @@ public class HTTPServer extends Thread implements Closeable, Notifier {
     }
 
     // Start the thread pool for the workers
-    threadPool = new ThreadPool(numberOfWorkerThreads, "HTTP Server Worker Thread", shutdownDuration);
+    threadPool = new ThreadPool(configuration.getNumberOfWorkerThreads(), "HTTP Server Worker Thread", configuration.getShutdownDuration());
 
     super.start();
-    logger.info("HTTP server started successfully and listening on port [{}]", port);
+    logger.info("HTTP server started successfully and listening on port [{}]", configuration.getPort());
   }
 
   /**
-   * Sets the bind address that this server listens on. Defaults to `::`.
+   * Convenience method for calling {@link HTTPServerConfiguration#withBaseDir(Path)}.
+   *
+   * @param baseDir The base dir.
+   * @return This.
+   */
+  public HTTPServer withBaseDir(Path baseDir) {
+    this.configuration.withBaseDir(baseDir);
+    return this;
+  }
+
+  /**
+   * Convenience method for calling {@link HTTPServerConfiguration#withBindAddress(InetAddress)}.
    *
    * @param address The bind address.
    * @return This.
    */
   public HTTPServer withBindAddress(InetAddress address) {
-    this.address = address;
+    this.configuration.withBindAddress(address);
     return this;
   }
 
   /**
-   * Sets the duration that the server will allow client connections to remain open. This includes Keep-Alive as well as read timeout.
+   * Convenience method for calling {@link HTTPServerConfiguration#withClientTimeoutDuration(Duration)}.
    *
    * @param duration The duration.
    * @return This.
    */
   public HTTPServer withClientTimeoutDuration(Duration duration) {
-    this.clientTimeoutDuration = duration;
+    this.configuration.withClientTimeoutDuration(duration);
     return this;
   }
 
   /**
-   * Sets an ExpectValidator that is used if a client sends the server a {@code Expect: 100-continue} header.
+   * Sets the configuration for this server.
+   *
+   * @param configuration The new configuration.
+   * @return This.
+   */
+  public HTTPServer withConfiguration(HTTPServerConfiguration configuration) {
+    this.configuration = configuration;
+    return this;
+  }
+
+  /**
+   * Convenience method for calling {@link HTTPServerConfiguration#withContextPath(String)}.
+   *
+   * @param contextPath The context path for the server.
+   * @return This.
+   */
+  public HTTPServer withContextPath(String contextPath) {
+    this.configuration.withContextPath(contextPath);
+    return this;
+  }
+
+  /**
+   * Convenience method for calling {@link HTTPServerConfiguration#withExpectValidator(ExpectValidator)}.
    *
    * @param validator The validator.
    * @return This.
    */
   public HTTPServer withExpectValidator(ExpectValidator validator) {
-    this.expectValidator = validator;
+    this.configuration.withExpectValidator(validator);
     return this;
   }
 
   /**
-   * Sets the handler that will process the requests.
+   * Convenience method for calling {@link HTTPServerConfiguration#withHandler(HTTPHandler)}.
    *
    * @param handler The handler that processes the requests.
    * @return This.
    */
   public HTTPServer withHandler(HTTPHandler handler) {
-    this.handler = handler;
+    this.configuration.withHandler(handler);
     return this;
   }
 
   /**
-   * Sets an instrumenter that the server will notify when events and conditions happen.
+   * Convenience method for calling {@link HTTPServerConfiguration#withInstrumenter(Instrumenter)}.
    *
    * @param instrumenter The instrumenter.
    * @return This.
    */
   public HTTPServer withInstrumenter(Instrumenter instrumenter) {
-    this.instrumenter = instrumenter;
+    this.configuration.withInstrumenter(instrumenter);
     return this;
   }
 
   /**
-   * Sets the logger factory that all the HTTP server classes use to retrieve specific loggers. Defaults to the
-   * {@link SystemOutLoggerFactory}.
+   * Convenience method for calling {@link HTTPServerConfiguration#withLoggerFactory(LoggerFactory)}.
    *
    * @param loggerFactory The factory.
    * @return This.
    */
   public HTTPServer withLoggerFactory(LoggerFactory loggerFactory) {
     Objects.requireNonNull(loggerFactory);
-    this.loggerFactory = loggerFactory;
+    this.configuration.withLoggerFactory(loggerFactory);
     this.logger = loggerFactory.getLogger(HTTPServer.class);
     return this;
   }
 
   /**
-   * Sets the max preamble length (the start-line and headers constitute the head). Defaults to 64k
+   * Convenience method for calling {@link HTTPServerConfiguration#withMaxPreambleLength(int)}.
    *
    * @param maxLength The max preamble length.
    * @return This.
    */
   public HTTPServer withMaxPreambleLength(int maxLength) {
-    this.maxHeadLength = maxLength;
+    this.configuration.withMaxPreambleLength(maxLength);
     return this;
   }
 
   /**
-   * Sets the number of worker threads that will handle requests coming into the HTTP server. Defaults to 40.
+   * Convenience method for calling {@link HTTPServerConfiguration#withNumberOfWorkerThreads(int)}.
    *
    * @param numberOfWorkerThreads The number of worker threads.
    * @return This.
    */
   public HTTPServer withNumberOfWorkerThreads(int numberOfWorkerThreads) {
-    this.numberOfWorkerThreads = numberOfWorkerThreads;
+    this.configuration.withNumberOfWorkerThreads(numberOfWorkerThreads);
     return this;
   }
 
   /**
-   * Sets the port that this server listens on for HTTP (non-TLS). Defaults to 8080.
+   * Convenience method for calling {@link HTTPServerConfiguration#withPort(int)}.
    *
    * @param port The port.
    * @return This.
    */
   public HTTPServer withPort(int port) {
-    this.port = port;
+    this.configuration.withPort(port);
     return this;
   }
 
   /**
-   * Sets the size of the preamble buffer (that is the buffer that reads the start-line and headers). Defaults to 4096.
+   * Convenience method for calling {@link HTTPServerConfiguration#withPreambleBufferSize(int)}.
    *
    * @param size The buffer size.
    * @return This.
    */
   public HTTPServer withPreambleBufferSize(int size) {
-    this.preambleBufferSize = size;
+    this.configuration.withPreambleBufferSize(size);
     return this;
   }
 
   /**
-   * Sets the duration the server will wait for running requests to be completed. Defaults to 10 seconds.
+   * Convenience method for calling {@link HTTPServerConfiguration#withShutdownDuration(Duration)}.
    *
    * @param duration The duration the server will wait for all running request processing threads to complete their work.
    * @return This.
    */
   public HTTPServer withShutdownDuration(Duration duration) {
-    this.shutdownDuration = duration;
+    this.configuration.withShutdownDuration(duration);
     return this;
   }
 
@@ -339,7 +362,7 @@ public class HTTPServer extends Thread implements Closeable, Notifier {
     selector.keys()
             .stream()
             .filter(key -> key.attachment() != null)
-            .filter(key -> ((HTTPProcessor) key.attachment()).lastUsed() < now - clientTimeoutDuration.toMillis())
+            .filter(key -> ((HTTPProcessor) key.attachment()).lastUsed() < now - configuration.getClientTimeoutDuration().toMillis())
             .forEach(key -> {
               var client = (SocketChannel) key.channel();
               try {

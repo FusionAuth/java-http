@@ -25,7 +25,6 @@ import io.fusionauth.http.body.request.ChunkedBodyProcessor;
 import io.fusionauth.http.body.request.ContentLengthBodyProcessor;
 import io.fusionauth.http.io.ReaderBlockingByteBufferInputStream;
 import io.fusionauth.http.log.Logger;
-import io.fusionauth.http.log.LoggerFactory;
 
 /**
  * A processor that handles incoming bytes that form the HTTP request.
@@ -35,7 +34,7 @@ import io.fusionauth.http.log.LoggerFactory;
 public class HTTPRequestProcessor {
   private final StringBuilder builder = new StringBuilder();
 
-  private final Instrumenter instrumenter;
+  private final HTTPServerConfiguration configuration;
 
   private final Logger logger;
 
@@ -51,10 +50,10 @@ public class HTTPRequestProcessor {
 
   private RequestState state = RequestState.Preamble;
 
-  public HTTPRequestProcessor(HTTPRequest request, Instrumenter instrumenter, LoggerFactory loggerFactory) {
+  public HTTPRequestProcessor(HTTPServerConfiguration configuration, HTTPRequest request) {
+    this.configuration = configuration;
     this.request = request;
-    this.instrumenter = instrumenter;
-    this.logger = loggerFactory.getLogger(HTTPRequestProcessor.class);
+    this.logger = configuration.getLoggerFactory().getLogger(HTTPRequestProcessor.class);
   }
 
   public ByteBuffer bodyBuffer() {
@@ -113,7 +112,7 @@ public class HTTPRequestProcessor {
             bodyProcessor = new ContentLengthBodyProcessor(size, contentLength);
           } else {
             bodyProcessor = new ChunkedBodyProcessor(size);
-            instrumenter.chunkedRequest();
+            configuration.getInstrumenter().chunkedRequest();
           }
 
           // Create the input stream and add any body data that is left over in the buffer

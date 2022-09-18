@@ -27,7 +27,6 @@ import io.fusionauth.http.body.response.ContentLengthBodyProcessor;
 import io.fusionauth.http.body.response.EmptyBodyProcessor;
 import io.fusionauth.http.io.NonBlockingByteBufferOutputStream;
 import io.fusionauth.http.log.Logger;
-import io.fusionauth.http.log.LoggerFactory;
 import io.fusionauth.http.util.HTTPTools;
 
 /**
@@ -36,11 +35,9 @@ import io.fusionauth.http.util.HTTPTools;
  * @author Brian Pontarelli
  */
 public class HTTPResponseProcessor {
-  private final Instrumenter instrumenter;
+  private final HTTPServerConfiguration configuration;
 
   private final Logger logger;
-
-  private final int maxHeadLength;
 
   private final NonBlockingByteBufferOutputStream outputStream;
 
@@ -54,14 +51,13 @@ public class HTTPResponseProcessor {
 
   private volatile ResponseState state = ResponseState.Preamble;
 
-  public HTTPResponseProcessor(HTTPRequest request, HTTPResponse response, Instrumenter instrumenter,
-                               NonBlockingByteBufferOutputStream outputStream, int maxHeadLength, LoggerFactory loggerFactory) {
+  public HTTPResponseProcessor(HTTPServerConfiguration configuration, HTTPRequest request, HTTPResponse response,
+                               NonBlockingByteBufferOutputStream outputStream) {
+    this.configuration = configuration;
     this.request = request;
     this.response = response;
-    this.instrumenter = instrumenter;
     this.outputStream = outputStream;
-    this.maxHeadLength = maxHeadLength;
-    this.logger = loggerFactory.getLogger(HTTPRequestProcessor.class);
+    this.logger = configuration.getLoggerFactory().getLogger(HTTPRequestProcessor.class);
   }
 
   public synchronized ByteBuffer[] currentBuffer() {
@@ -75,6 +71,7 @@ public class HTTPResponseProcessor {
       // Construct the preamble if needed and return it if there is any bytes left
       if (preambleBuffers == null) {
         logger.debug("The worker thread has bytes to write or has closed the stream, but the preamble hasn't been sent yet. Generating preamble");
+        int maxHeadLength = configuration.getMaxHeadLength();
         if (state == ResponseState.Preamble) {
           fillInHeaders();
           preambleBuffers = new ByteBuffer[]{HTTPTools.buildResponsePreamble(response, maxHeadLength)};
@@ -94,6 +91,7 @@ public class HTTPResponseProcessor {
         } else if (!outputStream.isEmpty()) {
           bodyProcessor = new ChunkedBodyProcessor(outputStream);
 
+          var instrumenter = configuration.getInstrumenter();
           if (instrumenter != null) {
             instrumenter.chunkedResponse();
           }

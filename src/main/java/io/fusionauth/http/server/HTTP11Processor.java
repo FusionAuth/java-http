@@ -22,7 +22,6 @@ import java.nio.channels.SocketChannel;
 
 import io.fusionauth.http.io.NonBlockingByteBufferOutputStream;
 import io.fusionauth.http.log.Logger;
-import io.fusionauth.http.log.LoggerFactory;
 import io.fusionauth.http.server.HTTPRequestProcessor.RequestState;
 import io.fusionauth.http.server.HTTPResponseProcessor.ResponseState;
 import io.fusionauth.http.util.ThreadPool;
@@ -34,17 +33,9 @@ import io.fusionauth.http.util.ThreadPool;
  */
 @SuppressWarnings("resource")
 public class HTTP11Processor implements HTTPProcessor {
-  private final ExpectValidator expectValidator;
-
-  private final HTTPHandler handler;
-
-  private final Instrumenter instrumenter;
+  private final HTTPServerConfiguration configuration;
 
   private final Logger logger;
-
-  private final LoggerFactory loggerFactory;
-
-  private final int maxHeadLength;
 
   private final Notifier notifier;
 
@@ -62,26 +53,19 @@ public class HTTP11Processor implements HTTPProcessor {
 
   private long lastUsed = System.currentTimeMillis();
 
-  private boolean responseCommitted = false;
-
-  public HTTP11Processor(ExpectValidator validator, HTTPHandler handler, Instrumenter instrumenter, int maxHeadLength, Notifier notifier,
-                         LoggerFactory loggerFactory, ByteBuffer preambleBuffer, ThreadPool threadPool) {
-    expectValidator = validator;
-    this.handler = handler;
-    this.instrumenter = instrumenter;
-    this.logger = loggerFactory.getLogger(HTTP11Processor.class);
-    this.loggerFactory = loggerFactory;
-    this.maxHeadLength = maxHeadLength;
+  public HTTP11Processor(HTTPServerConfiguration configuration, Notifier notifier, ByteBuffer preambleBuffer, ThreadPool threadPool) {
+    this.configuration = configuration;
+    this.logger = configuration.getLoggerFactory().getLogger(HTTP11Processor.class);
     this.notifier = notifier;
     this.preambleBuffer = preambleBuffer;
     this.threadPool = threadPool;
 
-    this.request = new HTTPRequest();
-    this.requestProcessor = new HTTPRequestProcessor(request, instrumenter, loggerFactory);
+    this.request = new HTTPRequest(configuration.getContextPath());
+    this.requestProcessor = new HTTPRequestProcessor(configuration, request);
 
     NonBlockingByteBufferOutputStream outputStream = new NonBlockingByteBufferOutputStream(notifier);
     this.response = new HTTPResponse(outputStream, request);
-    this.responseProcessor = new HTTPResponseProcessor(request, response, instrumenter, outputStream, maxHeadLength, loggerFactory);
+    this.responseProcessor = new HTTPResponseProcessor(configuration, request, response, outputStream);
   }
 
   @Override
@@ -121,6 +105,8 @@ public class HTTP11Processor implements HTTPProcessor {
       return 0L;
     }
 
+    logger.trace("Read [{}] bytes from client", read);
+    
     if (state == RequestState.Preamble) {
       buffer.flip();
       state = requestProcessor.processPreambleBytes(buffer);
@@ -131,13 +117,14 @@ public class HTTP11Processor implements HTTPProcessor {
       // If the next state is not preamble, that means we are done processing that and ready to handle the request in a separate thread
       if (state != RequestState.Preamble && state != RequestState.Expect) {
         logger.trace("(RW)");
-        threadPool.submit(new HTTPWorker(handler, loggerFactory, this, request, response));
+        threadPool.submit(new HTTPWorker(configuration.getHandler(), configuration.getLoggerFactory(), this, request, response));
       }
     } else {
       state = requestProcessor.processBodyBytes();
     }
 
     if (state == RequestState.Expect) {
+      var expectValidator = configuration.getExpectValidator();
       if (expectValidator != null) {
         expectValidator.validate(request, response);
       } else {
@@ -168,7 +155,7 @@ public class HTTP11Processor implements HTTPProcessor {
 
       long bytes = client.write(buffer);
       if (bytes > 0) {
-        responseCommitted = true;
+        response.setCommitted(true);
       }
 
       logger.debug("Wrote [{}] bytes to the client", bytes);
@@ -180,19 +167,19 @@ public class HTTP11Processor implements HTTPProcessor {
       requestProcessor.resetState(RequestState.Body);
       responseProcessor.resetState(ResponseState.Preamble);
       logger.trace("(RW)");
-      threadPool.submit(new HTTPWorker(handler, loggerFactory, this, request, response));
+      threadPool.submit(new HTTPWorker(configuration.getHandler(), configuration.getLoggerFactory(), this, request, response));
       key.interestOps(SelectionKey.OP_READ);
     } else if (state == ResponseState.Failure) {
       // If we've written at least one byte back to the client, close the connection and bail. Otherwise, the failure was noted and the
       // Preamble will contain a 500 response. Therefore, we need to reset the processor, so it writes the preamble
-      if (responseCommitted) {
+      if (response.isCommitted()) {
         client.close();
         key.cancel();
       } else {
         responseProcessor.resetState(ResponseState.Preamble);
       }
     } else if (state == ResponseState.KeepAlive) {
-      HTTP11Processor processor = new HTTP11Processor(expectValidator, handler, instrumenter, maxHeadLength, notifier, loggerFactory, preambleBuffer, threadPool);
+      HTTP11Processor processor = new HTTP11Processor(configuration, notifier, preambleBuffer, threadPool);
       key.attach(processor);
       key.interestOps(SelectionKey.OP_READ);
       logger.trace("(WD)");

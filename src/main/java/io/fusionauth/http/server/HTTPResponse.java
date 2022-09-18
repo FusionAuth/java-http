@@ -34,9 +34,12 @@ import java.util.zip.GZIPOutputStream;
 import io.fusionauth.http.Cookie;
 import io.fusionauth.http.HTTPValues.Connections;
 import io.fusionauth.http.HTTPValues.ContentEncodings;
+import io.fusionauth.http.HTTPValues.ContentTypes;
 import io.fusionauth.http.HTTPValues.Headers;
 import io.fusionauth.http.HTTPValues.Status;
 import io.fusionauth.http.io.NonBlockingByteBufferOutputStream;
+import io.fusionauth.http.util.HTTPTools;
+import io.fusionauth.http.util.HTTPTools.HeaderValue;
 
 /**
  * An HTTP response that the server sends back to a client. The handler that processes the HTTP request can fill out this object and the
@@ -53,6 +56,8 @@ public class HTTPResponse {
 
   private final HTTPRequest request;
 
+  private volatile boolean committed;
+
   private boolean compress;
 
   private Throwable exception;
@@ -62,6 +67,8 @@ public class HTTPResponse {
   private int status = 200;
 
   private String statusMessage;
+
+  private Writer writer;
 
   public HTTPResponse(NonBlockingByteBufferOutputStream outputStream, HTTPRequest request) {
     this.outputStream = outputStream;
@@ -82,6 +89,18 @@ public class HTTPResponse {
     headers.clear();
   }
 
+  /**
+   * Closes the HTTP response to ensure that the client is notified that the server is finished responding. This closes the Writer or the
+   * OutputStream if they are available. The Writer is preferred if it exists so that it is properly flushed.
+   */
+  public void close() throws IOException {
+    if (writer != null) {
+      writer.close();
+    } else {
+      outputStream.close();
+    }
+  }
+
   public boolean containsHeader(String name) {
     String key = name.toLowerCase();
     return headers.containsKey(key) && headers.get(key).size() > 0;
@@ -91,19 +110,19 @@ public class HTTPResponse {
     return status < 200 || status > 299;
   }
 
+  /**
+   * Determines the character set by parsing the {@code Content-Type} header (if it exists) to pull out the {@code charset} parameter.
+   *
+   * @return The Charset or UTF-8 if it wasn't specified in the {@code Content-Type} header.
+   */
   public Charset getCharset() {
     Charset charset = StandardCharsets.UTF_8;
     String contentType = getContentType();
     if (contentType != null) {
-      String lower = contentType.toLowerCase();
-      int index = lower.indexOf("charset=");
-      if (index > 0) {
-        int colon = lower.indexOf(';', index);
-        if (colon < 0) {
-          colon = lower.length();
-        }
-
-        charset = Charset.forName(contentType.substring(index, colon));
+      HeaderValue headerValue = HTTPTools.parseHeaderValue(contentType);
+      String charsetName = headerValue.parameters().get(ContentTypes.CharsetParameter);
+      if (charsetName != null) {
+        charset = Charset.forName(charsetName);
       }
     }
 
@@ -184,7 +203,27 @@ public class HTTPResponse {
 
   public Writer getWriter() {
     Charset charset = getCharset();
-    return new OutputStreamWriter(getOutputStream(), charset);
+    if (writer == null) {
+      writer = new OutputStreamWriter(getOutputStream(), charset);
+    }
+
+    return writer;
+  }
+
+  /**
+   * @return True if the response has been committed, meaning at least one byte was written back to the client. False otherwise.
+   */
+  public boolean isCommitted() {
+    return committed;
+  }
+
+  /**
+   * Sets the committed status of the response.
+   *
+   * @param committed The status.
+   */
+  public void setCommitted(boolean committed) {
+    this.committed = committed;
   }
 
   public boolean isCompress() {
@@ -223,7 +262,7 @@ public class HTTPResponse {
 
   /**
    * @return If the connection should be kept open (keep-alive) or not. The default is to return the Connection: keep-alive header, which
-   * this method does.
+   *     this method does.
    */
   public boolean isKeepAlive() {
     String value = getHeader(Headers.Connection);

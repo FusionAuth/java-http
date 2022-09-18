@@ -28,7 +28,6 @@ import java.util.List;
 import java.util.Map;
 
 import io.fusionauth.http.HTTPValues.Headers;
-import io.fusionauth.http.server.FileInfo;
 import io.fusionauth.http.server.HTTPHandler;
 import io.fusionauth.http.server.HTTPServer;
 import org.testng.annotations.Test;

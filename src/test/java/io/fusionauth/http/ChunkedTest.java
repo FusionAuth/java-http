@@ -19,6 +19,7 @@ import java.io.ByteArrayInputStream;
 import java.io.IOException;
 import java.io.InputStream;
 import java.io.OutputStream;
+import java.io.Writer;
 import java.net.URI;
 import java.net.http.HttpClient;
 import java.net.http.HttpRequest;
@@ -30,6 +31,8 @@ import java.nio.file.Path;
 import java.nio.file.Paths;
 import java.util.function.Supplier;
 
+import com.inversoft.rest.RESTClient;
+import com.inversoft.rest.TextResponseHandler;
 import io.fusionauth.http.HTTPValues.Headers;
 import io.fusionauth.http.log.Level;
 import io.fusionauth.http.log.SystemOutLoggerFactory;
@@ -133,6 +136,41 @@ public class ChunkedTest {
   }
 
   @Test
+  public void chunkedResponseRestify() throws Exception {
+    String html = """
+        Success!
+        parm=some values
+        theRest=some other values
+        """;
+    HTTPHandler handler = (req, res) -> {
+      res.setHeader(Headers.ContentType, "text/html; charset=UTF-8");
+      res.setHeader(Headers.CacheControl, "no-cache");
+      res.setStatus(200);
+
+      try {
+        Writer writer = res.getWriter();
+        writer.write(html);
+      } catch (IOException e) {
+        throw new RuntimeException(e);
+      }
+    };
+
+    CountingInstrumenter instrumenter = new CountingInstrumenter();
+    try (HTTPServer server = new HTTPServer().withHandler(handler).withInstrumenter(instrumenter).withNumberOfWorkerThreads(1).withPort(4242)) {
+      server.start();
+
+      var response = new RESTClient<>(String.class, String.class).url("http://localhost:4242/api/system/version")
+                                                                 .get()
+                                                                 .successResponseHandler(new TextResponseHandler())
+                                                                 .errorResponseHandler(new TextResponseHandler())
+                                                                 .go();
+      assertEquals(response.status, 200);
+      assertEquals(response.successResponse, html);
+      assertEquals(instrumenter.getChunkedResponses(), 1);
+    }
+  }
+
+  @Test
   public void chunkedResponseStreamingFile() throws Exception {
     Path file = Paths.get("src/test/java/io/fusionauth/http/ChunkedTest.java");
     HTTPHandler handler = (req, res) -> {
@@ -161,6 +199,42 @@ public class ChunkedTest {
 
       assertEquals(response.statusCode(), 200);
       assertEquals(response.body(), Files.readString(file));
+      assertEquals(instrumenter.getChunkedResponses(), 1);
+    }
+  }
+
+  @Test
+  public void chunkedResponseWriter() throws Exception {
+    String html = """
+        Success!
+        parm=some values
+        theRest=some other values
+        """;
+    HTTPHandler handler = (req, res) -> {
+      res.setHeader(Headers.ContentType, "text/html; charset=UTF-8");
+      res.setHeader(Headers.CacheControl, "no-cache");
+      res.setStatus(200);
+
+      try {
+        Writer writer = res.getWriter();
+        writer.write(html);
+      } catch (IOException e) {
+        throw new RuntimeException(e);
+      }
+    };
+
+    CountingInstrumenter instrumenter = new CountingInstrumenter();
+    try (HTTPServer server = new HTTPServer().withHandler(handler).withInstrumenter(instrumenter).withNumberOfWorkerThreads(1).withPort(4242)) {
+      server.start();
+
+      var client = HttpClient.newHttpClient();
+      URI uri = URI.create("http://localhost:4242/api/system/version");
+      var response = client.send(
+          HttpRequest.newBuilder().uri(uri).GET().build(),
+          r -> BodySubscribers.ofString(StandardCharsets.UTF_8)
+      );
+      assertEquals(response.statusCode(), 200);
+      assertEquals(response.body(), html);
       assertEquals(instrumenter.getChunkedResponses(), 1);
     }
   }

@@ -79,7 +79,7 @@ public final class HTTPValues {
 
     public static final byte[] CRLF = {CR, LF};
 
-    public static final byte[] HeaderTerminator = {CR, LF, CR, LF};
+    public static final byte[] ChunkedTerminator = {'0', CR, LF, CR, LF};
 
     public static final byte[] MultipartBoundaryPrefix = {CR, LF, Dash, Dash};
 

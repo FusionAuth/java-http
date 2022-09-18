@@ -21,7 +21,7 @@ package io.fusionauth.http.log;
  * @author Brian Pontarelli
  */
 public class SystemOutLogger implements Logger {
-  private Level level = Level.Info;
+  public static Level level = Level.Info;
 
   @Override
   public void debug(String message) {

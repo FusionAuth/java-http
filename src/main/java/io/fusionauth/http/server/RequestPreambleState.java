@@ -171,11 +171,11 @@ public enum RequestPreambleState {
     public RequestPreambleState next(byte ch) {
       if (ch == ' ') {
         return HeaderColon; // Re-using this state because HeaderSP would be the same
-      } else if (HTTPTools.isTokenCharacter(ch)) {
-        return HeaderValue;
+      } else if (ch == '\r') {
+        return HeaderCR; // Empty header
       }
 
-      throw makeParseException((char) ch);
+      return HeaderValue;
     }
 
     @Override

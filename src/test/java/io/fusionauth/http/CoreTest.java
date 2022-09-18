@@ -17,6 +17,7 @@ package io.fusionauth.http;
 
 import java.io.IOException;
 import java.io.OutputStream;
+import java.io.Writer;
 import java.net.HttpURLConnection;
 import java.net.URI;
 import java.net.http.HttpClient;
@@ -29,12 +30,14 @@ import java.time.Duration;
 import io.fusionauth.http.HTTPValues.Connections;
 import io.fusionauth.http.HTTPValues.Headers;
 import io.fusionauth.http.log.Level;
+import io.fusionauth.http.log.SystemOutLogger;
 import io.fusionauth.http.log.SystemOutLoggerFactory;
 import io.fusionauth.http.server.CountingInstrumenter;
 import io.fusionauth.http.server.HTTPHandler;
 import io.fusionauth.http.server.HTTPServer;
 import org.testng.annotations.Test;
 import static org.testng.Assert.assertEquals;
+import static org.testng.Assert.assertNull;
 import static org.testng.Assert.fail;
 
 /**
@@ -89,6 +92,50 @@ public class CoreTest {
         // Expected
         e.printStackTrace();
       }
+    }
+  }
+
+  @Test
+  public void emptyContentType() throws Exception {
+    HTTPHandler handler = (req, res) -> {
+      assertNull(req.getContentType());
+      res.setStatus(200);
+    };
+
+    SystemOutLogger.level = Level.Trace;
+    try (HTTPServer server = new HTTPServer().withHandler(handler).withNumberOfWorkerThreads(1).withPort(4242)) {
+      server.start();
+
+      var client = HttpClient.newHttpClient();
+      URI uri = URI.create("http://localhost:4242/api/system/version");
+      var response = client.send(
+          HttpRequest.newBuilder().uri(uri).header(Headers.ContentType, "").POST(BodyPublishers.noBody()).build(),
+          r -> BodySubscribers.ofString(StandardCharsets.UTF_8)
+      );
+
+      assertEquals(response.statusCode(), 200);
+    }
+  }
+
+  @Test
+  public void emptyContentTypeWithEncoding() throws Exception {
+    HTTPHandler handler = (req, res) -> {
+      assertEquals(req.getContentType(), "");
+      assertEquals(req.getCharacterEncoding(), StandardCharsets.UTF_16);
+      res.setStatus(200);
+    };
+
+    try (HTTPServer server = new HTTPServer().withHandler(handler).withNumberOfWorkerThreads(1).withPort(4242)) {
+      server.start();
+
+      var client = HttpClient.newHttpClient();
+      URI uri = URI.create("http://localhost:4242/api/system/version");
+      var response = client.send(
+          HttpRequest.newBuilder().uri(uri).header(Headers.ContentType, "; charset=UTF-16").POST(BodyPublishers.noBody()).build(),
+          r -> BodySubscribers.ofString(StandardCharsets.UTF_8)
+      );
+
+      assertEquals(response.statusCode(), 200);
     }
   }
 
@@ -305,6 +352,39 @@ public class CoreTest {
       );
 
       assertEquals(response.statusCode(), 200);
+    }
+  }
+
+  @Test
+  public void writer() throws Exception {
+    HTTPHandler handler = (req, res) -> {
+      try {
+        req.getInputStream().readAllBytes();
+
+        res.setHeader(Headers.ContentType, "text/plain; charset=UTF-16");
+        res.setHeader("Content-Length", "" + ExpectedResponse.getBytes(StandardCharsets.UTF_16).length); // Recalculate the byte length using UTF-16
+        res.setStatus(200);
+
+        Writer writer = res.getWriter();
+        writer.write(ExpectedResponse);
+        writer.close();
+      } catch (IOException e) {
+        throw new RuntimeException(e);
+      }
+    };
+
+    try (HTTPServer server = new HTTPServer().withHandler(handler).withNumberOfWorkerThreads(1).withPort(4242)) {
+      server.start();
+
+      var client = HttpClient.newHttpClient();
+      URI uri = URI.create("http://localhost:4242/api/system/version");
+      var response = client.send(
+          HttpRequest.newBuilder().uri(uri).header(Headers.ContentType, "application/json").POST(BodyPublishers.ofString(RequestBody)).build(),
+          r -> BodySubscribers.ofString(StandardCharsets.UTF_16)
+      );
+
+      assertEquals(response.statusCode(), 200);
+      assertEquals(response.body(), ExpectedResponse);
     }
   }
 

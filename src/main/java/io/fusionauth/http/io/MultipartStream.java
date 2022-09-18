@@ -29,12 +29,12 @@ import java.util.LinkedList;
 import java.util.List;
 import java.util.Map;
 
+import io.fusionauth.http.FileInfo;
 import io.fusionauth.http.HTTPValues.ContentTypes;
 import io.fusionauth.http.HTTPValues.ControlBytes;
 import io.fusionauth.http.HTTPValues.DispositionParameters;
 import io.fusionauth.http.HTTPValues.Headers;
 import io.fusionauth.http.ParseException;
-import io.fusionauth.http.server.FileInfo;
 import io.fusionauth.http.server.RequestPreambleState;
 import io.fusionauth.http.util.HTTPTools;
 import io.fusionauth.http.util.HTTPTools.HeaderValue;

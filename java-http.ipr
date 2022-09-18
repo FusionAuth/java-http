@@ -371,6 +371,7 @@
             <package name="" withSubpackages="true" static="true" />
           </value>
         </option>
+        <option name="JD_INDENT_ON_CONTINUATION" value="true" />
       </JavaCodeStyleSettings>
       <MSSQLCodeStyleSettings version="6">
         <option name="USE_GENERAL_STYLE" value="false" />

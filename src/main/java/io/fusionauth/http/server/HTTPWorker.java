@@ -50,7 +50,7 @@ public class HTTPWorker implements Runnable {
       handler.handle(request, response);
 
       // Close the stream to signal that the work is done. If the handler calls this also, it won't hurt to call it here as well
-      response.getOutputStream().close();
+      response.close();
     } catch (Throwable t) {
       // Log the error and signal a failure
       logger.error("HTTP worker threw an exception while processing a request", t);

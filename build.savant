@@ -15,6 +15,7 @@
  */
 savantVersion = "1.0.0"
 
+restifyVersion = "4.1.2"
 testngVersion = "7.3.0"
 
 project(group: "io.fusionauth", name: "java-http", version: "0.1.0", licenses: ["ApacheV2_0"]) {
@@ -34,6 +35,7 @@ project(group: "io.fusionauth", name: "java-http", version: "0.1.0", licenses: [
 
   dependencies {
     group(name: "test-compile") {
+      dependency(id: "com.inversoft:restify:${restifyVersion}")
       dependency(id: "org.testng:testng:${testngVersion}")
     }
   }
@@ -71,7 +73,7 @@ target(name: "test", description: "Runs the project's tests", dependsOn: ["jar"]
   javaTestNG.test()
 }
 
-target(name: "int", description: "Releases a local integration build of the project", dependsOn: ["jar"]) {
+target(name: "int", description: "Releases a local integration build of the project", dependsOn: ["test"]) {
   dependency.integrate()
 }
 

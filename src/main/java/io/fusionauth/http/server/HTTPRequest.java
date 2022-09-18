@@ -37,6 +37,7 @@ import java.util.stream.Collectors;
 
 import io.fusionauth.http.Buildable;
 import io.fusionauth.http.Cookie;
+import io.fusionauth.http.FileInfo;
 import io.fusionauth.http.HTTPMethod;
 import io.fusionauth.http.HTTPValues.ContentTypes;
 import io.fusionauth.http.HTTPValues.Headers;
@@ -57,6 +58,8 @@ import io.fusionauth.http.util.HTTPTools.HeaderValue;
  */
 @SuppressWarnings("unused")
 public class HTTPRequest implements Buildable<HTTPRequest> {
+  private final Map<String, Object> attributes = new HashMap<>();
+
   private final Map<String, Cookie> cookies = new HashMap<>();
 
   private final List<FileInfo> files = new LinkedList<>();
@@ -77,6 +80,8 @@ public class HTTPRequest implements Buildable<HTTPRequest> {
 
   private String contentType;
 
+  private String contextPath;
+
   private Charset encoding = StandardCharsets.UTF_8;
 
   private Map<String, List<String>> formData;
@@ -89,7 +94,7 @@ public class HTTPRequest implements Buildable<HTTPRequest> {
 
   private HTTPMethod method;
 
-  private Boolean multipart;
+  private boolean multipart;
 
   private String multipartBoundary;
 
@@ -100,6 +105,10 @@ public class HTTPRequest implements Buildable<HTTPRequest> {
   private String protocol;
 
   private String scheme;
+
+  public HTTPRequest(String contextPath) {
+    this.contextPath = contextPath;
+  }
 
   public void addCookies(Cookie... cookies) {
     for (Cookie cookie : cookies) {
@@ -199,6 +208,25 @@ public class HTTPRequest implements Buildable<HTTPRequest> {
     return acceptEncoding;
   }
 
+  /**
+   * Retrieves a request attribute.
+   *
+   * @param name The name of the attribute.
+   * @return The attribute or null if it doesn't exist.
+   */
+  public Object getAttribute(String name) {
+    return attributes.get(name);
+  }
+
+  /**
+   * Retrieves all the request attributes. This returns the direct Map so changes to the Map will affect all attributes.
+   *
+   * @return The attribute Map.
+   */
+  public Map<String, Object> getAttributes() {
+    return attributes;
+  }
+
   public String getBaseURL() {
     // Setting the wrong value in the X-Forwarded-Proto header seems to be a common issue that causes an exception during URI.create.
     // Assuming request.getScheme() is not the problem, and it is related to the proxy configuration.
@@ -262,6 +290,14 @@ public class HTTPRequest implements Buildable<HTTPRequest> {
     this.contentType = contentType;
   }
 
+  public String getContextPath() {
+    return contextPath;
+  }
+
+  public void setContextPath(String contextPath) {
+    this.contextPath = contextPath;
+  }
+
   public Cookie getCookie(String name) {
     return cookies.get(name);
   }
@@ -270,8 +306,8 @@ public class HTTPRequest implements Buildable<HTTPRequest> {
     return new ArrayList<>(cookies.values());
   }
 
-  public Instant getDateHeader(String key) {
-    String header = getHeader(key);
+  public Instant getDateHeader(String name) {
+    String header = getHeader(name);
     return header != null ? ZonedDateTime.parse(header, DateTimeFormatter.RFC_1123_DATE_TIME).toInstant() : null;
   }
 
@@ -302,7 +338,7 @@ public class HTTPRequest implements Buildable<HTTPRequest> {
       formData = new HashMap<>();
 
       String contentType = getContentType();
-      if (contentType.equalsIgnoreCase(ContentTypes.Form)) {
+      if (contentType != null && contentType.equalsIgnoreCase(ContentTypes.Form)) {
         byte[] body = getBodyBytes();
         HTTPTools.parseEncodedData(body, 0, body.length, formData);
       } else if (isMultipart()) {
@@ -318,13 +354,13 @@ public class HTTPRequest implements Buildable<HTTPRequest> {
     return formData;
   }
 
-  public String getHeader(String key) {
-    List<String> values = getHeaders(key);
+  public String getHeader(String name) {
+    List<String> values = getHeaders(name);
     return values != null && values.size() > 0 ? values.get(0) : null;
   }
 
-  public List<String> getHeaders(String key) {
-    return headers.get(key.toLowerCase());
+  public List<String> getHeaders(String name) {
+    return headers.get(name.toLowerCase());
   }
 
   public Map<String, List<String>> getHeaders() {
@@ -394,6 +430,21 @@ public class HTTPRequest implements Buildable<HTTPRequest> {
   }
 
   /**
+   * Calls {@link #getParameters()} to combine everything and then returns the first parameter value for the given name.
+   *
+   * @param name The name of the parameter
+   * @return The parameter values or null if the parameter doesn't exist.
+   */
+  public String getParameter(String name) {
+    List<String> values = getParameters().get(name);
+    if (values != null && values.size() > 0) {
+      return values.get(0);
+    }
+
+    return null;
+  }
+
+  /**
    * Combines the URL parameters and the form data that might exist in the body of the HTTP request. The Map returned is not linked back to
    * the URL parameters or form data. Changing it will not impact either of those Maps. If this method is called multiple times, the merging
    * of all the data is only done the first time and then cached. This is not thread-safe, so you need to ensure you protect against
@@ -412,6 +463,16 @@ public class HTTPRequest implements Buildable<HTTPRequest> {
     }
 
     return combinedParameters;
+  }
+
+  /**
+   * Calls {@link #getParameters()} to combine everything and then returns the parameters for the given name.
+   *
+   * @param name The name of the parameter
+   * @return The parameter values or null if the parameter doesn't exist.
+   */
+  public List<String> getParameters(String name) {
+    return getParameters().get(name);
   }
 
   public String getPath() {
@@ -462,13 +523,13 @@ public class HTTPRequest implements Buildable<HTTPRequest> {
     return getHeader(Headers.TransferEncoding);
   }
 
-  public String getURLParameter(String key) {
-    List<String> values = urlParameters.get(key);
+  public String getURLParameter(String name) {
+    List<String> values = urlParameters.get(name);
     return (values != null && values.size() > 0) ? values.get(0) : null;
   }
 
-  public List<String> getURLParameters(String key) {
-    return urlParameters.get(key);
+  public List<String> getURLParameters(String name) {
+    return urlParameters.get(name);
   }
 
   public Map<String, List<String>> getURLParameters() {
@@ -480,12 +541,31 @@ public class HTTPRequest implements Buildable<HTTPRequest> {
     this.urlParameters.putAll(parameters);
   }
 
+  /**
+   * @return True if the request can reasonably be assumed to have a body. This uses the fact that the request is chunked or that
+   *     {@code Content-Length} header was provided.
+   */
+  public boolean hasBody() {
+    Long contentLength = getContentLength();
+    return isChunked() || (contentLength != null && contentLength > 0);
+  }
+
   public boolean isChunked() {
     return getTransferEncoding() != null && getTransferEncoding().equalsIgnoreCase(TransferEncodings.Chunked);
   }
 
   public boolean isMultipart() {
     return multipart;
+  }
+
+  /**
+   * Removes a request attribute.
+   *
+   * @param name The name of the attribute.
+   * @return The attribute if it exists.
+   */
+  public Object removeAttribute(String name) {
+    return attributes.remove(name);
   }
 
   public void removeHeader(String name) {
@@ -497,6 +577,16 @@ public class HTTPRequest implements Buildable<HTTPRequest> {
     if (actual != null) {
       actual.removeAll(List.of(values));
     }
+  }
+
+  /**
+   * Sets a request attribute.
+   *
+   * @param name  The name to store the attribute under.
+   * @param value The attribute value.
+   */
+  public void setAttribute(String name, Object value) {
+    attributes.put(name, value);
   }
 
   public void setHeader(String name, String value) {
