@@ -16,9 +16,9 @@ requirements and roadmap are as follows:
 * [x] Support compression
 * [x] Support cookies in request and response
 * [x] Clean up HTTPRequest
+* [x] Support form data
+* [x] Support multipart form data
 * [ ] Support trailers
-* [ ] Support form data
-* [ ] Support multipart form data
 * [ ] Support HTTP 2
 
 ### Client tasks
@@ -34,7 +34,70 @@ requirements and roadmap are as follows:
 
 ## Examples Usages:
 
-Coming soon (this is going to change a ton in the next few weeks, so we aren't providing examples yet).
+Creating a server is simple:
+
+```java
+import io.fusionauth.http.server.HTTPServer;
+import io.fusionauth.http.server.HTTPHandler;
+
+public class Example {
+  public static void main(String... args) {
+    HTTPHandler handler = (req, res) -> {
+      // Handler code goes here
+    };
+
+    HTTPServer server = new HTTPServer().withHandler(handler).withPort(4242);
+    server.start();
+    // Use server
+    server.close();
+  }
+}
+```
+
+Since the `HTTPServer` class implements `java.io.Closeable`, you can also use a try-resource block like this:
+
+```java
+import io.fusionauth.http.server.HTTPServer;
+import io.fusionauth.http.server.HTTPHandler;
+
+public class Example {
+  public static void main(String... args) {
+    HTTPHandler handler = (req, res) -> {
+      // Handler code goes here
+    };
+
+    try (HTTPServer server = new HTTPServer().withHandler(handler).withPort(4242)) {
+      server.start();
+      // When this block exits, the server will be shutdown
+    }
+  }
+}
+```
+
+You can also set various options on the server using the `with` methods on the class like this:
+
+```java
+import java.time.Duration;
+
+import io.fusionauth.http.server.HTTPServer;
+import io.fusionauth.http.server.HTTPHandler;
+
+public class Example {
+  public static void main(String... args) {
+    HTTPHandler handler = (req, res) -> {
+      // Handler code goes here
+    };
+
+    HTTPServer server = new HTTPServer().withHandler(handler)
+                                        .withNumberOfWorkerThreads(42)
+                                        .withShutdownDuration(Duration.ofSeconds(10L))
+                                        .withPort(4242);
+    server.start();
+    // Use server
+    server.close();
+  }
+}
+```
 
 ### Helping out
 

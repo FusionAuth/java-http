@@ -42,6 +42,7 @@ import io.fusionauth.http.HTTPValues.ContentTypes;
 import io.fusionauth.http.HTTPValues.Headers;
 import io.fusionauth.http.HTTPValues.TransferEncodings;
 import io.fusionauth.http.body.BodyException;
+import io.fusionauth.http.io.MultipartStream;
 import io.fusionauth.http.util.HTTPTools;
 import io.fusionauth.http.util.HTTPTools.HeaderValue;
 
@@ -275,6 +276,17 @@ public class HTTPRequest implements Buildable<HTTPRequest> {
   }
 
   /**
+   * Processes the HTTP request body completely by calling {@link #getFormData()}. If the {@code Content-Type} header is multipart, then the
+   * processing of the body will extract the files.
+   *
+   * @return The files, if any.
+   */
+  public List<FileInfo> getFiles() {
+    getFormData();
+    return files;
+  }
+
+  /**
    * Processes the HTTP request body completely if the {@code Content-Type} header is equal to {@link ContentTypes#Form}. If this method is
    * called multiple times, the body is only processed the first time. This is not thread-safe, so you need to ensure you protect against
    * multiple threads calling this method concurrently.
@@ -294,7 +306,12 @@ public class HTTPRequest implements Buildable<HTTPRequest> {
         byte[] body = getBodyBytes();
         HTTPTools.parseEncodedData(body, 0, body.length, formData);
       } else if (isMultipart()) {
-        throw new IllegalStateException("Not implemented yet");
+        MultipartStream stream = new MultipartStream(inputStream, getMultipartBoundary().getBytes(), 1024);
+        try {
+          stream.process(formData, files);
+        } catch (IOException e) {
+          throw new BodyException("Invalid multipart body.", e);
+        }
       }
     }
 
@@ -536,11 +553,12 @@ public class HTTPRequest implements Buildable<HTTPRequest> {
                                 .collect(Collectors.toList()));
         break;
       case Headers.ContentTypeLower:
-        this.contentType = value;
         this.encoding = null;
         this.multipart = false;
 
         HeaderValue headerValue = HTTPTools.parseHeaderValue(value);
+        this.contentType = headerValue.value();
+
         if (headerValue.value().startsWith(ContentTypes.MultipartPrefix)) {
           this.multipart = true;
           this.multipartBoundary = headerValue.parameters().get(ContentTypes.BoundaryParameter);
@@ -548,7 +566,7 @@ public class HTTPRequest implements Buildable<HTTPRequest> {
 
         String charset = headerValue.parameters().get(ContentTypes.CharsetParameter);
         if (charset != null) {
-          encoding = Charset.forName(charset);
+          this.encoding = Charset.forName(charset);
         }
 
         break;
