@@ -32,6 +32,8 @@ import io.fusionauth.http.log.Logger;
  * @author Brian Pontarelli
  */
 public class HTTPRequestProcessor {
+  private final int bufferSize;
+
   private final StringBuilder builder = new StringBuilder();
 
   private final HTTPServerConfiguration configuration;
@@ -51,6 +53,7 @@ public class HTTPRequestProcessor {
   private RequestState state = RequestState.Preamble;
 
   public HTTPRequestProcessor(HTTPServerConfiguration configuration, HTTPRequest request) {
+    this.bufferSize = configuration.getRequestBufferSize();
     this.configuration = configuration;
     this.request = request;
     this.logger = configuration.getLoggerFactory().getLogger(HTTPRequestProcessor.class);
@@ -107,7 +110,7 @@ public class HTTPRequestProcessor {
 
           state = RequestState.Body;
 
-          int size = Math.max(buffer.remaining(), 1024);
+          int size = Math.max(buffer.remaining(), bufferSize);
           if (contentLength != null) {
             bodyProcessor = new ContentLengthBodyProcessor(size, contentLength);
           } else {

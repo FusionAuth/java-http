@@ -76,7 +76,6 @@ public class ReaderBlockingByteBufferInputStream extends InputStream implements 
   private void poll() {
     while (currentBuffer != Last && (currentBuffer == null || !currentBuffer.hasRemaining())) {
       try {
-        System.out.println("Taking non-last");
         currentBuffer = buffers.take();
       } catch (InterruptedException e) {
         // Ignore and try again

@@ -16,6 +16,7 @@
 package io.fusionauth.http.server;
 
 import java.io.IOException;
+import java.net.InetAddress;
 import java.nio.ByteBuffer;
 import java.nio.channels.SelectionKey;
 import java.nio.channels.SocketChannel;
@@ -35,6 +36,8 @@ import io.fusionauth.http.util.ThreadPool;
 public class HTTP11Processor implements HTTPProcessor {
   private final HTTPServerConfiguration configuration;
 
+  private final InetAddress ipAddress;
+
   private final Logger logger;
 
   private final Notifier notifier;
@@ -53,17 +56,19 @@ public class HTTP11Processor implements HTTPProcessor {
 
   private long lastUsed = System.currentTimeMillis();
 
-  public HTTP11Processor(HTTPServerConfiguration configuration, Notifier notifier, ByteBuffer preambleBuffer, ThreadPool threadPool) {
+  public HTTP11Processor(HTTPServerConfiguration configuration, Notifier notifier, ByteBuffer preambleBuffer, ThreadPool threadPool,
+                         InetAddress ipAddress) {
     this.configuration = configuration;
     this.logger = configuration.getLoggerFactory().getLogger(HTTP11Processor.class);
     this.notifier = notifier;
     this.preambleBuffer = preambleBuffer;
     this.threadPool = threadPool;
+    this.ipAddress = ipAddress;
 
-    this.request = new HTTPRequest(configuration.getContextPath());
+    this.request = new HTTPRequest(configuration.getContextPath(), configuration.getMultipartBufferSize(), "http", configuration.getPort(), ipAddress.getHostAddress());
     this.requestProcessor = new HTTPRequestProcessor(configuration, request);
 
-    NonBlockingByteBufferOutputStream outputStream = new NonBlockingByteBufferOutputStream(notifier);
+    NonBlockingByteBufferOutputStream outputStream = new NonBlockingByteBufferOutputStream(notifier, configuration.getResponseBufferSize());
     this.response = new HTTPResponse(outputStream, request);
     this.responseProcessor = new HTTPResponseProcessor(configuration, request, response, outputStream);
   }
@@ -106,7 +111,7 @@ public class HTTP11Processor implements HTTPProcessor {
     }
 
     logger.trace("Read [{}] bytes from client", read);
-    
+
     if (state == RequestState.Preamble) {
       buffer.flip();
       state = requestProcessor.processPreambleBytes(buffer);
@@ -179,7 +184,7 @@ public class HTTP11Processor implements HTTPProcessor {
         responseProcessor.resetState(ResponseState.Preamble);
       }
     } else if (state == ResponseState.KeepAlive) {
-      HTTP11Processor processor = new HTTP11Processor(configuration, notifier, preambleBuffer, threadPool);
+      HTTP11Processor processor = new HTTP11Processor(configuration, notifier, preambleBuffer, threadPool, ipAddress);
       key.attach(processor);
       key.interestOps(SelectionKey.OP_READ);
       logger.trace("(WD)");

@@ -33,14 +33,14 @@ import static org.testng.Assert.assertTrue;
 public class HTTPRequestTest {
   @Test
   public void acceptEncoding() {
-    HTTPRequest request = new HTTPRequest("");
+    HTTPRequest request = new HTTPRequest();
     request.addHeader(Headers.AcceptEncoding, "foo, bar  , baz");
-    assertEquals(request.getAcceptEncoding(), List.of("foo", "bar", "baz"));
+    assertEquals(request.getAcceptEncodings(), List.of("foo", "bar", "baz"));
   }
 
   @Test
   public void decodeHeaders() {
-    HTTPRequest request = new HTTPRequest("");
+    HTTPRequest request = new HTTPRequest();
     request.addHeader("coNTent-LENGTH", "42");
     request.addHeader("coNTent-type", "multipart/form-data; boundary=--foobarbaz");
     assertTrue(request.isMultipart());
@@ -53,7 +53,7 @@ public class HTTPRequestTest {
 
   @Test
   public void queryString() {
-    HTTPRequest request = new HTTPRequest("");
+    HTTPRequest request = new HTTPRequest();
     request.setPath("/path?name=value");
     assertEquals(request.getPath(), "/path");
     assertEquals(request.getURLParameters(), Map.of("name", List.of("value")));

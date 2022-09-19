@@ -31,6 +31,8 @@ import io.fusionauth.http.server.Notifier;
  * @author Brian Pontarelli
  */
 public class NonBlockingByteBufferOutputStream extends OutputStream {
+  private final int bufferSize;
+
   // Shared between writer and reader threads. No one blocks using this.
   private final Queue<ByteBuffer> buffers = new ConcurrentLinkedQueue<>();
 
@@ -43,8 +45,9 @@ public class NonBlockingByteBufferOutputStream extends OutputStream {
 
   private volatile boolean used;
 
-  public NonBlockingByteBufferOutputStream(Notifier notifier) {
+  public NonBlockingByteBufferOutputStream(Notifier notifier, int bufferSize) {
     this.notifier = notifier;
+    this.bufferSize = bufferSize;
   }
 
   public void clear() {
@@ -70,11 +73,12 @@ public class NonBlockingByteBufferOutputStream extends OutputStream {
   }
 
   /**
-   * Flushes the current stream contents by putting the current ByteBuffer into the Queue that the reader thread is reading from. Then it
-   * sets the current ByteBuffer to null so that a new one is created. And finally, this notifies the selector to wake up.
+   * Flushes the current stream contents if the current ByteBuffer has less than 10% remaining space. It flushes by putting the current
+   * ByteBuffer into the Queue that the reader thread is reading from. Then it sets the current ByteBuffer to null so that a new one is
+   * created. And finally, this notifies the selector to wake up.
    */
   public void flush() {
-    if (currentBuffer != null) {
+    if (currentBuffer != null && currentBuffer.remaining() < (currentBuffer.capacity() / 10)) {
       addBuffer(true);
     }
   }
@@ -115,7 +119,7 @@ public class NonBlockingByteBufferOutputStream extends OutputStream {
     // Mark this stream used so that the processor knows if it should write back a content-length header of zero or not
     used = true;
 
-    setupBuffer(1024);
+    setupBuffer(bufferSize);
 
     currentBuffer.put((byte) b);
   }
@@ -130,7 +134,7 @@ public class NonBlockingByteBufferOutputStream extends OutputStream {
     used = true;
 
     // Set up the buffer to handle the bytes
-    setupBuffer(Math.max(1024, len));
+    setupBuffer(Math.max(bufferSize, len));
 
     int length = Math.min(currentBuffer.remaining(), len);
     currentBuffer.put(b, off, length);
@@ -138,7 +142,7 @@ public class NonBlockingByteBufferOutputStream extends OutputStream {
     if (length < len) {
       addBuffer(true);
 
-      int newCapacity = Math.max(1024, len - length);
+      int newCapacity = Math.max(bufferSize, len - length);
       currentBuffer = ByteBuffer.allocate(newCapacity);
       currentBuffer.put(b, off + length, len - length);
 

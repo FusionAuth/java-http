@@ -141,7 +141,11 @@ public final class HTTPValues {
   public static final class Headers {
     public static final String AcceptEncoding = "Accept-Encoding";
 
+    public static final String AcceptEncodingLower = "accept-encoding";
+
     public static final String AcceptLanguage = "Accept-Language";
+
+    public static final String AcceptLanguageLower = "accept-language";
 
     /**
      * The Access-Control-Allow-Credentials header indicates whether the response to request can be exposed when the omit credentials flag
@@ -213,6 +217,10 @@ public final class HTTPValues {
     public static final String Expect = "Expect";
 
     public static final String Expires = "Expires";
+
+    public static final String Host = "Host";
+
+    public static final String HostLower = "host";
 
     public static final String IfModifiedSince = "If-Modified-Since";
 

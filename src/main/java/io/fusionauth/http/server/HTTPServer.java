@@ -17,26 +17,20 @@ package io.fusionauth.http.server;
 
 import java.io.Closeable;
 import java.io.IOException;
-import java.net.InetAddress;
 import java.net.InetSocketAddress;
 import java.net.SocketException;
-import java.net.UnknownHostException;
 import java.nio.ByteBuffer;
 import java.nio.channels.ClosedSelectorException;
 import java.nio.channels.SelectionKey;
 import java.nio.channels.Selector;
 import java.nio.channels.ServerSocketChannel;
 import java.nio.channels.SocketChannel;
-import java.nio.file.Path;
-import java.time.Duration;
 import java.util.Iterator;
-import java.util.Objects;
 
 import io.fusionauth.http.log.Logger;
-import io.fusionauth.http.log.LoggerFactory;
 import io.fusionauth.http.util.ThreadPool;
 
-public class HTTPServer extends Thread implements Closeable, Notifier {
+public class HTTPServer extends Thread implements Closeable, Notifier, Configurable<HTTPServer> {
   private ServerSocketChannel channel;
 
   private HTTPServerConfiguration configuration = new HTTPServerConfiguration();
@@ -51,14 +45,6 @@ public class HTTPServer extends Thread implements Closeable, Notifier {
   private Selector selector;
 
   private ThreadPool threadPool;
-
-  public HTTPServer() {
-    try {
-      this.configuration.withBindAddress(InetAddress.getByName("::"));
-    } catch (UnknownHostException e) {
-      throw new IllegalStateException(e);
-    }
-  }
 
   @Override
   public void close() {
@@ -81,6 +67,11 @@ public class HTTPServer extends Thread implements Closeable, Notifier {
     } else {
       logger.error("HTTP server shutdown failed. Harsh!");
     }
+  }
+
+  @Override
+  public HTTPServerConfiguration configuration() {
+    return configuration;
   }
 
   /**
@@ -116,7 +107,7 @@ public class HTTPServer extends Thread implements Closeable, Notifier {
             var clientChannel = channel.accept();
             clientChannel.configureBlocking(false);
 
-            HTTPProcessor processor = new HTTP11Processor(configuration, this, preambleBuffer, threadPool);
+            HTTPProcessor processor = new HTTP11Processor(configuration, this, preambleBuffer, threadPool, clientChannel.socket().getInetAddress());
             clientChannel.register(selector, SelectionKey.OP_READ, processor);
             logger.trace("(A)");
 
@@ -182,7 +173,7 @@ public class HTTPServer extends Thread implements Closeable, Notifier {
       selector = Selector.open();
       channel = ServerSocketChannel.open();
       channel.configureBlocking(false);
-      channel.bind(new InetSocketAddress(configuration.getAddress(), configuration.getPort()));
+      channel.bind(new InetSocketAddress(configuration.getBindAddress(), configuration.getPort()));
       channel.register(selector, SelectionKey.OP_ACCEPT);
 
       Instrumenter instrumenter = configuration.getInstrumenter();
@@ -202,158 +193,14 @@ public class HTTPServer extends Thread implements Closeable, Notifier {
   }
 
   /**
-   * Convenience method for calling {@link HTTPServerConfiguration#withBaseDir(Path)}.
+   * Specify the full configuration object for the server rather than using the {@code with} builder methods.
    *
-   * @param baseDir The base dir.
-   * @return This.
-   */
-  public HTTPServer withBaseDir(Path baseDir) {
-    this.configuration.withBaseDir(baseDir);
-    return this;
-  }
-
-  /**
-   * Convenience method for calling {@link HTTPServerConfiguration#withBindAddress(InetAddress)}.
-   *
-   * @param address The bind address.
-   * @return This.
-   */
-  public HTTPServer withBindAddress(InetAddress address) {
-    this.configuration.withBindAddress(address);
-    return this;
-  }
-
-  /**
-   * Convenience method for calling {@link HTTPServerConfiguration#withClientTimeoutDuration(Duration)}.
-   *
-   * @param duration The duration.
-   * @return This.
-   */
-  public HTTPServer withClientTimeoutDuration(Duration duration) {
-    this.configuration.withClientTimeoutDuration(duration);
-    return this;
-  }
-
-  /**
-   * Sets the configuration for this server.
-   *
-   * @param configuration The new configuration.
+   * @param configuration The configuration for the server.
    * @return This.
    */
   public HTTPServer withConfiguration(HTTPServerConfiguration configuration) {
     this.configuration = configuration;
-    return this;
-  }
-
-  /**
-   * Convenience method for calling {@link HTTPServerConfiguration#withContextPath(String)}.
-   *
-   * @param contextPath The context path for the server.
-   * @return This.
-   */
-  public HTTPServer withContextPath(String contextPath) {
-    this.configuration.withContextPath(contextPath);
-    return this;
-  }
-
-  /**
-   * Convenience method for calling {@link HTTPServerConfiguration#withExpectValidator(ExpectValidator)}.
-   *
-   * @param validator The validator.
-   * @return This.
-   */
-  public HTTPServer withExpectValidator(ExpectValidator validator) {
-    this.configuration.withExpectValidator(validator);
-    return this;
-  }
-
-  /**
-   * Convenience method for calling {@link HTTPServerConfiguration#withHandler(HTTPHandler)}.
-   *
-   * @param handler The handler that processes the requests.
-   * @return This.
-   */
-  public HTTPServer withHandler(HTTPHandler handler) {
-    this.configuration.withHandler(handler);
-    return this;
-  }
-
-  /**
-   * Convenience method for calling {@link HTTPServerConfiguration#withInstrumenter(Instrumenter)}.
-   *
-   * @param instrumenter The instrumenter.
-   * @return This.
-   */
-  public HTTPServer withInstrumenter(Instrumenter instrumenter) {
-    this.configuration.withInstrumenter(instrumenter);
-    return this;
-  }
-
-  /**
-   * Convenience method for calling {@link HTTPServerConfiguration#withLoggerFactory(LoggerFactory)}.
-   *
-   * @param loggerFactory The factory.
-   * @return This.
-   */
-  public HTTPServer withLoggerFactory(LoggerFactory loggerFactory) {
-    Objects.requireNonNull(loggerFactory);
-    this.configuration.withLoggerFactory(loggerFactory);
-    this.logger = loggerFactory.getLogger(HTTPServer.class);
-    return this;
-  }
-
-  /**
-   * Convenience method for calling {@link HTTPServerConfiguration#withMaxPreambleLength(int)}.
-   *
-   * @param maxLength The max preamble length.
-   * @return This.
-   */
-  public HTTPServer withMaxPreambleLength(int maxLength) {
-    this.configuration.withMaxPreambleLength(maxLength);
-    return this;
-  }
-
-  /**
-   * Convenience method for calling {@link HTTPServerConfiguration#withNumberOfWorkerThreads(int)}.
-   *
-   * @param numberOfWorkerThreads The number of worker threads.
-   * @return This.
-   */
-  public HTTPServer withNumberOfWorkerThreads(int numberOfWorkerThreads) {
-    this.configuration.withNumberOfWorkerThreads(numberOfWorkerThreads);
-    return this;
-  }
-
-  /**
-   * Convenience method for calling {@link HTTPServerConfiguration#withPort(int)}.
-   *
-   * @param port The port.
-   * @return This.
-   */
-  public HTTPServer withPort(int port) {
-    this.configuration.withPort(port);
-    return this;
-  }
-
-  /**
-   * Convenience method for calling {@link HTTPServerConfiguration#withPreambleBufferSize(int)}.
-   *
-   * @param size The buffer size.
-   * @return This.
-   */
-  public HTTPServer withPreambleBufferSize(int size) {
-    this.configuration.withPreambleBufferSize(size);
-    return this;
-  }
-
-  /**
-   * Convenience method for calling {@link HTTPServerConfiguration#withShutdownDuration(Duration)}.
-   *
-   * @param duration The duration the server will wait for all running request processing threads to complete their work.
-   * @return This.
-   */
-  public HTTPServer withShutdownDuration(Duration duration) {
-    this.configuration.withShutdownDuration(duration);
+    this.logger = configuration.getLoggerFactory().getLogger(HTTPServer.class);
     return this;
   }
 

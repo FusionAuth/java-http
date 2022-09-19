@@ -26,11 +26,12 @@ import java.net.http.HttpRequest.BodyPublishers;
 import java.net.http.HttpResponse.BodySubscribers;
 import java.nio.charset.StandardCharsets;
 import java.time.Duration;
+import java.util.List;
+import java.util.Locale;
 
 import io.fusionauth.http.HTTPValues.Connections;
 import io.fusionauth.http.HTTPValues.Headers;
 import io.fusionauth.http.log.Level;
-import io.fusionauth.http.log.SystemOutLogger;
 import io.fusionauth.http.log.SystemOutLoggerFactory;
 import io.fusionauth.http.server.CountingInstrumenter;
 import io.fusionauth.http.server.HTTPHandler;
@@ -102,7 +103,6 @@ public class CoreTest {
       res.setStatus(200);
     };
 
-    SystemOutLogger.level = Level.Trace;
     try (HTTPServer server = new HTTPServer().withHandler(handler).withNumberOfWorkerThreads(1).withPort(4242)) {
       server.start();
 
@@ -263,6 +263,24 @@ public class CoreTest {
   @Test
   public void simpleGet() throws Exception {
     HTTPHandler handler = (req, res) -> {
+      assertEquals(req.getAcceptEncodings(), List.of("deflate", "compress", "identity", "gzip", "br"));
+      assertEquals(req.getBaseURL(), "http://localhost:4242");
+      assertEquals(req.getContentType(), "text/plain");
+      assertEquals(req.getCharacterEncoding(), StandardCharsets.ISO_8859_1);
+      assertEquals(req.getHeader(Headers.Origin), "https://example.com");
+      assertEquals(req.getHeader(Headers.Referer), "foobar.com");
+      assertEquals(req.getHeader(Headers.UserAgent), "java-http test");
+      assertEquals(req.getHost(), "localhost");
+      assertEquals(req.getIPAddress(), "127.0.0.1");
+      assertEquals(req.getLocales(), List.of(Locale.ENGLISH, Locale.GERMAN, Locale.FRENCH));
+      assertEquals(req.getMethod(), HTTPMethod.GET);
+      assertEquals(req.getParameter("foo"), "bar");
+      assertEquals(req.getPath(), "/api/system/version");
+      assertEquals(req.getPort(), 4242);
+      assertEquals(req.getProtocol(), "HTTP/1.1");
+      assertEquals(req.getScheme(), "http");
+      assertEquals(req.getURLParameter("foo"), "bar");
+
       res.setHeader(Headers.ContentType, "text/plain");
       res.setHeader("Content-Length", "16");
       res.setStatus(200);
@@ -280,11 +298,18 @@ public class CoreTest {
       server.start();
 
       var client = HttpClient.newHttpClient();
-      URI uri = URI.create("http://localhost:4242/api/system/version");
-      var response = client.send(
-          HttpRequest.newBuilder().uri(uri).GET().build(),
-          r -> BodySubscribers.ofString(StandardCharsets.UTF_8)
-      );
+      URI uri = URI.create("http://localhost:4242/api/system/version?foo=bar");
+      HttpRequest request = HttpRequest.newBuilder()
+                                       .uri(uri)
+                                       .header(Headers.AcceptEncoding, "deflate, compress, br;q=0.5, gzip;q=0.8, identity;q=1.0")
+                                       .header(Headers.AcceptLanguage, "en, fr;q=0.7, de;q=0.8")
+                                       .header(Headers.ContentType, "text/plain; charset=ISO8859-1")
+                                       .header(Headers.Origin, "https://example.com")
+                                       .header(Headers.Referer, "foobar.com")
+                                       .header(Headers.UserAgent, "java-http test")
+                                       .GET()
+                                       .build();
+      var response = client.send(request, r -> BodySubscribers.ofString(StandardCharsets.UTF_8));
 
       assertEquals(response.statusCode(), 200);
       assertEquals(response.body(), ExpectedResponse);

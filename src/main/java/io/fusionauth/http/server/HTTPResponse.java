@@ -238,7 +238,7 @@ public class HTTPResponse {
     }
 
     if (compress) {
-      for (String encoding : request.getAcceptEncoding()) {
+      for (String encoding : request.getAcceptEncodings()) {
         if (encoding.equalsIgnoreCase(ContentEncodings.Gzip)) {
           try {
             outputStream = new GZIPOutputStream(originalOutputStream);

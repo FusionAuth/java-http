@@ -33,6 +33,8 @@ import java.util.Locale;
 import java.util.Locale.LanguageRange;
 import java.util.Map;
 import java.util.Objects;
+import java.util.SortedSet;
+import java.util.TreeSet;
 import java.util.stream.Collectors;
 
 import io.fusionauth.http.Buildable;
@@ -46,6 +48,7 @@ import io.fusionauth.http.body.BodyException;
 import io.fusionauth.http.io.MultipartStream;
 import io.fusionauth.http.util.HTTPTools;
 import io.fusionauth.http.util.HTTPTools.HeaderValue;
+import io.fusionauth.http.util.WeightedString;
 
 /**
  * An HTTP request that is received by the HTTP server. This contains all the relevant information from the request including any file
@@ -58,6 +61,8 @@ import io.fusionauth.http.util.HTTPTools.HeaderValue;
  */
 @SuppressWarnings("unused")
 public class HTTPRequest implements Buildable<HTTPRequest> {
+  private final List<String> acceptEncodings = new LinkedList<>();
+
   private final Map<String, Object> attributes = new HashMap<>();
 
   private final Map<String, Cookie> cookies = new HashMap<>();
@@ -68,9 +73,9 @@ public class HTTPRequest implements Buildable<HTTPRequest> {
 
   private final List<Locale> locales = new LinkedList<>();
 
-  private final Map<String, List<String>> urlParameters = new HashMap<>();
+  private final int multipartBufferSize;
 
-  private List<String> acceptEncoding;
+  private final Map<String, List<String>> urlParameters = new HashMap<>();
 
   private byte[] bodyBytes;
 
@@ -106,8 +111,27 @@ public class HTTPRequest implements Buildable<HTTPRequest> {
 
   private String scheme;
 
-  public HTTPRequest(String contextPath) {
+  public HTTPRequest() {
+    this.contextPath = "/";
+    this.multipartBufferSize = 1024;
+  }
+
+  public HTTPRequest(String contextPath, int multipartBufferSize, String scheme, int port, String ipAddress) {
+    Objects.requireNonNull(contextPath);
+    Objects.requireNonNull(scheme);
     this.contextPath = contextPath;
+    this.multipartBufferSize = multipartBufferSize;
+    this.scheme = scheme;
+    this.port = port;
+    this.ipAddress = ipAddress;
+  }
+
+  public void addAcceptEncoding(String encoding) {
+    this.acceptEncodings.add(encoding);
+  }
+
+  public void addAcceptEncodings(List<String> encodings) {
+    this.acceptEncodings.addAll(encodings);
   }
 
   public void addCookies(Cookie... cookies) {
@@ -186,26 +210,13 @@ public class HTTPRequest implements Buildable<HTTPRequest> {
     cookies.remove(name);
   }
 
-  public List<String> getAcceptEncoding() {
-    if (acceptEncoding == null) {
-      acceptEncoding = new ArrayList<>();
+  public List<String> getAcceptEncodings() {
+    return acceptEncodings;
+  }
 
-      String header = getHeader(Headers.AcceptEncoding);
-      if (header == null || header.isBlank()) {
-        return acceptEncoding;
-      }
-
-      String[] values = header.split("\\s*,\\s*");
-      for (String value : values) {
-        if (value.isBlank()) {
-          continue;
-        }
-
-        acceptEncoding.add(value.trim());
-      }
-    }
-
-    return acceptEncoding;
+  public void setAcceptEncodings(List<String> encodings) {
+    this.acceptEncodings.clear();
+    this.acceptEncodings.addAll(encodings);
   }
 
   /**
@@ -342,7 +353,7 @@ public class HTTPRequest implements Buildable<HTTPRequest> {
         byte[] body = getBodyBytes();
         HTTPTools.parseEncodedData(body, 0, body.length, formData);
       } else if (isMultipart()) {
-        MultipartStream stream = new MultipartStream(inputStream, getMultipartBoundary().getBytes(), 1024);
+        MultipartStream stream = new MultipartStream(inputStream, getMultipartBoundary().getBytes(), multipartBufferSize);
         try {
           stream.process(formData, files);
         } catch (IOException e) {
@@ -634,7 +645,36 @@ public class HTTPRequest implements Buildable<HTTPRequest> {
 
   private void decodeHeader(String name, String value) {
     switch (name) {
-      case Headers.AcceptLanguage:
+      case Headers.AcceptEncodingLower:
+        SortedSet<WeightedString> weightedStrings = new TreeSet<>();
+        String[] parts = value.split(",");
+        int index = 0;
+        for (String part : parts) {
+          part = part.trim();
+          if (part.isEmpty()) {
+            continue;
+          }
+
+          HeaderValue parsed = HTTPTools.parseHeaderValue(part);
+          String weightText = parsed.parameters().get("q");
+          double weight = 1;
+          if (weightText != null) {
+            weight = Double.parseDouble(weightText);
+          }
+
+          WeightedString ws = new WeightedString(parsed.value(), weight, index);
+          weightedStrings.add(ws);
+          index++;
+        }
+
+        // Transfer the Strings in weighted-position order
+        setAcceptEncodings(
+            weightedStrings.stream()
+                           .map(WeightedString::value)
+                           .toList()
+        );
+        break;
+      case Headers.AcceptLanguageLower:
         addLocales(LanguageRange.parse(value) // Default to English
                                 .stream()
                                 .sorted(Comparator.comparing(LanguageRange::getWeight).reversed())
@@ -673,6 +713,14 @@ public class HTTPRequest implements Buildable<HTTPRequest> {
         break;
       case Headers.CookieLower:
         addCookies(Cookie.fromRequestHeader(value));
+        break;
+      case Headers.HostLower:
+        int colon = value.indexOf(':');
+        if (colon > 0) {
+          this.host = value.substring(0, colon);
+        } else {
+          this.host = value;
+        }
         break;
     }
   }

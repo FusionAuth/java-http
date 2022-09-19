@@ -16,6 +16,7 @@
 package io.fusionauth.http.server;
 
 import java.net.InetAddress;
+import java.net.UnknownHostException;
 import java.nio.file.Path;
 import java.time.Duration;
 import java.util.Objects;
@@ -23,10 +24,10 @@ import java.util.Objects;
 import io.fusionauth.http.log.LoggerFactory;
 import io.fusionauth.http.log.SystemOutLoggerFactory;
 
-public class HTTPServerConfiguration {
-  private InetAddress address;
-
+public class HTTPServerConfiguration implements Configurable<HTTPServerConfiguration> {
   private Path baseDir = Path.of("");
+
+  private InetAddress bindAddress;
 
   private Duration clientTimeoutDuration = Duration.ofSeconds(10);
 
@@ -42,20 +43,42 @@ public class HTTPServerConfiguration {
 
   private int maxHeadLength;
 
+  private int multipartBufferSize = 16 * 1024;
+
   private int numberOfWorkerThreads = 40;
 
   private int port = 8080;
 
   private int preambleBufferSize = 4096;
 
+  private int requestBufferSize = 16 * 1024;
+
+  private int responseBufferSize = 16 * 1024;
+
   private Duration shutdownDuration = Duration.ofSeconds(10);
 
-  public InetAddress getAddress() {
-    return address;
+  public HTTPServerConfiguration() {
+    try {
+      this.bindAddress = InetAddress.getByName("::");
+    } catch (UnknownHostException e) {
+      throw new IllegalStateException(e);
+    }
+  }
+
+  /**
+   * @return This.
+   */
+  @Override
+  public HTTPServerConfiguration configuration() {
+    return this;
   }
 
   public Path getBaseDir() {
     return baseDir;
+  }
+
+  public InetAddress getBindAddress() {
+    return bindAddress;
   }
 
   public Duration getClientTimeoutDuration() {
@@ -86,6 +109,10 @@ public class HTTPServerConfiguration {
     return maxHeadLength;
   }
 
+  public int getMultipartBufferSize() {
+    return multipartBufferSize;
+  }
+
   public int getNumberOfWorkerThreads() {
     return numberOfWorkerThreads;
   }
@@ -98,97 +125,85 @@ public class HTTPServerConfiguration {
     return preambleBufferSize;
   }
 
+  public int getRequestBufferSize() {
+    return requestBufferSize;
+  }
+
+  public int getResponseBufferSize() {
+    return responseBufferSize;
+  }
+
   public Duration getShutdownDuration() {
     return shutdownDuration;
   }
 
   /**
-   * Sets the base directory for this server. This is passed to the HTTPContext, which is available from this class. This defaults to the
-   * current working directory of the process.
-   *
-   * @param baseDir The base dir.
-   * @return This.
+   * {@inheritDoc}
    */
+  @Override
   public HTTPServerConfiguration withBaseDir(Path baseDir) {
     this.baseDir = baseDir;
     return this;
   }
 
   /**
-   * Sets the bind address that this server listens on. Defaults to `::`.
-   *
-   * @param address The bind address.
-   * @return This.
+   * {@inheritDoc}
    */
+  @Override
   public HTTPServerConfiguration withBindAddress(InetAddress address) {
-    this.address = address;
+    this.bindAddress = address;
     return this;
   }
 
   /**
-   * Sets the duration that the server will allow client connections to remain open. This includes Keep-Alive as well as read timeout.
-   *
-   * @param duration The duration.
-   * @return This.
+   * {@inheritDoc}
    */
+  @Override
   public HTTPServerConfiguration withClientTimeoutDuration(Duration duration) {
     this.clientTimeoutDuration = duration;
     return this;
   }
 
   /**
-   * Sets the prefix of the URIs that this server handles. Technically, the server will accept all inbound connections, but if a context
-   * path is set, it can assist the application with building URIs (in HTML for example). This value will be accessible via the
-   * {@link HTTPRequest#getContextPath()} method.
-   *
-   * @param contextPath The context path for the server.
-   * @return This.
+   * {@inheritDoc}
    */
+  @Override
   public HTTPServerConfiguration withContextPath(String contextPath) {
     this.contextPath = contextPath;
     return this;
   }
 
   /**
-   * Sets an ExpectValidator that is used if a client sends the server a {@code Expect: 100-continue} header.
-   *
-   * @param validator The validator.
-   * @return This.
+   * {@inheritDoc}
    */
+  @Override
   public HTTPServerConfiguration withExpectValidator(ExpectValidator validator) {
     this.expectValidator = validator;
     return this;
   }
 
   /**
-   * Sets the handler that will process the requests.
-   *
-   * @param handler The handler that processes the requests.
-   * @return This.
+   * {@inheritDoc}
    */
+  @Override
   public HTTPServerConfiguration withHandler(HTTPHandler handler) {
     this.handler = handler;
     return this;
   }
 
   /**
-   * Sets an instrumenter that the server will notify when events and conditions happen.
-   *
-   * @param instrumenter The instrumenter.
-   * @return This.
+   * {@inheritDoc}
    */
+  @Override
   public HTTPServerConfiguration withInstrumenter(Instrumenter instrumenter) {
     this.instrumenter = instrumenter;
     return this;
   }
 
   /**
-   * Sets the logger factory that all the HTTP server classes use to retrieve specific loggers. Defaults to the
-   * {@link SystemOutLoggerFactory}.
-   *
-   * @param loggerFactory The factory.
-   * @return This.
+   * {@inheritDoc}
    */
+  @Override
   public HTTPServerConfiguration withLoggerFactory(LoggerFactory loggerFactory) {
     Objects.requireNonNull(loggerFactory);
     this.loggerFactory = loggerFactory;
@@ -196,55 +211,72 @@ public class HTTPServerConfiguration {
   }
 
   /**
-   * Sets the max preamble length (the start-line and headers constitute the head). Defaults to 64k
-   *
-   * @param maxLength The max preamble length.
-   * @return This.
+   * {@inheritDoc}
    */
+  @Override
   public HTTPServerConfiguration withMaxPreambleLength(int maxLength) {
     this.maxHeadLength = maxLength;
     return this;
   }
 
   /**
-   * Sets the number of worker threads that will handle requests coming into the HTTP server. Defaults to 40.
-   *
-   * @param numberOfWorkerThreads The number of worker threads.
-   * @return This.
+   * {@inheritDoc}
    */
+  @Override
+  public HTTPServerConfiguration withMultipartBufferSize(int multipartBufferSize) {
+    this.multipartBufferSize = multipartBufferSize;
+    return this;
+  }
+
+  /**
+   * {@inheritDoc}
+   */
+  @Override
   public HTTPServerConfiguration withNumberOfWorkerThreads(int numberOfWorkerThreads) {
     this.numberOfWorkerThreads = numberOfWorkerThreads;
     return this;
   }
 
   /**
-   * Sets the port that this server listens on for HTTP (non-TLS). Defaults to 8080.
-   *
-   * @param port The port.
-   * @return This.
+   * {@inheritDoc}
    */
+  @Override
   public HTTPServerConfiguration withPort(int port) {
     this.port = port;
     return this;
   }
 
   /**
-   * Sets the size of the preamble buffer (that is the buffer that reads the start-line and headers). Defaults to 4096.
-   *
-   * @param size The buffer size.
-   * @return This.
+   * {@inheritDoc}
    */
+  @Override
   public HTTPServerConfiguration withPreambleBufferSize(int size) {
     this.preambleBufferSize = size;
     return this;
   }
 
   /**
-   * Sets the duration the server will wait for running requests to be completed. Defaults to 10 seconds.
-   *
-   * @param duration The duration the server will wait for all running request processing threads to complete their work.
-   * @return This.
+   * {@inheritDoc}
    */
+  @Override
+  public HTTPServerConfiguration withRequestBufferSize(int requestBufferSize) {
+    this.requestBufferSize = requestBufferSize;
+    return this;
+  }
+
+  /**
+   * {@inheritDoc}
+   */
+  @Override
+  public HTTPServerConfiguration withResponseBufferSize(int responseBufferSize) {
+    this.responseBufferSize = responseBufferSize;
+    return this;
+  }
+
+  /**
+   * {@inheritDoc}
+   */
+  @Override
   public HTTPServerConfiguration withShutdownDuration(Duration duration) {
     this.shutdownDuration = duration;
     return this;
