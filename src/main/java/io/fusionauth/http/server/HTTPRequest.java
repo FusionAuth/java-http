@@ -112,7 +112,7 @@ public class HTTPRequest implements Buildable<HTTPRequest> {
   private String scheme;
 
   public HTTPRequest() {
-    this.contextPath = "/";
+    this.contextPath = "";
     this.multipartBufferSize = 1024;
   }
 

@@ -85,28 +85,25 @@ public class Cookie implements Buildable<Cookie> {
         continue;
       }
 
-      if (c == '=') {
-        name = header.substring(start, i);
+      if (c == '=' && inName) {
+        name = new String(chars, start, i - start);
         value = "";
         inValue = true;
         inName = false;
         start = i + 1;
-      } else if (c == ';') {
-        value = header.substring(start, i);
-        if (name != null && name.trim().length() > 0 && value.trim().length() > 0) {
+      } else if (c == ';' && inValue) {
+        value = new String(chars, start, i - start);
+        if (name.trim().length() > 0 && value.trim().length() > 0) {
           cookies.add(new Cookie(name, value));
         }
 
-        inName = false;
         inValue = false;
         name = null;
         value = null;
         start = 0;
-      } else {
-        if (!inName && !inValue) {
-          inName = true;
-          start = i;
-        }
+      } else if (!inName && !inValue) {
+        inName = true;
+        start = i;
       }
     }
 

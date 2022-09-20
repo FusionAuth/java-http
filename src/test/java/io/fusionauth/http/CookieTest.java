@@ -44,6 +44,11 @@ public class CookieTest {
     assertEquals(cookies.get(0), new Cookie("foo", "bar"));
     assertEquals(cookies.get(1), new Cookie("baz", "fred"));
 
+    cookies = Cookie.fromRequestHeader("foo=bar==; baz=fred==");
+    assertEquals(cookies.size(), 2);
+    assertEquals(cookies.get(0), new Cookie("foo", "bar=="));
+    assertEquals(cookies.get(1), new Cookie("baz", "fred=="));
+
     cookies = Cookie.fromRequestHeader("foo=; baz=");
     assertEquals(cookies.size(), 0);
 
