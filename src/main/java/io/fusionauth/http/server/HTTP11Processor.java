@@ -23,8 +23,6 @@ import java.nio.channels.SocketChannel;
 
 import io.fusionauth.http.io.NonBlockingByteBufferOutputStream;
 import io.fusionauth.http.log.Logger;
-import io.fusionauth.http.server.HTTPRequestProcessor.RequestState;
-import io.fusionauth.http.server.HTTPResponseProcessor.ResponseState;
 import io.fusionauth.http.util.ThreadPool;
 
 /**
@@ -32,27 +30,26 @@ import io.fusionauth.http.util.ThreadPool;
  *
  * @author Brian Pontarelli
  */
-@SuppressWarnings("resource")
 public class HTTP11Processor implements HTTPProcessor {
-  private final HTTPServerConfiguration configuration;
+  final HTTPServerConfiguration configuration;
 
-  private final InetAddress ipAddress;
+  final InetAddress ipAddress;
 
-  private final Logger logger;
+  final Logger logger;
 
-  private final Notifier notifier;
+  final Notifier notifier;
 
-  private final ByteBuffer preambleBuffer;
+  final ByteBuffer preambleBuffer;
 
-  private final HTTPRequest request;
+  final HTTPRequest request;
 
-  private final HTTPRequestProcessor requestProcessor;
+  final HTTPRequestProcessor requestProcessor;
 
-  private final HTTPResponse response;
+  final HTTPResponse response;
 
-  private final HTTPResponseProcessor responseProcessor;
+  final HTTPResponseProcessor responseProcessor;
 
-  private final ThreadPool threadPool;
+  final ThreadPool threadPool;
 
   private long lastUsed = System.currentTimeMillis();
 
@@ -73,6 +70,19 @@ public class HTTP11Processor implements HTTPProcessor {
     this.responseProcessor = new HTTPResponseProcessor(configuration, request, response, outputStream);
   }
 
+  /**
+   * Since this is an HTTP implementation, this simply puts the connection into a read state.
+   *
+   * @param key           The selection key for the client.
+   * @param clientChannel The socket connection with the client.
+   * @throws IOException If the registration failed.
+   */
+  @Override
+  public void accept(SelectionKey key, SocketChannel clientChannel) throws IOException {
+    clientChannel.configureBlocking(false);
+    clientChannel.register(key.selector(), SelectionKey.OP_READ, this);
+  }
+
   @Override
   public void failure(Throwable t) {
     responseProcessor.failure();
@@ -87,7 +97,8 @@ public class HTTP11Processor implements HTTPProcessor {
     lastUsed = System.currentTimeMillis();
   }
 
-  public long read(SelectionKey key) throws IOException {
+  @Override
+  public int read(SelectionKey key) throws IOException {
     markUsed();
 
     RequestState state = requestProcessor.state();
@@ -105,9 +116,9 @@ public class HTTP11Processor implements HTTPProcessor {
     }
 
     SocketChannel client = (SocketChannel) key.channel();
-    long read = client.read(buffer);
+    int read = client.read(buffer);
     if (read <= 0) {
-      return 0L;
+      return 0;
     }
 
     logger.trace("Read [{}] bytes from client", read);
@@ -146,19 +157,20 @@ public class HTTP11Processor implements HTTPProcessor {
     return read;
   }
 
+  @Override
   public long write(SelectionKey key) throws IOException {
     markUsed();
 
     SocketChannel client = (SocketChannel) key.channel();
     ResponseState state = responseProcessor.state();
     if (state == ResponseState.Expect || state == ResponseState.Preamble || state == ResponseState.Body) {
-      ByteBuffer[] buffer = responseProcessor.currentBuffer();
-      if (buffer == null) {
+      ByteBuffer[] buffers = responseProcessor.currentBuffer();
+      if (buffers == null) {
         // Nothing to write
-        return 0L;
+        return 0;
       }
 
-      long bytes = client.write(buffer);
+      long bytes = client.write(buffers);
       if (bytes > 0) {
         response.setCommitted(true);
       }

@@ -17,6 +17,7 @@ package io.fusionauth.http.server;
 
 import java.io.IOException;
 import java.nio.channels.SelectionKey;
+import java.nio.channels.SocketChannel;
 
 /**
  * Generic interface that is used by all the processors to allow worker threads and other hooks into the processing of the requests and
@@ -25,6 +26,15 @@ import java.nio.channels.SelectionKey;
  * @author Brian Pontarelli
  */
 public interface HTTPProcessor {
+  /**
+   * Accepts an inbound connection to the server from a client.
+   *
+   * @param key           The selection key for the client.
+   * @param clientChannel The socket connection with the client.
+   * @throws IOException If the accept request failed. This could be a subclass like ClosedSocketException.
+   */
+  void accept(SelectionKey key, SocketChannel clientChannel) throws IOException;
+
   /**
    * Signals to the processor that the request handling failed in some way.
    *
@@ -44,7 +54,7 @@ public interface HTTPProcessor {
    * @return The number of bytes read.
    * @throws IOException If any I/O operations failed.
    */
-  long read(SelectionKey key) throws IOException;
+  int read(SelectionKey key) throws IOException;
 
   /**
    * Handles a write operation.

@@ -29,6 +29,8 @@ public class HTTPServerConfiguration implements Configurable<HTTPServerConfigura
 
   private InetAddress bindAddress;
 
+  private String certificateString;
+
   private Duration clientTimeoutDuration = Duration.ofSeconds(10);
 
   private String contextPath = "";
@@ -50,6 +52,8 @@ public class HTTPServerConfiguration implements Configurable<HTTPServerConfigura
   private int port = 8080;
 
   private int preambleBufferSize = 4096;
+
+  private String privateKeyString;
 
   private int requestBufferSize = 16 * 1024;
 
@@ -79,6 +83,10 @@ public class HTTPServerConfiguration implements Configurable<HTTPServerConfigura
 
   public InetAddress getBindAddress() {
     return bindAddress;
+  }
+
+  public String getCertificateString() {
+    return certificateString;
   }
 
   public Duration getClientTimeoutDuration() {
@@ -125,6 +133,10 @@ public class HTTPServerConfiguration implements Configurable<HTTPServerConfigura
     return preambleBufferSize;
   }
 
+  public String getPrivateKeyString() {
+    return privateKeyString;
+  }
+
   public int getRequestBufferSize() {
     return requestBufferSize;
   }
@@ -152,6 +164,15 @@ public class HTTPServerConfiguration implements Configurable<HTTPServerConfigura
   @Override
   public HTTPServerConfiguration withBindAddress(InetAddress address) {
     this.bindAddress = address;
+    return this;
+  }
+
+  /**
+   * {@inheritDoc}
+   */
+  @Override
+  public HTTPServerConfiguration withCertificateString(String certificateString) {
+    this.certificateString = certificateString;
     return this;
   }
 
@@ -252,6 +273,15 @@ public class HTTPServerConfiguration implements Configurable<HTTPServerConfigura
   @Override
   public HTTPServerConfiguration withPreambleBufferSize(int size) {
     this.preambleBufferSize = size;
+    return this;
+  }
+
+  /**
+   * {@inheritDoc}
+   */
+  @Override
+  public HTTPServerConfiguration withPrivateKeyString(String privateKeyString) {
+    this.privateKeyString = privateKeyString;
     return this;
   }
 

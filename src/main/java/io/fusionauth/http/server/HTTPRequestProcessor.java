@@ -150,11 +150,4 @@ public class HTTPRequestProcessor {
   public RequestState state() {
     return state;
   }
-
-  public enum RequestState {
-    Preamble,
-    Body,
-    Expect,
-    Complete
-  }
 }

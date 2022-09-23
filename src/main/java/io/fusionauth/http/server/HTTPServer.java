@@ -104,19 +104,17 @@ public class HTTPServer extends Thread implements Closeable, Notifier, Configura
         while (iterator.hasNext()) {
           key = iterator.next();
           if (key.isAcceptable()) {
-            var clientChannel = channel.accept();
-            clientChannel.configureBlocking(false);
-
-            HTTPProcessor processor = new HTTP11Processor(configuration, this, preambleBuffer, threadPool, clientChannel.socket().getInetAddress());
-            clientChannel.register(selector, SelectionKey.OP_READ, processor);
             logger.trace("(A)");
+            var clientChannel = channel.accept();
+            HTTPProcessor processor = new HTTP11Processor(configuration, this, preambleBuffer, threadPool, clientChannel.socket().getInetAddress());
+            processor.accept(key, clientChannel);
 
             if (instrumenter != null) {
               instrumenter.acceptedConnection();
             }
           } else if (key.isReadable()) {
             logger.trace("(R)");
-            HTTPProcessor processor = (HTTP11Processor) key.attachment();
+            HTTPProcessor processor = (HTTPProcessor) key.attachment();
             long bytes = processor.read(key);
 
             if (instrumenter != null) {
@@ -124,7 +122,7 @@ public class HTTPServer extends Thread implements Closeable, Notifier, Configura
             }
           } else if (key.isWritable()) {
             logger.trace("(W)");
-            HTTPProcessor processor = (HTTP11Processor) key.attachment();
+            HTTPProcessor processor = (HTTPProcessor) key.attachment();
             long bytes = processor.write(key);
 
             if (instrumenter != null) {

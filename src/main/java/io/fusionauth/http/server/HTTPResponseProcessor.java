@@ -195,14 +195,4 @@ public class HTTPResponseProcessor {
       response.setHeader(Headers.SetCookie, value);
     }
   }
-
-  public enum ResponseState {
-    Preamble,
-    Body,
-    KeepAlive,
-    Close,
-    Expect,
-    Continue,
-    Failure
-  }
 }
