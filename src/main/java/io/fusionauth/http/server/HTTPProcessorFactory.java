@@ -15,7 +15,9 @@
  */
 package io.fusionauth.http.server;
 
+import java.io.IOException;
 import java.nio.ByteBuffer;
+import java.security.GeneralSecurityException;
 
 import io.fusionauth.http.util.ThreadPool;
 
@@ -47,7 +49,8 @@ public class HTTPProcessorFactory {
    * @param ipAddress      The IP address of the client.
    * @return The HTTPProcessor.
    */
-  public HTTPProcessor build(Notifier notifier, ByteBuffer preambleBuffer, String ipAddress) {
-    return new HTTP11Processor(configuration, listener, notifier, preambleBuffer, threadPool, ipAddress);
+  public HTTPProcessor build(Notifier notifier, ByteBuffer preambleBuffer, String ipAddress) throws GeneralSecurityException, IOException {
+    HTTP11Processor delegate = new HTTP11Processor(configuration, listener, notifier, preambleBuffer, threadPool, ipAddress);
+    return new HTTPS11Processor(delegate, configuration, listener);
   }
 }

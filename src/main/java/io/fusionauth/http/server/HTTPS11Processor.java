@@ -15,8 +15,246 @@
  */
 package io.fusionauth.http.server;
 
-public class HTTPS11Processor {
-//  private static final ByteBuffer Empty = ByteBuffer.allocate(0);
+import javax.net.ssl.SSLContext;
+import javax.net.ssl.SSLEngine;
+import javax.net.ssl.SSLEngineResult.HandshakeStatus;
+import javax.net.ssl.SSLEngineResult.Status;
+import javax.net.ssl.SSLSession;
+import java.io.IOException;
+import java.nio.ByteBuffer;
+import java.nio.channels.SelectionKey;
+import java.security.GeneralSecurityException;
+
+import io.fusionauth.http.log.Logger;
+import io.fusionauth.http.security.SecurityTools;
+
+public class HTTPS11Processor implements HTTPProcessor {
+  private final HTTP11Processor delegate;
+
+  private final SSLEngine engine;
+
+  private final Logger logger;
+
+  private final ByteBuffer[] myAppData;
+
+  private final ByteBuffer[] myNetData;
+
+  private final ByteBuffer peerAppData;
+
+  private ByteBuffer peerNetData;
+
+  private volatile ProcessorState state;
+
+  public HTTPS11Processor(HTTP11Processor delegate, HTTPServerConfiguration configuration, HTTPListenerConfiguration listenerConfiguration)
+      throws GeneralSecurityException, IOException {
+    this.delegate = delegate;
+    this.logger = configuration.getLoggerFactory().getLogger(HTTPS11Processor.class);
+
+    if (listenerConfiguration.isTLS()) {
+      SSLContext context = SecurityTools.getServerContext(listenerConfiguration.getCertificate(), listenerConfiguration.getPrivateKey());
+      this.engine = context.createSSLEngine();
+      this.engine.setUseClientMode(false);
+
+      SSLSession session = engine.getSession();
+      this.myAppData = new ByteBuffer[]{ByteBuffer.allocate(session.getApplicationBufferSize())};
+      this.myNetData = new ByteBuffer[]{ByteBuffer.allocate(session.getPacketBufferSize())};
+      this.peerAppData = ByteBuffer.allocate(session.getApplicationBufferSize());
+      this.peerNetData = ByteBuffer.allocate(session.getPacketBufferSize());
+
+      engine.beginHandshake();
+      HandshakeStatus tlsStatus = engine.getHandshakeStatus();
+      if (tlsStatus == HandshakeStatus.NEED_UNWRAP) {
+        this.state = ProcessorState.Read;
+      } else if (tlsStatus == HandshakeStatus.NEED_WRAP) {
+        this.state = ProcessorState.Write;
+      } else {
+        throw new IllegalStateException("The SSLEngine is not in a valid state. It should be in the handshake state, but it is in the state [" + tlsStatus + "]");
+      }
+    } else {
+      this.engine = null;
+      this.myAppData = null;
+      this.myNetData = null;
+      this.peerAppData = null;
+      this.peerNetData = null;
+    }
+  }
+
+  @Override
+  public ProcessorState close() {
+    logger.trace("(HTTPS-C)");
+
+    if (this.engine == null) {
+      return delegate.close();
+    }
+
+    throw new UnsupportedOperationException();
+  }
+
+  @Override
+  public void failure(Throwable t) {
+    logger.trace("(HTTPS-F)");
+    delegate.failure(t);
+  }
+
+  /**
+   * TLS so we need to read and write during the handshake.
+   *
+   * @return {@link SelectionKey#OP_READ} {@code |} {@link SelectionKey#OP_WRITE}
+   */
+  @Override
+  public int initialKeyOps() {
+    logger.trace("(HTTPS-A)");
+    if (engine == null) {
+      return delegate.initialKeyOps();
+    }
+
+    return SelectionKey.OP_READ | SelectionKey.OP_WRITE;
+  }
+
+  /**
+   * @return The delegate's lastUsed().
+   */
+  @Override
+  public long lastUsed() {
+    return delegate.lastUsed();
+  }
+
+  @Override
+  public ProcessorState read(ByteBuffer buffer) throws IOException {
+    delegate.markUsed();
+
+    if (engine == null) {
+      return delegate.read(buffer);
+    }
+
+    var tlsStatus = engine.getHandshakeStatus();
+    ByteBuffer decryptBuffer;
+    if (tlsStatus != HandshakeStatus.NOT_HANDSHAKING && tlsStatus != HandshakeStatus.FINISHED) {
+      decryptBuffer = peerAppData;
+    } else {
+      decryptBuffer = delegate.readBuffer();
+    }
+
+    // TODO : Not sure if this is correct
+    if (decryptBuffer == null) {
+      state = ProcessorState.Write;
+      return state;
+    }
+
+    var result = engine.unwrap(buffer, decryptBuffer);
+    if (result.getStatus() == Status.BUFFER_UNDERFLOW) {
+      peerNetData = handleBufferUnderflow(peerNetData);
+      return state;
+    } else if (result.getStatus() == Status.CLOSED) {
+      return close();
+    } else if (result.getStatus() == Status.BUFFER_OVERFLOW) {
+      throw new IllegalStateException("A buffer underflow is not expected during a wrap operation according to the Javadoc. Maybe this is something we need to fix.");
+    }
+
+    var newTLSStatus = result.getHandshakeStatus();
+    if (tlsStatus == HandshakeStatus.NOT_HANDSHAKING || tlsStatus == HandshakeStatus.FINISHED) {
+      decryptBuffer.flip();
+      state = delegate.read(decryptBuffer);
+    } else if (newTLSStatus == HandshakeStatus.NEED_UNWRAP || newTLSStatus == HandshakeStatus.NEED_UNWRAP_AGAIN) {
+      state = ProcessorState.Read;
+    } else if (newTLSStatus == HandshakeStatus.NEED_WRAP) {
+      state = ProcessorState.Write;
+    }
+
+    return state;
+  }
+
+  @Override
+  public ByteBuffer readBuffer() {
+    delegate.markUsed();
+
+    if (engine == null) {
+      return delegate.readBuffer();
+    }
+
+    // Always read into the peer network buffer
+    return peerNetData;
+  }
+
+  @Override
+  public ProcessorState state() {
+    delegate.markUsed();
+
+    if (engine == null) {
+      return delegate.state();
+    }
+
+    throw new UnsupportedOperationException();
+  }
+
+  @Override
+  public ByteBuffer[] writeBuffers() throws IOException {
+    delegate.markUsed();
+
+    if (engine == null) {
+      return delegate.writeBuffers();
+    }
+
+    var tlsStatus = engine.getHandshakeStatus();
+    ByteBuffer[] buffers;
+    if (tlsStatus == HandshakeStatus.NEED_WRAP) {
+      buffers = myAppData;
+    } else {
+      buffers = delegate.writeBuffers();
+    }
+
+    if (buffers == null) {
+      return null;
+    }
+
+    var result = engine.wrap(buffers, myNetData[0]);
+    if (result.getStatus() == Status.BUFFER_OVERFLOW) {
+      myNetData[0] = handleBufferOverflow(myNetData[0]);
+    } else if (result.getStatus() == Status.CLOSED) {
+      close();
+      return null;
+    } else if (result.getStatus() == Status.BUFFER_UNDERFLOW) {
+      throw new IllegalStateException("A buffer underflow is not expected during a wrap operation according to the Javadoc. Maybe this is something we need to fix.");
+    }
+
+    return myNetData;
+  }
+
+  @Override
+  public ProcessorState wrote(long num) {
+    delegate.markUsed();
+
+    // If we are in a handshake that needs to read or just finished the handshake, flip the selector back to Read
+    var tlsStatus = engine != null ? engine.getHandshakeStatus() : null;
+    if (tlsStatus == HandshakeStatus.NEED_UNWRAP || tlsStatus == HandshakeStatus.NEED_UNWRAP_AGAIN || tlsStatus == HandshakeStatus.FINISHED) {
+      state = ProcessorState.Read;
+      return state;
+    }
+
+    return delegate.wrote(num);
+  }
+
+  private ByteBuffer handleBufferOverflow(ByteBuffer buffer) {
+    int applicationSize = engine.getSession().getApplicationBufferSize();
+    ByteBuffer newBuffer = ByteBuffer.allocate(applicationSize + buffer.position());
+    buffer.flip();
+    newBuffer.put(buffer);
+    return newBuffer;
+  }
+
+  private ByteBuffer handleBufferUnderflow(ByteBuffer buffer) {
+    int networkSize = engine.getSession().getPacketBufferSize();
+    if (networkSize > buffer.capacity()) {
+      ByteBuffer newBuffer = ByteBuffer.allocate(networkSize);
+      buffer.flip();
+      newBuffer.put(buffer);
+      buffer = newBuffer;
+    }
+
+    return buffer;
+  }
+
+  //  private static final ByteBuffer Empty = ByteBuffer.allocate(0);
 //
 //  private final SSLEngine engine;
 //
@@ -180,25 +418,6 @@ public class HTTPS11Processor {
 //    return read;
 //  }
 //
-//  private ByteBuffer handleBufferOverflow(ByteBuffer buffer) {
-//    int applicationSize = engine.getSession().getApplicationBufferSize();
-//    ByteBuffer newBuffer = ByteBuffer.allocate(applicationSize + buffer.position());
-//    buffer.flip();
-//    newBuffer.put(buffer);
-//    return newBuffer;
-//  }
-//
-//  private ByteBuffer handleBufferUnderflow(ByteBuffer buffer) {
-//    int networkSize = engine.getSession().getPacketBufferSize();
-//    if (networkSize > buffer.capacity()) {
-//      ByteBuffer newBuffer = ByteBuffer.allocate(networkSize);
-//      buffer.flip();
-//      newBuffer.put(buffer);
-//      buffer = newBuffer;
-//    }
-//
-//    return buffer;
-//  }
 //
 //  private HandshakeStatus handleHandshake(SelectionKey key, SocketChannel client) throws IOException {
 //    HandshakeStatus status = engine.getHandshakeStatus();

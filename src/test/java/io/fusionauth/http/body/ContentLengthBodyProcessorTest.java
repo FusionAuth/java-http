@@ -33,11 +33,13 @@ public class ContentLengthBodyProcessorTest {
     Consumer<ByteBuffer> consumer = list::add;
     var processor = new ContentLengthBodyProcessor(30, 60);
     processor.currentBuffer().put("123456789012345678901234567890".getBytes());
+    processor.currentBuffer().flip();
     processor.processBuffer(consumer);
 
     assertFalse(processor.isComplete());
 
     processor.currentBuffer().put("123456789012345678901234567890".getBytes());
+    processor.currentBuffer().flip();
     processor.processBuffer(consumer);
 
     assertTrue(processor.isComplete());
@@ -52,16 +54,19 @@ public class ContentLengthBodyProcessorTest {
     Consumer<ByteBuffer> consumer = list::add;
     var processor = new ContentLengthBodyProcessor(30, 60);
     processor.currentBuffer().put("1234567890123456789012345".getBytes());
+    processor.currentBuffer().flip();
     processor.processBuffer(consumer);
 
     assertFalse(processor.isComplete());
 
     processor.currentBuffer().put("67890".getBytes());
+    processor.currentBuffer().flip();
     processor.processBuffer(consumer);
 
     assertFalse(processor.isComplete());
 
     processor.currentBuffer().put("123456789012345678901234567890".getBytes());
+    processor.currentBuffer().flip();
     processor.processBuffer(consumer);
 
     assertTrue(processor.isComplete());
@@ -76,6 +81,7 @@ public class ContentLengthBodyProcessorTest {
     Consumer<ByteBuffer> consumer = list::add;
     var processor = new ContentLengthBodyProcessor(1024, 60);
     processor.currentBuffer().put("123456789012345678901234567890123456789012345678901234567890".getBytes());
+    processor.currentBuffer().flip();
     processor.processBuffer(consumer);
 
     assertTrue(processor.isComplete());

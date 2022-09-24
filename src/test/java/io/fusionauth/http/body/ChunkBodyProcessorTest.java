@@ -44,6 +44,7 @@ public class ChunkBodyProcessorTest {
             \r
             """.getBytes()
     );
+    processor.currentBuffer().flip();
     processor.processBuffer(consumer);
 
     assertTrue(processor.isComplete());
@@ -63,6 +64,7 @@ public class ChunkBodyProcessorTest {
             A\r
             12345678""".getBytes()
     );
+    processor.currentBuffer().flip();
     processor.processBuffer(consumer);
 
     assertFalse(processor.isComplete());
@@ -80,6 +82,7 @@ public class ChunkBodyProcessorTest {
             \r
             """.getBytes()
     );
+    processor.currentBuffer().flip();
     processor.processBuffer(consumer);
 
     assertTrue(processor.isComplete());
@@ -100,6 +103,7 @@ public class ChunkBodyProcessorTest {
             A\r
             1234567890""".getBytes()
     );
+    processor.currentBuffer().flip();
     processor.processBuffer(consumer);
 
     assertFalse(processor.isComplete());
@@ -117,6 +121,7 @@ public class ChunkBodyProcessorTest {
             \r
             """.getBytes()
     );
+    processor.currentBuffer().flip();
     processor.processBuffer(consumer);
 
     assertTrue(processor.isComplete());
@@ -137,6 +142,7 @@ public class ChunkBodyProcessorTest {
             1234567890\r
             14""".getBytes()
     );
+    processor.currentBuffer().flip();
     processor.processBuffer(consumer);
 
     assertFalse(processor.isComplete());
@@ -151,6 +157,7 @@ public class ChunkBodyProcessorTest {
             \r
             """.getBytes()
     );
+    processor.currentBuffer().flip();
     processor.processBuffer(consumer);
 
     assertTrue(processor.isComplete());

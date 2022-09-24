@@ -112,8 +112,10 @@ public class HTTPRequestProcessor {
 
           int size = Math.max(buffer.remaining(), bufferSize);
           if (contentLength != null) {
+            logger.info("Handling body using Content-Length header");
             bodyProcessor = new ContentLengthBodyProcessor(size, contentLength);
           } else {
+            logger.info("Handling body using Chunked data");
             bodyProcessor = new ChunkedBodyProcessor(size);
             configuration.getInstrumenter().chunkedRequest();
           }
@@ -121,7 +123,9 @@ public class HTTPRequestProcessor {
           // Create the input stream and add any body data that is left over in the buffer
           inputStream = new ReaderBlockingByteBufferInputStream();
           if (buffer.hasRemaining()) {
-            bodyProcessor.currentBuffer().put(buffer);
+            ByteBuffer bodyBuffer = bodyProcessor.currentBuffer();
+            bodyBuffer.put(buffer);
+            bodyBuffer.flip();
             state = processBodyBytes();
           }
 

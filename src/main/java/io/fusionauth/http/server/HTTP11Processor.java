@@ -29,27 +29,23 @@ import io.fusionauth.http.util.ThreadPool;
  * @author Brian Pontarelli
  */
 public class HTTP11Processor implements HTTPProcessor {
-  final HTTPServerConfiguration configuration;
+  private final HTTPServerConfiguration configuration;
 
-  final String ipAddress;
+  private final Logger logger;
 
-  final HTTPListenerConfiguration listener;
+  private final Notifier notifier;
 
-  final Logger logger;
+  private final ByteBuffer preambleBuffer;
 
-  final Notifier notifier;
+  private final HTTPRequest request;
 
-  final ByteBuffer preambleBuffer;
+  private final HTTPRequestProcessor requestProcessor;
 
-  final HTTPRequest request;
+  private final HTTPResponse response;
 
-  final HTTPRequestProcessor requestProcessor;
+  private final HTTPResponseProcessor responseProcessor;
 
-  final HTTPResponse response;
-
-  final HTTPResponseProcessor responseProcessor;
-
-  final ThreadPool threadPool;
+  private final ThreadPool threadPool;
 
   private long lastUsed = System.currentTimeMillis();
 
@@ -58,12 +54,10 @@ public class HTTP11Processor implements HTTPProcessor {
   public HTTP11Processor(HTTPServerConfiguration configuration, HTTPListenerConfiguration listener, Notifier notifier,
                          ByteBuffer preambleBuffer, ThreadPool threadPool, String ipAddress) {
     this.configuration = configuration;
-    this.listener = listener;
     this.logger = configuration.getLoggerFactory().getLogger(HTTP11Processor.class);
     this.notifier = notifier;
     this.preambleBuffer = preambleBuffer;
     this.threadPool = threadPool;
-    this.ipAddress = ipAddress;
     this.state = ProcessorState.Read;
 
     this.request = new HTTPRequest(configuration.getContextPath(), configuration.getMultipartBufferSize(), "http", listener.getPort(), ipAddress);
@@ -131,7 +125,6 @@ public class HTTP11Processor implements HTTPProcessor {
     if (requestState == RequestState.Preamble) {
       logger.trace("(RP)");
 
-      buffer.flip();
       requestState = requestProcessor.processPreambleBytes(buffer);
 
       // Reset the preamble buffer because it is shared

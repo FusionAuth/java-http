@@ -31,8 +31,9 @@ public interface HTTPProcessor {
    * Therefore, this method can interrupt a normal shutdown.
    *
    * @return The new state of the processor.
+   * @throws IOException If the close operation failed for any reason.
    */
-  ProcessorState close();
+  ProcessorState close() throws IOException;
 
   /**
    * Signals to the processor that the request handling failed in some way.
@@ -67,8 +68,9 @@ public interface HTTPProcessor {
 
   /**
    * @return The current read buffer or null if the state has changed or there we aren't expecting to read.
+   * @throws IOException If any I/O operations failed.
    */
-  ByteBuffer readBuffer();
+  ByteBuffer readBuffer() throws IOException;
 
   /**
    * @return The current state of the HTTPProcessor.
@@ -77,14 +79,16 @@ public interface HTTPProcessor {
 
   /**
    * @return The current write buffer(s) and never null.
+   * @throws IOException If any I/O operations failed.
    */
-  ByteBuffer[] writeBuffers();
+  ByteBuffer[] writeBuffers() throws IOException;
 
   /**
    * Called by the selector to tell the HTTPProcessor that bytes were written back to the client.
    *
    * @param num The number of bytes written.
    * @return The new state of the HTTPProcessor.
+   * @throws IOException If any I/O operations failed.
    */
-  ProcessorState wrote(long num);
+  ProcessorState wrote(long num) throws IOException;
 }

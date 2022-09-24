@@ -25,6 +25,7 @@ import java.nio.channels.SelectionKey;
 import java.nio.channels.Selector;
 import java.nio.channels.ServerSocketChannel;
 import java.nio.channels.SocketChannel;
+import java.security.GeneralSecurityException;
 import java.time.Duration;
 import java.util.Iterator;
 
@@ -89,6 +90,26 @@ public class HTTPServerThread extends Thread implements Closeable, Notifier {
 
   @Override
   public void notifyNow() {
+    if (!selector.isOpen()) {
+      return;
+    }
+
+    // Update the keys based on any changes to the processor state
+    var keys = selector.keys();
+    for (SelectionKey key : keys) {
+      HTTPProcessor processor = (HTTPProcessor) key.attachment();
+      if (processor != null) {
+        ProcessorState state = processor.state();
+        if (state == ProcessorState.Read && key.interestOps() != SelectionKey.OP_READ) {
+          logger.debug("Flipping a SelectionKey to Read because it wasn't in the right state");
+          key.interestOps(SelectionKey.OP_READ);
+        } else if (state == ProcessorState.Write && key.interestOps() != SelectionKey.OP_WRITE) {
+          logger.debug("Flipping a SelectionKey to Write because it wasn't in the right state");
+          key.interestOps(SelectionKey.OP_WRITE);
+        }
+      }
+    }
+
     // Wake-up! Time to put on a little make-up!
     selector.wakeup();
   }
@@ -136,7 +157,7 @@ public class HTTPServerThread extends Thread implements Closeable, Notifier {
   }
 
   @SuppressWarnings("MagicConstant")
-  private void accept(SelectionKey key) throws IOException {
+  private void accept(SelectionKey key) throws GeneralSecurityException, IOException {
     var client = channel.accept();
     HTTPProcessor processor = processorFactory.build(this, preambleBuffer, ipAddress(client));
     client.configureBlocking(false);
@@ -198,6 +219,7 @@ public class HTTPServerThread extends Thread implements Closeable, Notifier {
         } else {
           logger.debug("Read [{}] bytes from client", num);
 
+          buffer.flip();
           state = processor.read(buffer);
 
           if (instrumenter != null) {
@@ -215,7 +237,7 @@ public class HTTPServerThread extends Thread implements Closeable, Notifier {
     }
   }
 
-  private void write(SelectionKey key) throws IOException {
+  private void write(SelectionKey key) throws GeneralSecurityException, IOException {
     HTTPProcessor processor = (HTTPProcessor) key.attachment();
     ProcessorState state = processor.state();
     SocketChannel client = (SocketChannel) key.channel();

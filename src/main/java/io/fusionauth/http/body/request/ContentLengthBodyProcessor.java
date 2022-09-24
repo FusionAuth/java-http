@@ -50,11 +50,19 @@ public class ContentLengthBodyProcessor implements BodyProcessor {
 
   @Override
   public void processBuffer(Consumer<ByteBuffer> consumer) {
-    if (buffer.position() + bytesRead >= contentLength || !buffer.hasRemaining()) {
-      bytesRead += buffer.position();
-      buffer.flip();
+    // If the bytes read is Content-Length or the buffer is full
+    if (buffer.remaining() + bytesRead >= contentLength || buffer.remaining() == buffer.capacity()) {
+      bytesRead += buffer.remaining();
       consumer.accept(buffer);
-      buffer = ByteBuffer.allocate(bufferSize);
+
+      // Create a new buffer if we have more bytes to read
+      if (bytesRead < contentLength) {
+        buffer = ByteBuffer.allocate(bufferSize);
+      }
+    } else {
+      // Reset the position and limit such that we can read more into the buffer
+      buffer.position(buffer.limit());
+      buffer.limit(buffer.capacity());
     }
   }
 

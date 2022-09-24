@@ -370,6 +370,7 @@ public class CoreTest {
       }
     };
 
+    SystemOutLogger.level = Level.Trace;
     try (HTTPServer ignore = new HTTPServer().withHandler(handler).withNumberOfWorkerThreads(1).withListener(new HTTPListenerConfiguration(4242)).start()) {
       var client = HttpClient.newHttpClient();
       URI uri = URI.create("http://localhost:4242/api/system/version");
@@ -385,9 +386,7 @@ public class CoreTest {
 
   @Test
   public void statusOnly() throws Exception {
-    HTTPHandler handler = (req, res) -> {
-      res.setStatus(200);
-    };
+    HTTPHandler handler = (req, res) -> res.setStatus(200);
 
     try (HTTPServer ignore = new HTTPServer().withHandler(handler).withNumberOfWorkerThreads(1).withListener(new HTTPListenerConfiguration(4242)).start()) {
       var client = HttpClient.newHttpClient();

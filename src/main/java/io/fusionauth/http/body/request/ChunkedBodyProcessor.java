@@ -56,7 +56,6 @@ public class ChunkedBodyProcessor implements BodyProcessor {
 
   @Override
   public void processBuffer(Consumer<ByteBuffer> consumer) {
-    buffer.flip();
     while (buffer.hasRemaining()) {
       byte ch = buffer.get();
       var nextState = state.next(ch, chunkSize, chunkBytes);
