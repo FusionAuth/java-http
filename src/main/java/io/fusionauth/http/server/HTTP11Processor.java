@@ -18,7 +18,6 @@ package io.fusionauth.http.server;
 import java.io.IOException;
 import java.nio.ByteBuffer;
 import java.nio.channels.SelectionKey;
-import java.nio.channels.SocketChannel;
 
 import io.fusionauth.http.io.NonBlockingByteBufferOutputStream;
 import io.fusionauth.http.log.Logger;
@@ -32,9 +31,9 @@ import io.fusionauth.http.util.ThreadPool;
 public class HTTP11Processor implements HTTPProcessor {
   final HTTPServerConfiguration configuration;
 
-  final HTTPListenerConfiguration listener;
-
   final String ipAddress;
+
+  final HTTPListenerConfiguration listener;
 
   final Logger logger;
 
@@ -54,6 +53,8 @@ public class HTTP11Processor implements HTTPProcessor {
 
   private long lastUsed = System.currentTimeMillis();
 
+  private volatile ProcessorState state;
+
   public HTTP11Processor(HTTPServerConfiguration configuration, HTTPListenerConfiguration listener, Notifier notifier,
                          ByteBuffer preambleBuffer, ThreadPool threadPool, String ipAddress) {
     this.configuration = configuration;
@@ -63,6 +64,7 @@ public class HTTP11Processor implements HTTPProcessor {
     this.preambleBuffer = preambleBuffer;
     this.threadPool = threadPool;
     this.ipAddress = ipAddress;
+    this.state = ProcessorState.Read;
 
     this.request = new HTTPRequest(configuration.getContextPath(), configuration.getMultipartBufferSize(), "http", listener.getPort(), ipAddress);
     this.requestProcessor = new HTTPRequestProcessor(configuration, request);
@@ -72,25 +74,45 @@ public class HTTP11Processor implements HTTPProcessor {
     this.responseProcessor = new HTTPResponseProcessor(configuration, request, response, outputStream);
   }
 
-  /**
-   * Since this is an HTTP implementation, this simply puts the connection into a read state.
-   *
-   * @param key           The selection key for the client.
-   * @param clientChannel The socket connection with the client.
-   * @throws IOException If the registration failed.
-   */
   @Override
-  public void accept(SelectionKey key, SocketChannel clientChannel) throws IOException {
-    clientChannel.configureBlocking(false);
-    clientChannel.register(key.selector(), SelectionKey.OP_READ, this);
+  public ProcessorState close() {
+    logger.trace("(C)");
+
+    // Set the state to Close and return it
+    state = ProcessorState.Close;
+    return state;
   }
 
   @Override
   public void failure(Throwable t) {
-    responseProcessor.failure();
+    logger.trace("(F)");
+
+    // If we've written at least one byte back to the client, close the connection and bail. Otherwise, the failure was noted and the
+    // Preamble will contain a 500 response. Therefore, we need to reset the processor, so it writes the preamble
+    if (response.isCommitted()) {
+      state = ProcessorState.Close;
+    } else {
+      // Maintain the `write` state but reset to Preamble to write the new headers
+      state = ProcessorState.Write;
+      responseProcessor.failure();
+    }
+
     notifier.notifyNow();
   }
 
+  /**
+   * Non-TLS so always start by reading from the client.
+   *
+   * @return {@link SelectionKey#OP_READ}
+   */
+  @Override
+  public int initialKeyOps() {
+    logger.trace("(A)");
+
+    return SelectionKey.OP_READ;
+  }
+
+  @Override
   public long lastUsed() {
     return lastUsed;
   }
@@ -100,48 +122,34 @@ public class HTTP11Processor implements HTTPProcessor {
   }
 
   @Override
-  public int read(SelectionKey key) throws IOException {
+  public ProcessorState read(ByteBuffer buffer) throws IOException {
     markUsed();
 
-    RequestState state = requestProcessor.state();
-    ByteBuffer buffer;
-    if (state == RequestState.Preamble) {
+    logger.trace("(R)");
+
+    RequestState requestState = requestProcessor.state();
+    if (requestState == RequestState.Preamble) {
       logger.trace("(RP)");
-      buffer = preambleBuffer;
-    } else if (state == RequestState.Body) {
-      logger.trace("(RB)");
-      buffer = requestProcessor.bodyBuffer();
-    } else {
-      logger.trace("(RD1)");
-      key.interestOps(SelectionKey.OP_WRITE);
-      return 0;
-    }
 
-    SocketChannel client = (SocketChannel) key.channel();
-    int read = client.read(buffer);
-    if (read <= 0) {
-      return 0;
-    }
-
-    logger.trace("Read [{}] bytes from client", read);
-
-    if (state == RequestState.Preamble) {
       buffer.flip();
-      state = requestProcessor.processPreambleBytes(buffer);
+      requestState = requestProcessor.processPreambleBytes(buffer);
 
       // Reset the preamble buffer because it is shared
       buffer.clear();
 
       // If the next state is not preamble, that means we are done processing that and ready to handle the request in a separate thread
-      if (state != RequestState.Preamble && state != RequestState.Expect) {
-        logger.trace("(RW)");
+      if (requestState != RequestState.Preamble && requestState != RequestState.Expect) {
+        logger.trace("(RWo)");
         threadPool.submit(new HTTPWorker(configuration.getHandler(), configuration.getLoggerFactory(), this, request, response));
       }
     } else {
-      state = requestProcessor.processBodyBytes();
+      logger.trace("(RB)");
+      requestState = requestProcessor.processBodyBytes();
     }
 
-    if (state == RequestState.Expect) {
+    if (requestState == RequestState.Expect) {
+      logger.trace("(RE)");
+
       var expectValidator = configuration.getExpectValidator();
       if (expectValidator != null) {
         expectValidator.validate(request, response);
@@ -150,63 +158,75 @@ public class HTTP11Processor implements HTTPProcessor {
       }
 
       responseProcessor.resetState(ResponseState.Expect);
-      key.interestOps(SelectionKey.OP_WRITE);
-    } else if (state == RequestState.Complete) {
-      logger.trace("(RD2)");
-      key.interestOps(SelectionKey.OP_WRITE);
+      state = ProcessorState.Write;
+    } else if (requestState == RequestState.Complete) {
+      logger.trace("(RC)");
+      state = ProcessorState.Write;
     }
 
-    return read;
+    return state;
   }
 
   @Override
-  public long write(SelectionKey key) throws IOException {
+  public ByteBuffer readBuffer() {
     markUsed();
 
-    SocketChannel client = (SocketChannel) key.channel();
-    ResponseState state = responseProcessor.state();
-    if (state == ResponseState.Expect || state == ResponseState.Preamble || state == ResponseState.Body) {
-      ByteBuffer[] buffers = responseProcessor.currentBuffer();
-      if (buffers == null) {
-        // Nothing to write
-        return 0;
-      }
-
-      long bytes = client.write(buffers);
-      if (bytes > 0) {
-        response.setCommitted(true);
-      }
-
-      logger.debug("Wrote [{}] bytes to the client", bytes);
-      return bytes;
+    RequestState state = requestProcessor.state();
+    ByteBuffer buffer;
+    if (state == RequestState.Preamble) {
+      buffer = preambleBuffer;
+    } else if (state == RequestState.Body) {
+      buffer = requestProcessor.bodyBuffer();
+    } else {
+      buffer = null;
     }
 
-    if (state == ResponseState.Continue) {
+    return buffer;
+  }
+
+  @Override
+  public ProcessorState state() {
+    return state;
+  }
+
+  @Override
+  public ByteBuffer[] writeBuffers() {
+    ResponseState responseState = responseProcessor.state();
+    if (responseState == ResponseState.Expect || responseState == ResponseState.Preamble || responseState == ResponseState.Body) {
+      return responseProcessor.currentBuffer();
+    }
+
+    return null;
+  }
+
+  @Override
+  public ProcessorState wrote(long num) {
+    markUsed();
+
+    logger.trace("(W)");
+
+    if (num > 0) {
+      response.setCommitted(true);
+    }
+
+    // Determine the state transition based on the state of the response processor
+    ResponseState responseState = responseProcessor.state();
+    if (responseState == ResponseState.Continue) {
+      logger.trace("(WCo)");
+
       // Flip back to reading and back to the preamble state, so we write the real response headers. Then start the worker thread and flip the ops
       requestProcessor.resetState(RequestState.Body);
       responseProcessor.resetState(ResponseState.Preamble);
-      logger.trace("(RW)");
       threadPool.submit(new HTTPWorker(configuration.getHandler(), configuration.getLoggerFactory(), this, request, response));
-      key.interestOps(SelectionKey.OP_READ);
-    } else if (state == ResponseState.Failure) {
-      // If we've written at least one byte back to the client, close the connection and bail. Otherwise, the failure was noted and the
-      // Preamble will contain a 500 response. Therefore, we need to reset the processor, so it writes the preamble
-      if (response.isCommitted()) {
-        client.close();
-        key.cancel();
-      } else {
-        responseProcessor.resetState(ResponseState.Preamble);
-      }
-    } else if (state == ResponseState.KeepAlive) {
-      HTTP11Processor processor = new HTTP11Processor(configuration, listener, notifier, preambleBuffer, threadPool, ipAddress);
-      key.attach(processor);
-      key.interestOps(SelectionKey.OP_READ);
-      logger.trace("(WD)");
-    } else if (state == ResponseState.Close) {
-      client.close();
-      key.cancel();
+      state = ProcessorState.Read;
+    } else if (responseState == ResponseState.KeepAlive) {
+      logger.trace("(WKA)");
+      state = ProcessorState.Reset;
+    } else if (responseState == ResponseState.Close) {
+      logger.trace("(WC)");
+      state = ProcessorState.Close;
     }
 
-    return 0L;
+    return state;
   }
 }

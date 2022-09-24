@@ -110,31 +110,11 @@ public class HTTPServerThread extends Thread implements Closeable, Notifier {
         while (iterator.hasNext()) {
           key = iterator.next();
           if (key.isAcceptable()) {
-            logger.trace("(A)");
-            var clientChannel = channel.accept();
-            InetSocketAddress ipAddress = (InetSocketAddress) clientChannel.getRemoteAddress();
-            HTTPProcessor processor = processorFactory.build(this, preambleBuffer, ipAddress.getAddress().getHostAddress());
-            processor.accept(key, clientChannel);
-
-            if (instrumenter != null) {
-              instrumenter.acceptedConnection();
-            }
+            accept(key);
           } else if (key.isReadable()) {
-            logger.trace("(R)");
-            HTTPProcessor processor = (HTTPProcessor) key.attachment();
-            long bytes = processor.read(key);
-
-            if (instrumenter != null) {
-              instrumenter.readFromClient(bytes);
-            }
+            read(key);
           } else if (key.isWritable()) {
-            logger.trace("(W)");
-            HTTPProcessor processor = (HTTPProcessor) key.attachment();
-            long bytes = processor.write(key);
-
-            if (instrumenter != null) {
-              instrumenter.wroteToClient(bytes);
-            }
+            write(key);
           }
 
           iterator.remove();
@@ -147,24 +127,32 @@ public class HTTPServerThread extends Thread implements Closeable, Notifier {
         break;
       } catch (SocketException se) {
         logger.debug("A socket exception was thrown during processing. These are pretty common.", se);
-
-        if (key != null) {
-          try (var ignore = key.channel()) {
-            key.cancel();
-          } catch (Throwable t) {
-            logger.error("An exception was thrown while trying to cancel a SelectionKey and close a channel with a client due to an exception being thrown for that specific client. Enable debug logging to see the error", t);
-          }
-        }
+        cancelAndCloseKey(key);
       } catch (Throwable t) {
         logger.error("An exception was thrown during processing", t);
+        cancelAndCloseKey(key);
+      }
+    }
+  }
 
-        if (key != null) {
-          try (var ignore = key.channel()) {
-            key.cancel();
-          } catch (Throwable t2) {
-            logger.error("An exception was thrown while trying to cancel a SelectionKey and close a channel with a client due to an exception being thrown for that specific client. Enable debug logging to see the error", t2);
-          }
-        }
+  @SuppressWarnings("MagicConstant")
+  private void accept(SelectionKey key) throws IOException {
+    var client = channel.accept();
+    HTTPProcessor processor = processorFactory.build(this, preambleBuffer, ipAddress(client));
+    client.configureBlocking(false);
+    client.register(key.selector(), processor.initialKeyOps(), processor);
+
+    if (instrumenter != null) {
+      instrumenter.acceptedConnection();
+    }
+  }
+
+  private void cancelAndCloseKey(SelectionKey key) {
+    if (key != null) {
+      try (var ignore = key.channel()) {
+        key.cancel();
+      } catch (Throwable t) {
+        logger.error("An exception was thrown while trying to cancel a SelectionKey and close a channel with a client due to an exception being thrown for that specific client. Enable debug logging to see the error", t);
       }
     }
   }
@@ -190,5 +178,79 @@ public class HTTPServerThread extends Thread implements Closeable, Notifier {
                 logger.error("Error while closing client connection", t);
               }
             });
+  }
+
+  private String ipAddress(SocketChannel client) throws IOException {
+    InetSocketAddress ipAddress = (InetSocketAddress) client.getRemoteAddress();
+    return ipAddress.getAddress().getHostAddress();
+  }
+
+  private void read(SelectionKey key) throws IOException {
+    HTTPProcessor processor = (HTTPProcessor) key.attachment();
+    ProcessorState state = processor.state();
+    SocketChannel client = (SocketChannel) key.channel();
+    if (state == ProcessorState.Read) {
+      ByteBuffer buffer = processor.readBuffer();
+      if (buffer != null) {
+        int num = client.read(buffer);
+        if (num < 0) {
+          state = processor.close();
+        } else {
+          logger.debug("Read [{}] bytes from client", num);
+
+          state = processor.read(buffer);
+
+          if (instrumenter != null) {
+            instrumenter.readFromClient(num);
+          }
+        }
+      }
+    }
+
+    // Turn the key around to start writing back the response or cancel and close it if instructed to
+    if (state == ProcessorState.Close) {
+      cancelAndCloseKey(key);
+    } else if (state == ProcessorState.Write) {
+      key.interestOps(SelectionKey.OP_WRITE);
+    }
+  }
+
+  private void write(SelectionKey key) throws IOException {
+    HTTPProcessor processor = (HTTPProcessor) key.attachment();
+    ProcessorState state = processor.state();
+    SocketChannel client = (SocketChannel) key.channel();
+    ByteBuffer[] buffers = processor.writeBuffers();
+    if (state == ProcessorState.Write) {
+      long num = 0;
+      if (buffers != null) {
+        num = client.write(buffers);
+      }
+
+      if (num < 0) {
+        state = processor.close();
+      } else {
+        if (num > 0) {
+          logger.debug("Wrote [{}] bytes to the client", num);
+
+          if (instrumenter != null) {
+            instrumenter.wroteToClient(num);
+          }
+        }
+
+        // Always call wrote to update the state even if zero bytes were written
+        state = processor.wrote(num);
+      }
+    }
+
+    // If the key is done, cancel and close it out. Otherwise, turn it around for KeepAlive handling to start reading the next request
+    if (state == ProcessorState.Close) {
+      cancelAndCloseKey(key);
+    } else if (state == ProcessorState.Read) {
+      key.interestOps(SelectionKey.OP_READ);
+    } else if (state == ProcessorState.Reset) {
+      processor = processorFactory.build(this, preambleBuffer, ipAddress(client));
+      key.attach(processor);
+      key.interestOps(SelectionKey.OP_READ);
+    }
   }
 }

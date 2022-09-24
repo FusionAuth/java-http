@@ -158,7 +158,7 @@ public class HTTPResponseProcessor {
 
     outputStream.clear();
     outputStream.close();
-    state = ResponseState.Failure;
+    state = ResponseState.Preamble;
   }
 
   public void resetState(ResponseState state) {

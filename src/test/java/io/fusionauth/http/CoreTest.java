@@ -32,6 +32,7 @@ import java.util.Locale;
 import io.fusionauth.http.HTTPValues.Connections;
 import io.fusionauth.http.HTTPValues.Headers;
 import io.fusionauth.http.log.Level;
+import io.fusionauth.http.log.SystemOutLogger;
 import io.fusionauth.http.log.SystemOutLoggerFactory;
 import io.fusionauth.http.server.CountingInstrumenter;
 import io.fusionauth.http.server.HTTPHandler;
@@ -185,6 +186,7 @@ public class CoreTest {
       }
     };
 
+//    SystemOutLogger.level = Level.Trace;
     CountingInstrumenter instrumenter = new CountingInstrumenter();
     try (HTTPServer ignore = new HTTPServer().withHandler(handler).withInstrumenter(instrumenter).withNumberOfWorkerThreads(1).withListener(new HTTPListenerConfiguration(4242)).start()) {
       var client = HttpClient.newHttpClient();
@@ -294,6 +296,45 @@ public class CoreTest {
                                        .GET()
                                        .build();
       var response = client.send(request, r -> BodySubscribers.ofString(StandardCharsets.UTF_8));
+
+      assertEquals(response.statusCode(), 200);
+      assertEquals(response.body(), ExpectedResponse);
+    }
+  }
+
+  @Test
+  public void simpleGetMultiplePorts() throws Exception {
+    HTTPHandler handler = (req, res) -> {
+      res.setHeader(Headers.ContentType, "text/plain");
+      res.setHeader("Content-Length", "16");
+      res.setStatus(200);
+
+      try {
+        OutputStream outputStream = res.getOutputStream();
+        outputStream.write(ExpectedResponse.getBytes());
+        outputStream.close();
+      } catch (IOException e) {
+        throw new RuntimeException(e);
+      }
+    };
+
+    try (HTTPServer ignore = new HTTPServer().withHandler(handler)
+                                             .withNumberOfWorkerThreads(1)
+                                             .withListener(new HTTPListenerConfiguration(4242))
+                                             .withListener(new HTTPListenerConfiguration(4243))
+                                             .start()) {
+      var client = HttpClient.newHttpClient();
+      URI uri = URI.create("http://localhost:4242/api/system/version?foo=bar");
+      HttpRequest request = HttpRequest.newBuilder().uri(uri).GET().build();
+      var response = client.send(request, r -> BodySubscribers.ofString(StandardCharsets.UTF_8));
+
+      assertEquals(response.statusCode(), 200);
+      assertEquals(response.body(), ExpectedResponse);
+
+      // Try the other port
+      uri = URI.create("http://localhost:4243/api/system/version?foo=bar");
+      request = HttpRequest.newBuilder().uri(uri).GET().build();
+      response = client.send(request, r -> BodySubscribers.ofString(StandardCharsets.UTF_8));
 
       assertEquals(response.statusCode(), 200);
       assertEquals(response.body(), ExpectedResponse);

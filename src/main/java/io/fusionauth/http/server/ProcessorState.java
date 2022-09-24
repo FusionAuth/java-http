@@ -16,15 +16,13 @@
 package io.fusionauth.http.server;
 
 /**
- * The response states that an HTTP client connection can be in.
+ * Simple processor state that indicates if the processor wants the Selector to Read, Write, or Close the client connection.
  *
  * @author Brian Pontarelli
  */
-public enum ResponseState {
-  Preamble,
-  Body,
-  KeepAlive,
-  Close,
-  Expect,
-  Continue
+public enum ProcessorState {
+  Read,
+  Write,
+  Reset,
+  Close
 }

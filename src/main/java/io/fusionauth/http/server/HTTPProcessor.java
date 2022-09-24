@@ -16,8 +16,8 @@
 package io.fusionauth.http.server;
 
 import java.io.IOException;
+import java.nio.ByteBuffer;
 import java.nio.channels.SelectionKey;
-import java.nio.channels.SocketChannel;
 
 /**
  * Generic interface that is used by all the processors to allow worker threads and other hooks into the processing of the requests and
@@ -27,13 +27,12 @@ import java.nio.channels.SocketChannel;
  */
 public interface HTTPProcessor {
   /**
-   * Accepts an inbound connection to the server from a client.
+   * Closes the processing. In some cases, the process of closing a connection might require additional work, like shutting down TLS.
+   * Therefore, this method can interrupt a normal shutdown.
    *
-   * @param key           The selection key for the client.
-   * @param clientChannel The socket connection with the client.
-   * @throws IOException If the accept request failed. This could be a subclass like ClosedSocketException.
+   * @return The new state of the processor.
    */
-  void accept(SelectionKey key, SocketChannel clientChannel) throws IOException;
+  ProcessorState close();
 
   /**
    * Signals to the processor that the request handling failed in some way.
@@ -43,25 +42,49 @@ public interface HTTPProcessor {
   void failure(Throwable t);
 
   /**
+   * Allows the HTTPProcessor to determine what the initial key operations are for the SelectionKey. For TLS, this is usually READ and WRITE
+   * in order to handle the handshake. For non-TLS, this is usually just READ.
+   *
+   * @return The initial interested ops.
+   * @see SelectionKey#OP_READ
+   * @see SelectionKey#OP_WRITE
+   */
+  int initialKeyOps();
+
+  /**
    * @return The instant that this processor was last used.
    */
   long lastUsed();
 
   /**
-   * Handles a read operation.
+   * Allows the HTTPProcessor to handle bytes that were read.
    *
-   * @param key The selected key for a client that has written bytes to the server.
-   * @return The number of bytes read.
+   * @param buffer The bytes read from the client.
+   * @return The new state of the HTTPProcessor.
    * @throws IOException If any I/O operations failed.
    */
-  int read(SelectionKey key) throws IOException;
+  ProcessorState read(ByteBuffer buffer) throws IOException;
 
   /**
-   * Handles a write operation.
-   *
-   * @param key The selected key for a client that is attempting to read bytes from the server.
-   * @return The number of bytes written.
-   * @throws IOException If any I/O operations failed.
+   * @return The current read buffer or null if the state has changed or there we aren't expecting to read.
    */
-  long write(SelectionKey key) throws IOException;
+  ByteBuffer readBuffer();
+
+  /**
+   * @return The current state of the HTTPProcessor.
+   */
+  ProcessorState state();
+
+  /**
+   * @return The current write buffer(s) and never null.
+   */
+  ByteBuffer[] writeBuffers();
+
+  /**
+   * Called by the selector to tell the HTTPProcessor that bytes were written back to the client.
+   *
+   * @param num The number of bytes written.
+   * @return The new state of the HTTPProcessor.
+   */
+  ProcessorState wrote(long num);
 }
