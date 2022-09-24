@@ -29,6 +29,7 @@ import java.util.Map;
 
 import io.fusionauth.http.HTTPValues.Headers;
 import io.fusionauth.http.server.HTTPHandler;
+import io.fusionauth.http.server.HTTPListenerConfiguration;
 import io.fusionauth.http.server.HTTPServer;
 import org.testng.annotations.Test;
 import static org.testng.Assert.assertEquals;
@@ -85,9 +86,7 @@ public class MultipartTest {
       }
     };
 
-    try (HTTPServer server = new HTTPServer().withHandler(handler).withNumberOfWorkerThreads(1).withPort(4242)) {
-      server.start();
-
+    try (HTTPServer ignore = new HTTPServer().withHandler(handler).withNumberOfWorkerThreads(1).withListener(new HTTPListenerConfiguration(4242)).start()) {
       var client = HttpClient.newHttpClient();
       URI uri = URI.create("http://localhost:4242/api/system/version");
       var response = client.send(

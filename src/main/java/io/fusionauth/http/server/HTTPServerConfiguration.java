@@ -15,8 +15,6 @@
  */
 package io.fusionauth.http.server;
 
-import java.net.InetAddress;
-import java.net.UnknownHostException;
 import java.nio.file.Path;
 import java.time.Duration;
 import java.util.ArrayList;
@@ -30,8 +28,6 @@ public class HTTPServerConfiguration implements Configurable<HTTPServerConfigura
   private final List<HTTPListenerConfiguration> listeners = new ArrayList<>();
 
   private Path baseDir = Path.of("");
-
-  private InetAddress bindAddress;
 
   private String certificateString;
 
@@ -53,8 +49,6 @@ public class HTTPServerConfiguration implements Configurable<HTTPServerConfigura
 
   private int numberOfWorkerThreads = 40;
 
-  private int port = 8080;
-
   private int preambleBufferSize = 4096;
 
   private String privateKeyString;
@@ -64,14 +58,6 @@ public class HTTPServerConfiguration implements Configurable<HTTPServerConfigura
   private int responseBufferSize = 16 * 1024;
 
   private Duration shutdownDuration = Duration.ofSeconds(10);
-
-  public HTTPServerConfiguration() {
-    try {
-      this.bindAddress = InetAddress.getByName("::");
-    } catch (UnknownHostException e) {
-      throw new IllegalStateException(e);
-    }
-  }
 
   /**
    * @return This.
@@ -83,10 +69,6 @@ public class HTTPServerConfiguration implements Configurable<HTTPServerConfigura
 
   public Path getBaseDir() {
     return baseDir;
-  }
-
-  public InetAddress getBindAddress() {
-    return bindAddress;
   }
 
   public String getCertificateString() {
@@ -133,10 +115,6 @@ public class HTTPServerConfiguration implements Configurable<HTTPServerConfigura
     return numberOfWorkerThreads;
   }
 
-  public int getPort() {
-    return port;
-  }
-
   public int getPreambleBufferSize() {
     return preambleBufferSize;
   }
@@ -163,15 +141,6 @@ public class HTTPServerConfiguration implements Configurable<HTTPServerConfigura
   @Override
   public HTTPServerConfiguration withBaseDir(Path baseDir) {
     this.baseDir = baseDir;
-    return this;
-  }
-
-  /**
-   * {@inheritDoc}
-   */
-  @Override
-  public HTTPServerConfiguration withBindAddress(InetAddress address) {
-    this.bindAddress = address;
     return this;
   }
 
@@ -272,15 +241,6 @@ public class HTTPServerConfiguration implements Configurable<HTTPServerConfigura
   @Override
   public HTTPServerConfiguration withNumberOfWorkerThreads(int numberOfWorkerThreads) {
     this.numberOfWorkerThreads = numberOfWorkerThreads;
-    return this;
-  }
-
-  /**
-   * {@inheritDoc}
-   */
-  @Override
-  public HTTPServerConfiguration withPort(int port) {
-    this.port = port;
     return this;
   }
 

@@ -38,6 +38,7 @@ import io.fusionauth.http.log.Level;
 import io.fusionauth.http.log.SystemOutLoggerFactory;
 import io.fusionauth.http.server.CountingInstrumenter;
 import io.fusionauth.http.server.HTTPHandler;
+import io.fusionauth.http.server.HTTPListenerConfiguration;
 import io.fusionauth.http.server.HTTPServer;
 import org.testng.annotations.Test;
 import static org.testng.Assert.assertEquals;
@@ -86,9 +87,8 @@ public class ChunkedTest {
     };
 
     CountingInstrumenter instrumenter = new CountingInstrumenter();
-    try (HTTPServer server = new HTTPServer().withHandler(handler).withInstrumenter(instrumenter).withNumberOfWorkerThreads(1).withPort(4242)) {
-      server.start();
-
+    try (HTTPServer ignore = new HTTPServer().withHandler(handler).withInstrumenter(instrumenter).withNumberOfWorkerThreads(1)
+                                             .withListener(new HTTPListenerConfiguration(4242)).start()) {
       var client = HttpClient.newHttpClient();
       URI uri = URI.create("http://localhost:4242/api/system/version");
       Supplier<InputStream> supplier = () -> new ByteArrayInputStream(RequestBody.getBytes());
@@ -119,9 +119,8 @@ public class ChunkedTest {
     };
 
     CountingInstrumenter instrumenter = new CountingInstrumenter();
-    try (HTTPServer server = new HTTPServer().withHandler(handler).withInstrumenter(instrumenter).withNumberOfWorkerThreads(1).withPort(4242)) {
-      server.start();
-
+    try (HTTPServer ignore = new HTTPServer().withHandler(handler).withInstrumenter(instrumenter).withNumberOfWorkerThreads(1)
+                                             .withListener(new HTTPListenerConfiguration(4242)).start()) {
       var client = HttpClient.newHttpClient();
       URI uri = URI.create("http://localhost:4242/api/system/version");
       var response = client.send(
@@ -136,7 +135,7 @@ public class ChunkedTest {
   }
 
   @Test
-  public void chunkedResponseRestify() throws Exception {
+  public void chunkedResponseRestify() {
     String html = """
         Success!
         parm=some values
@@ -156,9 +155,8 @@ public class ChunkedTest {
     };
 
     CountingInstrumenter instrumenter = new CountingInstrumenter();
-    try (HTTPServer server = new HTTPServer().withHandler(handler).withInstrumenter(instrumenter).withNumberOfWorkerThreads(1).withPort(4242)) {
-      server.start();
-
+    try (HTTPServer ignore = new HTTPServer().withHandler(handler).withInstrumenter(instrumenter).withNumberOfWorkerThreads(1)
+                                             .withListener(new HTTPListenerConfiguration(4242)).start()) {
       var response = new RESTClient<>(String.class, String.class).url("http://localhost:4242/api/system/version")
                                                                  .get()
                                                                  .successResponseHandler(new TextResponseHandler())
@@ -187,9 +185,8 @@ public class ChunkedTest {
     };
 
     CountingInstrumenter instrumenter = new CountingInstrumenter();
-    try (HTTPServer server = new HTTPServer().withHandler(handler).withInstrumenter(instrumenter).withNumberOfWorkerThreads(1).withPort(4242)) {
-      server.start();
-
+    try (HTTPServer ignore = new HTTPServer().withHandler(handler).withInstrumenter(instrumenter).withNumberOfWorkerThreads(1)
+                                             .withListener(new HTTPListenerConfiguration(4242)).start()) {
       var client = HttpClient.newHttpClient();
       URI uri = URI.create("http://localhost:4242/api/system/version");
       var response = client.send(
@@ -224,9 +221,8 @@ public class ChunkedTest {
     };
 
     CountingInstrumenter instrumenter = new CountingInstrumenter();
-    try (HTTPServer server = new HTTPServer().withHandler(handler).withInstrumenter(instrumenter).withNumberOfWorkerThreads(1).withPort(4242)) {
-      server.start();
-
+    try (HTTPServer ignore = new HTTPServer().withHandler(handler).withInstrumenter(instrumenter).withNumberOfWorkerThreads(1)
+                                             .withListener(new HTTPListenerConfiguration(4242)).start()) {
       var client = HttpClient.newHttpClient();
       URI uri = URI.create("http://localhost:4242/api/system/version");
       var response = client.send(
@@ -255,9 +251,8 @@ public class ChunkedTest {
     };
 
     CountingInstrumenter instrumenter = new CountingInstrumenter();
-    try (HTTPServer server = new HTTPServer().withHandler(handler).withInstrumenter(instrumenter).withNumberOfWorkerThreads(1).withPort(4242)) {
-      server.start();
-
+    try (HTTPServer ignore = new HTTPServer().withHandler(handler).withInstrumenter(instrumenter).withNumberOfWorkerThreads(1)
+                                             .withListener(new HTTPListenerConfiguration(4242)).start()) {
       var client = HttpClient.newHttpClient();
       URI uri = URI.create("http://localhost:4242/api/system/version");
       long start = System.currentTimeMillis();

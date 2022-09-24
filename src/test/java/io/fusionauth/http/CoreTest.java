@@ -35,6 +35,7 @@ import io.fusionauth.http.log.Level;
 import io.fusionauth.http.log.SystemOutLoggerFactory;
 import io.fusionauth.http.server.CountingInstrumenter;
 import io.fusionauth.http.server.HTTPHandler;
+import io.fusionauth.http.server.HTTPListenerConfiguration;
 import io.fusionauth.http.server.HTTPServer;
 import org.testng.annotations.Test;
 import static org.testng.Assert.assertEquals;
@@ -66,10 +67,7 @@ public class CoreTest {
       res.getOutputStream().close();
     };
 
-    try (HTTPServer server = new HTTPServer().withHandler(handler)
-                                             .withClientTimeout(Duration.ofSeconds(1))
-                                             .withNumberOfWorkerThreads(1)
-                                             .withPort(4242)) {
+    try (HTTPServer server = new HTTPServer().withHandler(handler).withClientTimeout(Duration.ofSeconds(1)).withNumberOfWorkerThreads(1).withListener(new HTTPListenerConfiguration(4242))) {
       server.start();
 
       URI uri = URI.create("http://localhost:4242/api/system/version");
@@ -103,9 +101,7 @@ public class CoreTest {
       res.setStatus(200);
     };
 
-    try (HTTPServer server = new HTTPServer().withHandler(handler).withNumberOfWorkerThreads(1).withPort(4242)) {
-      server.start();
-
+    try (HTTPServer ignore = new HTTPServer().withHandler(handler).withNumberOfWorkerThreads(1).withListener(new HTTPListenerConfiguration(4242)).start()) {
       var client = HttpClient.newHttpClient();
       URI uri = URI.create("http://localhost:4242/api/system/version");
       var response = client.send(
@@ -125,9 +121,7 @@ public class CoreTest {
       res.setStatus(200);
     };
 
-    try (HTTPServer server = new HTTPServer().withHandler(handler).withNumberOfWorkerThreads(1).withPort(4242)) {
-      server.start();
-
+    try (HTTPServer ignore = new HTTPServer().withHandler(handler).withNumberOfWorkerThreads(1).withListener(new HTTPListenerConfiguration(4242)).start()) {
       var client = HttpClient.newHttpClient();
       URI uri = URI.create("http://localhost:4242/api/system/version");
       var response = client.send(
@@ -145,9 +139,7 @@ public class CoreTest {
       throw new IllegalStateException("Bad state");
     };
 
-    try (HTTPServer server = new HTTPServer().withHandler(handler).withNumberOfWorkerThreads(1).withPort(4242)) {
-      server.start();
-
+    try (HTTPServer ignore = new HTTPServer().withHandler(handler).withNumberOfWorkerThreads(1).withListener(new HTTPListenerConfiguration(4242)).start()) {
       var client = HttpClient.newHttpClient();
       URI uri = URI.create("http://localhost:4242/api/system/version");
       var response = client.send(
@@ -165,9 +157,7 @@ public class CoreTest {
       throw new IllegalStateException("Bad state");
     };
 
-    try (HTTPServer server = new HTTPServer().withHandler(handler).withNumberOfWorkerThreads(1).withPort(4242)) {
-      server.start();
-
+    try (HTTPServer ignore = new HTTPServer().withHandler(handler).withNumberOfWorkerThreads(1).withListener(new HTTPListenerConfiguration(4242)).start()) {
       var client = HttpClient.newHttpClient();
       URI uri = URI.create("http://localhost:4242/api/system/version");
       var response = client.send(
@@ -196,9 +186,7 @@ public class CoreTest {
     };
 
     CountingInstrumenter instrumenter = new CountingInstrumenter();
-    try (HTTPServer server = new HTTPServer().withHandler(handler).withInstrumenter(instrumenter).withNumberOfWorkerThreads(1).withPort(4242)) {
-      server.start();
-
+    try (HTTPServer ignore = new HTTPServer().withHandler(handler).withInstrumenter(instrumenter).withNumberOfWorkerThreads(1).withListener(new HTTPListenerConfiguration(4242)).start()) {
       var client = HttpClient.newHttpClient();
       URI uri = URI.create("http://localhost:4242/api/system/version");
       long start = System.currentTimeMillis();
@@ -241,9 +229,7 @@ public class CoreTest {
     };
 
     CountingInstrumenter instrumenter = new CountingInstrumenter();
-    try (HTTPServer server = new HTTPServer().withHandler(handler).withInstrumenter(instrumenter).withNumberOfWorkerThreads(1).withPort(4242)) {
-      server.start();
-
+    try (HTTPServer ignore = new HTTPServer().withHandler(handler).withInstrumenter(instrumenter).withNumberOfWorkerThreads(1).withListener(new HTTPListenerConfiguration(4242)).start()) {
       var client = HttpClient.newHttpClient();
       URI uri = URI.create("http://localhost:4242/api/system/version");
       for (int i = 0; i < 500; i++) {
@@ -294,9 +280,7 @@ public class CoreTest {
       }
     };
 
-    try (HTTPServer server = new HTTPServer().withHandler(handler).withNumberOfWorkerThreads(1).withPort(4242)) {
-      server.start();
-
+    try (HTTPServer ignore = new HTTPServer().withHandler(handler).withNumberOfWorkerThreads(1).withListener(new HTTPListenerConfiguration(4242)).start()) {
       var client = HttpClient.newHttpClient();
       URI uri = URI.create("http://localhost:4242/api/system/version?foo=bar");
       HttpRequest request = HttpRequest.newBuilder()
@@ -345,9 +329,7 @@ public class CoreTest {
       }
     };
 
-    try (HTTPServer server = new HTTPServer().withHandler(handler).withNumberOfWorkerThreads(1).withPort(4242)) {
-      server.start();
-
+    try (HTTPServer ignore = new HTTPServer().withHandler(handler).withNumberOfWorkerThreads(1).withListener(new HTTPListenerConfiguration(4242)).start()) {
       var client = HttpClient.newHttpClient();
       URI uri = URI.create("http://localhost:4242/api/system/version");
       var response = client.send(
@@ -366,9 +348,7 @@ public class CoreTest {
       res.setStatus(200);
     };
 
-    try (HTTPServer server = new HTTPServer().withHandler(handler).withNumberOfWorkerThreads(1).withPort(4242)) {
-      server.start();
-
+    try (HTTPServer ignore = new HTTPServer().withHandler(handler).withNumberOfWorkerThreads(1).withListener(new HTTPListenerConfiguration(4242)).start()) {
       var client = HttpClient.newHttpClient();
       URI uri = URI.create("http://localhost:4242/api/system/version");
       var response = client.send(
@@ -398,9 +378,7 @@ public class CoreTest {
       }
     };
 
-    try (HTTPServer server = new HTTPServer().withHandler(handler).withNumberOfWorkerThreads(1).withPort(4242)) {
-      server.start();
-
+    try (HTTPServer ignore = new HTTPServer().withHandler(handler).withNumberOfWorkerThreads(1).withListener(new HTTPListenerConfiguration(4242)).start()) {
       var client = HttpClient.newHttpClient();
       URI uri = URI.create("http://localhost:4242/api/system/version");
       var response = client.send(

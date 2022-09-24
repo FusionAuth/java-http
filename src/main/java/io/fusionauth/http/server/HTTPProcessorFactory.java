@@ -17,19 +17,37 @@ package io.fusionauth.http.server;
 
 import java.nio.ByteBuffer;
 
+import io.fusionauth.http.util.ThreadPool;
+
 /**
  * Provides a way for processors to be built when needed.
  *
  * @author Brian Pontarelli
  */
-public interface HTTPProcessorFactory {
+public class HTTPProcessorFactory {
+  private final HTTPServerConfiguration configuration;
+
+  private final HTTPListenerConfiguration listener;
+
+  private final ThreadPool threadPool;
+
+  public HTTPProcessorFactory(HTTPServerConfiguration configuration, HTTPListenerConfiguration listener, ThreadPool threadPool) {
+    this.configuration = configuration;
+    this.listener = listener;
+    this.threadPool = threadPool;
+  }
+
   /**
    * Builds an HTTPProcessor to handle the client (socket).
    *
-   * @param ipAddress      The IP address of the client.
+   * @param notifier       A notifier that is used by the processors to notify the main selector thread when new bytes are ready for
+   *                       processing.
    * @param preambleBuffer A ByteBuffer that is always used for the HTTP preamble. Since the preamble is always fully parsed each read
    *                       operation, this buffer can be shared to reduce the memory footprint of the server.
+   * @param ipAddress      The IP address of the client.
    * @return The HTTPProcessor.
    */
-  HTTPProcessor build(String ipAddress, ByteBuffer preambleBuffer);
+  public HTTPProcessor build(Notifier notifier, ByteBuffer preambleBuffer, String ipAddress) {
+    return new HTTP11Processor(configuration, listener, notifier, preambleBuffer, threadPool, ipAddress);
+  }
 }

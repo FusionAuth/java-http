@@ -16,18 +16,24 @@
 package io.fusionauth.http.server;
 
 import java.io.Closeable;
+import java.io.IOException;
 import java.util.ArrayList;
 import java.util.List;
 
 import io.fusionauth.http.log.Logger;
 import io.fusionauth.http.util.ThreadPool;
 
+/**
+ * The server bro!
+ *
+ * @author Brian Pontarelli
+ */
 public class HTTPServer implements Closeable, Configurable<HTTPServer> {
   private final List<HTTPServerThread> threads = new ArrayList<>();
 
   private HTTPServerConfiguration configuration = new HTTPServerConfiguration();
 
-  private HTTPContext context;
+  private volatile HTTPContext context;
 
   private Logger logger;
 
@@ -66,7 +72,11 @@ public class HTTPServer implements Closeable, Configurable<HTTPServer> {
     return context;
   }
 
-  public void start() {
+  public HTTPServer start() {
+    if (context != null) {
+      return this;
+    }
+
     logger = configuration.getLoggerFactory().getLogger(HTTPServer.class);
     logger.info("Starting the HTTP server. Buckle up!");
 
@@ -75,13 +85,24 @@ public class HTTPServer implements Closeable, Configurable<HTTPServer> {
     // Start the thread pool for the workers
     threadPool = new ThreadPool(configuration.getNumberOfWorkerThreads(), "HTTP Server Worker Thread", configuration.getShutdownDuration());
 
-    for (HTTPListenerConfiguration listener : configuration.getListeners()) {
-      HTTPServerThread thread = new HTTPServerThread(listener, configuration, new HTTPProcessorFactory());
-      thread.start();
-      threads.add(thread);
+    try {
+      for (HTTPListenerConfiguration listener : configuration.getListeners()) {
+        HTTPServerThread thread = new HTTPServerThread(configuration, listener, new HTTPProcessorFactory(configuration, listener, threadPool));
+        thread.start();
+        threads.add(thread);
+
+        logger.info("HTTP server listening on port [{}]", listener.getPort());
+      }
+
+      logger.info("HTTP server started successfully");
+    } catch (IOException e) {
+      logger.error("Unable to start the HTTP server because one of the listeners threw an exception.", e);
+
+      // Clean up the threads that did start
+      close();
     }
 
-    logger.info("HTTP server started successfully and listening on port [{}]", configuration.getPort());
+    return this;
   }
 
   /**

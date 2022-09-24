@@ -29,6 +29,7 @@ import java.util.List;
 import io.fusionauth.http.Cookie.SameSite;
 import io.fusionauth.http.HTTPValues.Headers;
 import io.fusionauth.http.server.HTTPHandler;
+import io.fusionauth.http.server.HTTPListenerConfiguration;
 import io.fusionauth.http.server.HTTPServer;
 import org.testng.annotations.Test;
 import static org.testng.Assert.assertEquals;
@@ -237,9 +238,7 @@ public class CookieTest {
       res.setStatus(200);
     };
 
-    try (var server = new HTTPServer().withHandler(handler).withPort(4242)) {
-      server.start();
-
+    try (var ignore = new HTTPServer().withHandler(handler).withListener(new HTTPListenerConfiguration(4242)).start()) {
       CookieManager cookieHandler = new CookieManager();
       var client = HttpClient.newBuilder().cookieHandler(cookieHandler).build();
       URI uri = URI.create("http://localhost:4242/cookies");
@@ -268,9 +267,7 @@ public class CookieTest {
       res.setStatus(200);
     };
 
-    try (var server = new HTTPServer().withHandler(handler).withPort(4242)) {
-      server.start();
-
+    try (var ignore = new HTTPServer().withHandler(handler).withListener(new HTTPListenerConfiguration(4242)).start()) {
       CookieManager cookieHandler = new CookieManager();
       var client = HttpClient.newBuilder().cookieHandler(cookieHandler).build();
       URI uri = URI.create("http://localhost:4242/cookies");

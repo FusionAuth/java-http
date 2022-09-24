@@ -51,7 +51,7 @@ public class HTTPServerThread extends Thread implements Closeable, Notifier {
 
   private final Selector selector;
 
-  public HTTPServerThread(HTTPListenerConfiguration listenerConfiguration, HTTPServerConfiguration configuration,
+  public HTTPServerThread(HTTPServerConfiguration configuration, HTTPListenerConfiguration listenerConfiguration,
                           HTTPProcessorFactory processorFactory)
       throws IOException {
     this.clientTimeout = configuration.getClientTimeoutDuration();
@@ -113,7 +113,7 @@ public class HTTPServerThread extends Thread implements Closeable, Notifier {
             logger.trace("(A)");
             var clientChannel = channel.accept();
             InetSocketAddress ipAddress = (InetSocketAddress) clientChannel.getRemoteAddress();
-            HTTPProcessor processor = processorFactory.build(ipAddress.getAddress().getHostAddress(), preambleBuffer);
+            HTTPProcessor processor = processorFactory.build(this, preambleBuffer, ipAddress.getAddress().getHostAddress());
             processor.accept(key, clientChannel);
 
             if (instrumenter != null) {

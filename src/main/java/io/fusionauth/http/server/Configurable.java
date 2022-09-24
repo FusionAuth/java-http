@@ -48,17 +48,6 @@ public interface Configurable<T extends Configurable<T>> {
   }
 
   /**
-   * Sets the bind address that this server listens on. Defaults to `::`.
-   *
-   * @param address The bind address.
-   * @return This.
-   */
-  default T withBindAddress(InetAddress address) {
-    configuration().withBindAddress(address);
-    return (T) this;
-  }
-
-  /**
    * Sets the certificate used for TLS as a PEM encoded X.509 DER String. Generally, you can load the contents of an X.509 certificate file
    * using {@code Files.readString(path)}.
    *
@@ -181,17 +170,6 @@ public interface Configurable<T extends Configurable<T>> {
    */
   default T withNumberOfWorkerThreads(int numberOfWorkerThreads) {
     configuration().withNumberOfWorkerThreads(numberOfWorkerThreads);
-    return (T) this;
-  }
-
-  /**
-   * Sets the port that this server listens on for HTTP (non-TLS). Defaults to 8080.
-   *
-   * @param port The port.
-   * @return This.
-   */
-  default T withPort(int port) {
-    configuration().withPort(port);
     return (T) this;
   }
 

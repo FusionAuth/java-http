@@ -27,6 +27,7 @@ import io.fusionauth.http.HTTPValues.ContentTypes;
 import io.fusionauth.http.HTTPValues.Headers;
 import io.fusionauth.http.server.CountingInstrumenter;
 import io.fusionauth.http.server.HTTPHandler;
+import io.fusionauth.http.server.HTTPListenerConfiguration;
 import io.fusionauth.http.server.HTTPServer;
 import org.testng.annotations.Test;
 import static org.testng.Assert.assertEquals;
@@ -54,9 +55,7 @@ public class ParameterTest {
     };
 
     var instrumenter = new CountingInstrumenter();
-    try (var server = new HTTPServer().withHandler(handler).withInstrumenter(instrumenter).withPort(4242)) {
-      server.start();
-
+    try (var ignore = new HTTPServer().withHandler(handler).withInstrumenter(instrumenter).withListener(new HTTPListenerConfiguration(4242)).start()) {
       var client = HttpClient.newHttpClient();
       URI uri = URI.create("http://localhost:4242/parameters?one=two&three=four");
       var response = client.send(
@@ -81,9 +80,7 @@ public class ParameterTest {
     };
 
     var instrumenter = new CountingInstrumenter();
-    try (var server = new HTTPServer().withHandler(handler).withInstrumenter(instrumenter).withPort(4242)) {
-      server.start();
-
+    try (var ignore = new HTTPServer().withHandler(handler).withInstrumenter(instrumenter).withListener(new HTTPListenerConfiguration(4242)).start()) {
       var client = HttpClient.newHttpClient();
       URI uri = URI.create("http://localhost:4242/parameters?one=two&three=four");
       var response = client.send(

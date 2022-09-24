@@ -16,7 +16,6 @@
 package io.fusionauth.http.server;
 
 import java.io.IOException;
-import java.net.InetAddress;
 import java.nio.ByteBuffer;
 import java.nio.channels.SelectionKey;
 import java.nio.channels.SocketChannel;
@@ -33,7 +32,9 @@ import io.fusionauth.http.util.ThreadPool;
 public class HTTP11Processor implements HTTPProcessor {
   final HTTPServerConfiguration configuration;
 
-  final InetAddress ipAddress;
+  final HTTPListenerConfiguration listener;
+
+  final String ipAddress;
 
   final Logger logger;
 
@@ -53,16 +54,17 @@ public class HTTP11Processor implements HTTPProcessor {
 
   private long lastUsed = System.currentTimeMillis();
 
-  public HTTP11Processor(HTTPServerConfiguration configuration, Notifier notifier, ByteBuffer preambleBuffer, ThreadPool threadPool,
-                         InetAddress ipAddress) {
+  public HTTP11Processor(HTTPServerConfiguration configuration, HTTPListenerConfiguration listener, Notifier notifier,
+                         ByteBuffer preambleBuffer, ThreadPool threadPool, String ipAddress) {
     this.configuration = configuration;
+    this.listener = listener;
     this.logger = configuration.getLoggerFactory().getLogger(HTTP11Processor.class);
     this.notifier = notifier;
     this.preambleBuffer = preambleBuffer;
     this.threadPool = threadPool;
     this.ipAddress = ipAddress;
 
-    this.request = new HTTPRequest(configuration.getContextPath(), configuration.getMultipartBufferSize(), "http", configuration.getPort(), ipAddress.getHostAddress());
+    this.request = new HTTPRequest(configuration.getContextPath(), configuration.getMultipartBufferSize(), "http", listener.getPort(), ipAddress);
     this.requestProcessor = new HTTPRequestProcessor(configuration, request);
 
     NonBlockingByteBufferOutputStream outputStream = new NonBlockingByteBufferOutputStream(notifier, configuration.getResponseBufferSize());
@@ -196,7 +198,7 @@ public class HTTP11Processor implements HTTPProcessor {
         responseProcessor.resetState(ResponseState.Preamble);
       }
     } else if (state == ResponseState.KeepAlive) {
-      HTTP11Processor processor = new HTTP11Processor(configuration, notifier, preambleBuffer, threadPool, ipAddress);
+      HTTP11Processor processor = new HTTP11Processor(configuration, listener, notifier, preambleBuffer, threadPool, ipAddress);
       key.attach(processor);
       key.interestOps(SelectionKey.OP_READ);
       logger.trace("(WD)");

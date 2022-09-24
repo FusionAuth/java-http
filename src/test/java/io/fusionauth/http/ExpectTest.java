@@ -30,6 +30,7 @@ import io.fusionauth.http.log.Level;
 import io.fusionauth.http.log.SystemOutLoggerFactory;
 import io.fusionauth.http.server.ExpectValidator;
 import io.fusionauth.http.server.HTTPHandler;
+import io.fusionauth.http.server.HTTPListenerConfiguration;
 import io.fusionauth.http.server.HTTPServer;
 import org.testng.annotations.Test;
 import static org.testng.Assert.assertEquals;
@@ -91,9 +92,8 @@ public class ExpectTest {
       res.setStatusMessage("Continue");
     };
 
-    try (HTTPServer server = new HTTPServer().withExpectValidator(validator).withHandler(handler).withNumberOfWorkerThreads(1).withPort(4242)) {
-      server.start();
-
+    try (HTTPServer ignore = new HTTPServer().withExpectValidator(validator).withHandler(handler).withNumberOfWorkerThreads(1)
+                                             .withListener(new HTTPListenerConfiguration(4242)).start()) {
       var client = HttpClient.newHttpClient();
       URI uri = URI.create("http://localhost:4242/api/system/version");
       var response = client.send(
@@ -118,9 +118,8 @@ public class ExpectTest {
       res.setStatus(417);
     };
 
-    try (HTTPServer server = new HTTPServer().withExpectValidator(validator).withHandler(handler).withNumberOfWorkerThreads(1).withPort(4242)) {
-      server.start();
-
+    try (HTTPServer ignore = new HTTPServer().withExpectValidator(validator).withHandler(handler).withNumberOfWorkerThreads(1)
+                                             .withListener(new HTTPListenerConfiguration(4242)).start()) {
       var client = HttpClient.newHttpClient();
       URI uri = URI.create("http://localhost:4242/api/system/version");
       var response = client.send(
