@@ -76,8 +76,8 @@ public interface Configurable<T extends Configurable<T>> {
    * @param duration The duration.
    * @return This.
    */
-  default T withClientTimeoutDuration(Duration duration) {
-    configuration().withClientTimeoutDuration(duration);
+  default T withClientTimeout(Duration duration) {
+    configuration().withClientTimeout(duration);
     return (T) this;
   }
 
@@ -124,6 +124,18 @@ public interface Configurable<T extends Configurable<T>> {
    */
   default T withInstrumenter(Instrumenter instrumenter) {
     configuration().withInstrumenter(instrumenter);
+    return (T) this;
+  }
+
+  /**
+   * Adds a listener configuration for the server. This will listen on the address and port of the configuration but will share the thread
+   * pool of the server.
+   *
+   * @param listener The listener.
+   * @return This.
+   */
+  default T withListener(HTTPListenerConfiguration listener) {
+    configuration().withListener(listener);
     return (T) this;
   }
 

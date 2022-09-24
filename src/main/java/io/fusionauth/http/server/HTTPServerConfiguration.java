@@ -19,12 +19,16 @@ import java.net.InetAddress;
 import java.net.UnknownHostException;
 import java.nio.file.Path;
 import java.time.Duration;
+import java.util.ArrayList;
+import java.util.List;
 import java.util.Objects;
 
 import io.fusionauth.http.log.LoggerFactory;
 import io.fusionauth.http.log.SystemOutLoggerFactory;
 
 public class HTTPServerConfiguration implements Configurable<HTTPServerConfiguration> {
+  private final List<HTTPListenerConfiguration> listeners = new ArrayList<>();
+
   private Path baseDir = Path.of("");
 
   private InetAddress bindAddress;
@@ -109,6 +113,10 @@ public class HTTPServerConfiguration implements Configurable<HTTPServerConfigura
     return instrumenter;
   }
 
+  public List<HTTPListenerConfiguration> getListeners() {
+    return listeners;
+  }
+
   public LoggerFactory getLoggerFactory() {
     return loggerFactory;
   }
@@ -180,7 +188,7 @@ public class HTTPServerConfiguration implements Configurable<HTTPServerConfigura
    * {@inheritDoc}
    */
   @Override
-  public HTTPServerConfiguration withClientTimeoutDuration(Duration duration) {
+  public HTTPServerConfiguration withClientTimeout(Duration duration) {
     this.clientTimeoutDuration = duration;
     return this;
   }
@@ -218,6 +226,15 @@ public class HTTPServerConfiguration implements Configurable<HTTPServerConfigura
   @Override
   public HTTPServerConfiguration withInstrumenter(Instrumenter instrumenter) {
     this.instrumenter = instrumenter;
+    return this;
+  }
+
+  /**
+   * {@inheritDoc}
+   */
+  @Override
+  public HTTPServerConfiguration withListener(HTTPListenerConfiguration listener) {
+    this.listeners.add(listener);
     return this;
   }
 

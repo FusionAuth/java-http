@@ -67,7 +67,7 @@ public class CoreTest {
     };
 
     try (HTTPServer server = new HTTPServer().withHandler(handler)
-                                             .withClientTimeoutDuration(Duration.ofSeconds(1))
+                                             .withClientTimeout(Duration.ofSeconds(1))
                                              .withNumberOfWorkerThreads(1)
                                              .withPort(4242)) {
       server.start();
