@@ -48,7 +48,7 @@ import static org.testng.Assert.fail;
  *
  * @author Brian Pontarelli
  */
-public class CoreTest {
+public class CoreTest extends BaseTest {
   public static final String ExpectedResponse = "{\"version\":\"42\"}";
 
   public static final String RequestBody = "{\"message\":\"Hello World\"";
@@ -58,6 +58,7 @@ public class CoreTest {
     System.setProperty("jdk.httpclient.allowRestrictedHeaders", "connection");
     SystemOutLoggerFactory.FACTORY.getLogger(CoreTest.class).setLevel(Level.Info);
   }
+
 
   @Test
   public void clientTimeout() {
@@ -248,17 +249,17 @@ public class CoreTest {
     assertEquals(instrumenter.getConnections(), 500);
   }
 
-  @Test
-  public void simpleGet() throws Exception {
+  @Test(dataProvider = "schemes")
+  public void simpleGet(String scheme) throws Exception {
     HTTPHandler handler = (req, res) -> {
       assertEquals(req.getAcceptEncodings(), List.of("deflate", "compress", "identity", "gzip", "br"));
-      assertEquals(req.getBaseURL(), "http://localhost:4242");
+      assertEquals(req.getBaseURL(), scheme.equals("http") ? "http://localhost:4242" : "https://local.fusionauth.io:4242");
       assertEquals(req.getContentType(), "text/plain");
       assertEquals(req.getCharacterEncoding(), StandardCharsets.ISO_8859_1);
       assertEquals(req.getHeader(Headers.Origin), "https://example.com");
       assertEquals(req.getHeader(Headers.Referer), "foobar.com");
       assertEquals(req.getHeader(Headers.UserAgent), "java-http test");
-      assertEquals(req.getHost(), "localhost");
+      assertEquals(req.getHost(), scheme.equals("http") ? "localhost" : "local.fusionauth.io");
       assertEquals(req.getIPAddress(), "127.0.0.1");
       assertEquals(req.getLocales(), List.of(Locale.ENGLISH, Locale.GERMAN, Locale.FRENCH));
       assertEquals(req.getMethod(), HTTPMethod.GET);
@@ -266,7 +267,7 @@ public class CoreTest {
       assertEquals(req.getPath(), "/api/system/version");
       assertEquals(req.getPort(), 4242);
       assertEquals(req.getProtocol(), "HTTP/1.1");
-      assertEquals(req.getScheme(), "http");
+      assertEquals(req.getScheme(), scheme);
       assertEquals(req.getURLParameter("foo"), "bar");
 
       res.setHeader(Headers.ContentType, "text/plain");
@@ -282,9 +283,10 @@ public class CoreTest {
       }
     };
 
-    try (HTTPServer ignore = new HTTPServer().withHandler(handler).withNumberOfWorkerThreads(1).withListener(new HTTPListenerConfiguration(4242)).start()) {
+    SystemOutLogger.level = Level.Trace;
+    try (HTTPServer ignore = makeServer(scheme, handler)) {
       var client = HttpClient.newHttpClient();
-      URI uri = URI.create("http://localhost:4242/api/system/version?foo=bar");
+      URI uri = makeURI(scheme, "?foo=bar");
       HttpRequest request = HttpRequest.newBuilder()
                                        .uri(uri)
                                        .header(Headers.AcceptEncoding, "deflate, compress, br;q=0.5, gzip;q=0.8, identity;q=1.0")
@@ -341,8 +343,8 @@ public class CoreTest {
     }
   }
 
-  @Test
-  public void simplePost() throws Exception {
+  @Test(dataProvider = "schemes")
+  public void simplePost(String scheme) throws Exception {
     HTTPHandler handler = (req, res) -> {
       System.out.println("Handling");
       assertEquals(req.getHeader(Headers.ContentType), "application/json"); // Mixed case
@@ -371,9 +373,9 @@ public class CoreTest {
     };
 
     SystemOutLogger.level = Level.Trace;
-    try (HTTPServer ignore = new HTTPServer().withHandler(handler).withNumberOfWorkerThreads(1).withListener(new HTTPListenerConfiguration(4242)).start()) {
+    try (HTTPServer ignore = makeServer(scheme, handler)) {
       var client = HttpClient.newHttpClient();
-      URI uri = URI.create("http://localhost:4242/api/system/version");
+      URI uri = makeURI(scheme, "?foo=bar");
       var response = client.send(
           HttpRequest.newBuilder().uri(uri).header(Headers.ContentType, "application/json").POST(BodyPublishers.ofString(RequestBody)).build(),
           r -> BodySubscribers.ofString(StandardCharsets.UTF_8)

@@ -30,10 +30,11 @@ public interface HTTPProcessor {
    * Closes the processing. In some cases, the process of closing a connection might require additional work, like shutting down TLS.
    * Therefore, this method can interrupt a normal shutdown.
    *
+   * @param endOfStream True if the stream is being closed due to an unexpected end-of-stream.
    * @return The new state of the processor.
    * @throws IOException If the close operation failed for any reason.
    */
-  ProcessorState close() throws IOException;
+  ProcessorState close(boolean endOfStream) throws IOException;
 
   /**
    * Signals to the processor that the request handling failed in some way.

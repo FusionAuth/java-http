@@ -60,7 +60,7 @@ public class HTTP11Processor implements HTTPProcessor {
     this.threadPool = threadPool;
     this.state = ProcessorState.Read;
 
-    this.request = new HTTPRequest(configuration.getContextPath(), configuration.getMultipartBufferSize(), "http", listener.getPort(), ipAddress);
+    this.request = new HTTPRequest(configuration.getContextPath(), configuration.getMultipartBufferSize(), listener.isTLS() ? "https" : "http", listener.getPort(), ipAddress);
     this.requestProcessor = new HTTPRequestProcessor(configuration, request);
 
     NonBlockingByteBufferOutputStream outputStream = new NonBlockingByteBufferOutputStream(notifier, configuration.getResponseBufferSize());
@@ -69,7 +69,7 @@ public class HTTP11Processor implements HTTPProcessor {
   }
 
   @Override
-  public ProcessorState close() {
+  public ProcessorState close(boolean endOfStream) {
     logger.trace("(C)");
 
     // Set the state to Close and return it

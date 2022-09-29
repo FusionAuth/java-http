@@ -215,7 +215,7 @@ public class HTTPServerThread extends Thread implements Closeable, Notifier {
       if (buffer != null) {
         int num = client.read(buffer);
         if (num < 0) {
-          state = processor.close();
+          state = processor.close(true);
         } else {
           logger.debug("Read [{}] bytes from client", num);
 
@@ -249,7 +249,7 @@ public class HTTPServerThread extends Thread implements Closeable, Notifier {
       }
 
       if (num < 0) {
-        state = processor.close();
+        state = processor.close(true);
       } else {
         if (num > 0) {
           logger.debug("Wrote [{}] bytes to the client", num);

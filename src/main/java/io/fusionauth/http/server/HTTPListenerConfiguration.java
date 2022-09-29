@@ -42,16 +42,29 @@ public class HTTPListenerConfiguration {
    * @param port The port of this listener.
    */
   public HTTPListenerConfiguration(int port) {
-    try {
-      this.bindAddress = InetAddress.getByName("::");
-    } catch (UnknownHostException e) {
-      throw new IllegalStateException(e);
-    }
-
+    this.bindAddress = allInterfaces();
     this.port = port;
     this.tls = false;
     this.certificate = null;
     this.privateKey = null;
+  }
+
+  /**
+   * Stores the configuration for a single HTTP listener for the server. This constructor sets up a TLS based listener.
+   *
+   * @param port        The port of this listener.
+   * @param certificate The certificate as a PEM ecnoded X.509 certificate String.
+   * @param privateKey  The private key as a PKCS8 encoded DER private key.
+   */
+  public HTTPListenerConfiguration(int port, String certificate, String privateKey) {
+    Objects.requireNonNull(certificate);
+    Objects.requireNonNull(privateKey);
+
+    this.bindAddress = allInterfaces();
+    this.port = port;
+    this.tls = true;
+    this.certificate = certificate;
+    this.privateKey = privateKey;
   }
 
   /**
@@ -108,5 +121,13 @@ public class HTTPListenerConfiguration {
 
   public boolean isTLS() {
     return tls;
+  }
+
+  private InetAddress allInterfaces() {
+    try {
+      return InetAddress.getByName("::");
+    } catch (UnknownHostException e) {
+      throw new IllegalStateException(e);
+    }
   }
 }
