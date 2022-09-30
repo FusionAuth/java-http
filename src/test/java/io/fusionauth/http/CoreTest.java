@@ -171,6 +171,50 @@ public class CoreTest extends BaseTest {
   }
 
   @Test(dataProvider = "schemes")
+  public void hugeHeaders(String scheme) throws Exception {
+    // 260 characters for a total of 16,640 bytes per header value. 5 headers for a total of 83,200 bytes
+    String headerValue = "12345678901234567890123456789012345678901234567890123456789012345678901234567890123456789012345678901234567890123456789012345678901234567890123456789012345678901234567890123456789012345678901234567890123456789012345678901234567890123456789012345678901234567890".repeat(64);
+
+    HTTPHandler handler = (req, res) -> {
+      res.setHeader(Headers.ContentType, "text/plain");
+      res.setHeader("Content-Length", "16");
+      res.setHeader("X-Huge-Header-1", headerValue);
+      res.setHeader("X-Huge-Header-2", headerValue);
+      res.setHeader("X-Huge-Header-3", headerValue);
+      res.setHeader("X-Huge-Header-4", headerValue);
+      res.setHeader("X-Huge-Header-5", headerValue);
+      res.setStatus(200);
+
+      try {
+        OutputStream outputStream = res.getOutputStream();
+        outputStream.write(ExpectedResponse.getBytes());
+        outputStream.close();
+      } catch (IOException e) {
+        throw new RuntimeException(e);
+      }
+    };
+
+    try (HTTPServer ignore = makeServer(scheme, handler).start()) {
+      URI uri = makeURI(scheme, "");
+      var client = HttpClient.newHttpClient();
+      var response = client.send(
+          HttpRequest.newBuilder()
+                     .uri(uri)
+                     .header("X-Huge-Header-1", headerValue)
+                     .header("X-Huge-Header-2", headerValue)
+                     .header("X-Huge-Header-3", headerValue)
+                     .header("X-Huge-Header-4", headerValue)
+                     .header("X-Huge-Header-5", headerValue)
+                     .POST(BodyPublishers.ofString(RequestBody))
+                     .build(),
+          r -> BodySubscribers.ofString(StandardCharsets.UTF_8)
+      );
+
+      assertEquals(response.statusCode(), 200);
+    }
+  }
+
+  @Test(dataProvider = "schemes")
   public void performance(String scheme) throws Exception {
     HTTPHandler handler = (req, res) -> {
       res.setHeader(Headers.ContentType, "text/plain");
@@ -261,7 +305,7 @@ public class CoreTest extends BaseTest {
    * and removing the socket form the connection pool.
    */
   @Test(dataProvider = "schemes")
-  public void restifyMultipleServers(String scheme) {
+  public void serverClosesSockets(String scheme) {
     HTTPHandler handler = (req, res) -> {
       res.setHeader(Headers.ContentType, "text/plain");
       res.setHeader("Content-Length", "16");

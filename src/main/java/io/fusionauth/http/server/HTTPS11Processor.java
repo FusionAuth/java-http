@@ -172,8 +172,8 @@ public class HTTPS11Processor implements HTTPProcessor {
     //        * If Overflow - ??
     //    Encrypted Data ---> Plain Text Data (send to the HTTP handler)
     //        * If OK - send the decrypted data to the app
-    //        * If Underflow - Handshake Data was not enough or there isn't enough space in the buffer
-    //        * If Overflow - ??
+    //        * If Underflow - Encrypted Data was not enough or there isn't enough space in the network buffer
+    //        * If Overflow - The encrypted data was larger than the buffer the app is using (Preamble or body buffers)
     var result = engine.unwrap(peerNetData, decryptBuffer);
 
     // This will always put position at limit, so if there is data in the buffer, it will always be at the start and position will be greater than 0
@@ -188,7 +188,7 @@ public class HTTPS11Processor implements HTTPProcessor {
       logger.trace("(HTTPS-R-C)");
       return close(false);
     } else if (result.getStatus() == Status.BUFFER_OVERFLOW) {
-      throw new IllegalStateException("A buffer underflow is not expected during a wrap operation according to the Javadoc. Maybe this is something we need to fix.");
+      throw new IllegalStateException("A buffer overflow is not expected during an unwap operation. This occurs because the preamble or body buffers are too small. Increase their sizes to avoid this issue.");
     }
 
     if (tlsStatus == HandshakeStatus.NOT_HANDSHAKING || tlsStatus == HandshakeStatus.FINISHED) {

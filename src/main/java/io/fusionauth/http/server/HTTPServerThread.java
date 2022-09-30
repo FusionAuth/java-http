@@ -268,7 +268,7 @@ public class HTTPServerThread extends Thread implements Closeable, Notifier {
     }
   }
 
-  private void write(SelectionKey key) throws GeneralSecurityException, IOException {
+  private void write(SelectionKey key) throws IOException {
     HTTPS11Processor processor = (HTTPS11Processor) key.attachment();
     ProcessorState state = processor.state();
     SocketChannel client = (SocketChannel) key.channel();

@@ -79,7 +79,7 @@ public class ByteBufferOutputStream extends OutputStream {
         throw new IllegalArgumentException("Unable to increase the buffer for ByteBufferOutputStream beyond max of [" + maxCapacity + "]");
       }
 
-      buf = Arrays.copyOf(buf, Math.max(minGrowth, initialSize));
+      buf = Arrays.copyOf(buf, Math.max(minCapacity, initialSize));
     }
   }
 }

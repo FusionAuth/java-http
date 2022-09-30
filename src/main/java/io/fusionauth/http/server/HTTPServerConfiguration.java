@@ -43,13 +43,13 @@ public class HTTPServerConfiguration implements Configurable<HTTPServerConfigura
 
   private LoggerFactory loggerFactory = SystemOutLoggerFactory.FACTORY;
 
-  private int maxHeadLength;
+  private int maxHeadLength = 128 * 1024;
 
   private int multipartBufferSize = 16 * 1024;
 
   private int numberOfWorkerThreads = 40;
 
-  private int preambleBufferSize = 4096;
+  private int preambleBufferSize = 16 * 1024;
 
   private String privateKeyString;
 
