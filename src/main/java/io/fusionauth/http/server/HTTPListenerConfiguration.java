@@ -53,7 +53,7 @@ public class HTTPListenerConfiguration {
    * Stores the configuration for a single HTTP listener for the server. This constructor sets up a TLS based listener.
    *
    * @param port        The port of this listener.
-   * @param certificate The certificate as a PEM ecnoded X.509 certificate String.
+   * @param certificate The certificate as a PEM encoded X.509 certificate String.
    * @param privateKey  The private key as a PKCS8 encoded DER private key.
    */
   public HTTPListenerConfiguration(int port, String certificate, String privateKey) {
