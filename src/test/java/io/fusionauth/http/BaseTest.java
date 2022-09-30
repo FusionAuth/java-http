@@ -69,8 +69,7 @@ public class BaseTest {
                            .withExpectValidator(expectValidator)
                            .withInstrumenter(instrumenter)
                            .withNumberOfWorkerThreads(1)
-                           .withListener(listenerConfiguration)
-                           .start();
+                           .withListener(listenerConfiguration);
   }
 
   public URI makeURI(String scheme, String params) {

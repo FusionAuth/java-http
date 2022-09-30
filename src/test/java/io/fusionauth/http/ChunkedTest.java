@@ -86,7 +86,7 @@ public class ChunkedTest extends BaseTest {
     };
 
     CountingInstrumenter instrumenter = new CountingInstrumenter();
-    try (HTTPServer ignore = makeServer(scheme, handler, instrumenter)) {
+    try (HTTPServer ignore = makeServer(scheme, handler, instrumenter).start()) {
       URI uri = makeURI(scheme, "");
       var client = HttpClient.newHttpClient();
       Supplier<InputStream> supplier = () -> new ByteArrayInputStream(RequestBody.getBytes());
@@ -117,7 +117,7 @@ public class ChunkedTest extends BaseTest {
     };
 
     CountingInstrumenter instrumenter = new CountingInstrumenter();
-    try (HTTPServer ignore = makeServer(scheme, handler, instrumenter)) {
+    try (HTTPServer ignore = makeServer(scheme, handler, instrumenter).start()) {
       URI uri = makeURI(scheme, "");
       var client = HttpClient.newHttpClient();
       var response = client.send(
@@ -152,7 +152,7 @@ public class ChunkedTest extends BaseTest {
     };
 
     CountingInstrumenter instrumenter = new CountingInstrumenter();
-    try (HTTPServer ignore = makeServer(scheme, handler, instrumenter)) {
+    try (HTTPServer ignore = makeServer(scheme, handler, instrumenter).start()) {
       URI uri = makeURI(scheme, "");
       var response = new RESTClient<>(String.class, String.class).url(uri.toString())
                                                                  .get()
@@ -182,7 +182,7 @@ public class ChunkedTest extends BaseTest {
     };
 
     CountingInstrumenter instrumenter = new CountingInstrumenter();
-    try (HTTPServer ignore = makeServer(scheme, handler, instrumenter)) {
+    try (HTTPServer ignore = makeServer(scheme, handler, instrumenter).start()) {
       URI uri = makeURI(scheme, "");
       var client = HttpClient.newHttpClient();
       var response = client.send(
@@ -217,7 +217,7 @@ public class ChunkedTest extends BaseTest {
     };
 
     CountingInstrumenter instrumenter = new CountingInstrumenter();
-    try (HTTPServer ignore = makeServer(scheme, handler, instrumenter)) {
+    try (HTTPServer ignore = makeServer(scheme, handler, instrumenter).start()) {
       URI uri = makeURI(scheme, "");
       var client = HttpClient.newHttpClient();
       var response = client.send(
@@ -246,7 +246,7 @@ public class ChunkedTest extends BaseTest {
     };
 
     CountingInstrumenter instrumenter = new CountingInstrumenter();
-    try (HTTPServer ignore = makeServer(scheme, handler, instrumenter)) {
+    try (HTTPServer ignore = makeServer(scheme, handler, instrumenter).start()) {
       URI uri = makeURI(scheme, "");
       var client = HttpClient.newHttpClient();
       long start = System.currentTimeMillis();

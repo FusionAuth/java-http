@@ -93,7 +93,7 @@ public class ExpectTest extends BaseTest {
     };
 
     CountingInstrumenter instrumenter = new CountingInstrumenter();
-    try (HTTPServer ignore = makeServer(scheme, handler, instrumenter, validator)) {
+    try (HTTPServer ignore = makeServer(scheme, handler, instrumenter, validator).start()) {
       URI uri = makeURI(scheme, "");
       var client = HttpClient.newHttpClient();
       var response = client.send(
@@ -119,7 +119,7 @@ public class ExpectTest extends BaseTest {
     };
 
     CountingInstrumenter instrumenter = new CountingInstrumenter();
-    try (HTTPServer ignore = makeServer(scheme, handler, instrumenter, validator)) {
+    try (HTTPServer ignore = makeServer(scheme, handler, instrumenter, validator).start()) {
       URI uri = makeURI(scheme, "");
       var client = HttpClient.newHttpClient();
       var response = client.send(

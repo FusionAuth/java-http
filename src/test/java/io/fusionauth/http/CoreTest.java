@@ -25,6 +25,7 @@ import java.net.http.HttpRequest;
 import java.net.http.HttpRequest.BodyPublishers;
 import java.net.http.HttpResponse.BodySubscribers;
 import java.nio.charset.StandardCharsets;
+import java.time.Duration;
 import java.util.List;
 import java.util.Locale;
 
@@ -67,7 +68,7 @@ public class CoreTest extends BaseTest {
       res.getOutputStream().close();
     };
 
-    try (HTTPServer ignore = makeServer(scheme, handler)) {
+    try (HTTPServer ignore = makeServer(scheme, handler).withClientTimeout(Duration.ofSeconds(1)).start()) {
       URI uri = makeURI(scheme, "");
       try {
         HttpURLConnection connection = (HttpURLConnection) uri.toURL().openConnection();
@@ -99,7 +100,7 @@ public class CoreTest extends BaseTest {
       res.setStatus(200);
     };
 
-    try (HTTPServer ignore = makeServer(scheme, handler)) {
+    try (HTTPServer ignore = makeServer(scheme, handler).start()) {
       URI uri = makeURI(scheme, "");
       var client = HttpClient.newHttpClient();
       var response = client.send(
@@ -119,7 +120,7 @@ public class CoreTest extends BaseTest {
       res.setStatus(200);
     };
 
-    try (HTTPServer ignore = makeServer(scheme, handler)) {
+    try (HTTPServer ignore = makeServer(scheme, handler).start()) {
       URI uri = makeURI(scheme, "");
       var client = HttpClient.newHttpClient();
       var response = client.send(
@@ -137,7 +138,7 @@ public class CoreTest extends BaseTest {
       throw new IllegalStateException("Bad state");
     };
 
-    try (HTTPServer ignore = makeServer(scheme, handler)) {
+    try (HTTPServer ignore = makeServer(scheme, handler).start()) {
       URI uri = makeURI(scheme, "");
       var client = HttpClient.newHttpClient();
       var response = client.send(
@@ -155,7 +156,7 @@ public class CoreTest extends BaseTest {
       throw new IllegalStateException("Bad state");
     };
 
-    try (HTTPServer ignore = makeServer(scheme, handler)) {
+    try (HTTPServer ignore = makeServer(scheme, handler).start()) {
       URI uri = makeURI(scheme, "");
       var client = HttpClient.newHttpClient();
       var response = client.send(
@@ -185,7 +186,7 @@ public class CoreTest extends BaseTest {
 
     int iterations = 100_000;
     CountingInstrumenter instrumenter = new CountingInstrumenter();
-    try (HTTPServer ignore = makeServer(scheme, handler, instrumenter)) {
+    try (HTTPServer ignore = makeServer(scheme, handler, instrumenter).start()) {
       URI uri = makeURI(scheme, "");
       var client = HttpClient.newHttpClient();
       long start = System.currentTimeMillis();
@@ -229,7 +230,7 @@ public class CoreTest extends BaseTest {
 
     int iterations = 1_000;
     CountingInstrumenter instrumenter = new CountingInstrumenter();
-    try (HTTPServer ignore = makeServer(scheme, handler, instrumenter)) {
+    try (HTTPServer ignore = makeServer(scheme, handler, instrumenter).start()) {
       URI uri = makeURI(scheme, "");
       var client = HttpClient.newHttpClient();
       long start = System.currentTimeMillis();
@@ -285,7 +286,7 @@ public class CoreTest extends BaseTest {
       }
     };
 
-    try (HTTPServer ignore = makeServer(scheme, handler)) {
+    try (HTTPServer ignore = makeServer(scheme, handler).start()) {
       var client = HttpClient.newHttpClient();
       URI uri = makeURI(scheme, "?foo=bar");
       HttpRequest request = HttpRequest.newBuilder()
@@ -382,7 +383,7 @@ public class CoreTest extends BaseTest {
       }
     };
 
-    try (HTTPServer ignore = makeServer(scheme, handler)) {
+    try (HTTPServer ignore = makeServer(scheme, handler).start()) {
       var client = HttpClient.newHttpClient();
       URI uri = makeURI(scheme, "?foo=bar");
       var response = client.send(
@@ -399,7 +400,7 @@ public class CoreTest extends BaseTest {
   public void statusOnly(String scheme) throws Exception {
     HTTPHandler handler = (req, res) -> res.setStatus(200);
 
-    try (HTTPServer ignore = makeServer(scheme, handler)) {
+    try (HTTPServer ignore = makeServer(scheme, handler).start()) {
       URI uri = makeURI(scheme, "");
       var client = HttpClient.newHttpClient();
       var response = client.send(
@@ -429,7 +430,7 @@ public class CoreTest extends BaseTest {
       }
     };
 
-    try (HTTPServer ignore = makeServer(scheme, handler)) {
+    try (HTTPServer ignore = makeServer(scheme, handler).start()) {
       URI uri = makeURI(scheme, "");
       var client = HttpClient.newHttpClient();
       var response = client.send(

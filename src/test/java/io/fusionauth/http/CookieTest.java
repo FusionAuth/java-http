@@ -239,7 +239,7 @@ public class CookieTest extends BaseTest {
     };
 
     CountingInstrumenter instrumenter = new CountingInstrumenter();
-    try (HTTPServer ignore = makeServer(scheme, handler, instrumenter)) {
+    try (HTTPServer ignore = makeServer(scheme, handler, instrumenter).start()) {
       URI uri = makeURI(scheme, "");
       CookieManager cookieHandler = new CookieManager();
       var client = HttpClient.newBuilder().cookieHandler(cookieHandler).build();
@@ -269,7 +269,7 @@ public class CookieTest extends BaseTest {
     };
 
     CountingInstrumenter instrumenter = new CountingInstrumenter();
-    try (HTTPServer ignore = makeServer(scheme, handler, instrumenter)) {
+    try (HTTPServer ignore = makeServer(scheme, handler, instrumenter).start()) {
       URI uri = makeURI(scheme, "");
       CookieManager cookieHandler = new CookieManager();
       var client = HttpClient.newBuilder().cookieHandler(cookieHandler).build();
