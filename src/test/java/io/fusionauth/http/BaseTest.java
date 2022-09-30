@@ -21,6 +21,7 @@ import java.nio.file.Files;
 import java.nio.file.Paths;
 import java.time.Duration;
 
+import io.fusionauth.http.server.ExpectValidator;
 import io.fusionauth.http.server.HTTPHandler;
 import io.fusionauth.http.server.HTTPListenerConfiguration;
 import io.fusionauth.http.server.HTTPServer;
@@ -49,8 +50,12 @@ public class BaseTest {
     return makeServer(scheme, handler, null);
   }
 
-  @SuppressWarnings("resource")
   public HTTPServer makeServer(String scheme, HTTPHandler handler, Instrumenter instrumenter) {
+    return makeServer(scheme, handler, instrumenter, null);
+  }
+
+  @SuppressWarnings("resource")
+  public HTTPServer makeServer(String scheme, HTTPHandler handler, Instrumenter instrumenter, ExpectValidator expectValidator) {
     boolean tls = scheme.equals("https");
     HTTPListenerConfiguration listenerConfiguration;
     if (tls) {
@@ -61,6 +66,7 @@ public class BaseTest {
 
     return new HTTPServer().withHandler(handler)
                            .withClientTimeout(Duration.ofSeconds(600_000L))
+                           .withExpectValidator(expectValidator)
                            .withInstrumenter(instrumenter)
                            .withNumberOfWorkerThreads(1)
                            .withListener(listenerConfiguration)

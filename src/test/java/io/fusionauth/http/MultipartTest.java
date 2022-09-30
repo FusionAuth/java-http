@@ -28,8 +28,8 @@ import java.util.List;
 import java.util.Map;
 
 import io.fusionauth.http.HTTPValues.Headers;
+import io.fusionauth.http.server.CountingInstrumenter;
 import io.fusionauth.http.server.HTTPHandler;
-import io.fusionauth.http.server.HTTPListenerConfiguration;
 import io.fusionauth.http.server.HTTPServer;
 import org.testng.annotations.Test;
 import static org.testng.Assert.assertEquals;
@@ -39,7 +39,7 @@ import static org.testng.Assert.assertEquals;
  *
  * @author Brian Pontarelli
  */
-public class MultipartTest {
+public class MultipartTest extends BaseTest {
   public static final String Body = """
       ------WebKitFormBoundaryTWfMVJErBoLURJIe\r
       Content-Disposition: form-data; name="foo"\r
@@ -54,8 +54,8 @@ public class MultipartTest {
 
   public static final String ExpectedResponse = "{\"version\":\"42\"}";
 
-  @Test
-  public void post() throws IOException, InterruptedException {
+  @Test(dataProvider = "schemes")
+  public void post(String scheme) throws IOException, InterruptedException {
     HTTPHandler handler = (req, res) -> {
       System.out.println("Handling");
       assertEquals(req.getContentType(), "multipart/form-data");
@@ -86,9 +86,10 @@ public class MultipartTest {
       }
     };
 
-    try (HTTPServer ignore = new HTTPServer().withHandler(handler).withNumberOfWorkerThreads(1).withListener(new HTTPListenerConfiguration(4242)).start()) {
+    CountingInstrumenter instrumenter = new CountingInstrumenter();
+    try (HTTPServer ignore = makeServer(scheme, handler, instrumenter)) {
+      URI uri = makeURI(scheme, "");
       var client = HttpClient.newHttpClient();
-      URI uri = URI.create("http://localhost:4242/api/system/version");
       var response = client.send(
           HttpRequest.newBuilder().uri(uri).header(Headers.ContentType, "multipart/form-data; boundary=----WebKitFormBoundaryTWfMVJErBoLURJIe").POST(BodyPublishers.ofString(Body)).build(),
           r -> BodySubscribers.ofString(StandardCharsets.UTF_8)

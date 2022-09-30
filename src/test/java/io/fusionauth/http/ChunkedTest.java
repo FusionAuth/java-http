@@ -38,7 +38,6 @@ import io.fusionauth.http.log.Level;
 import io.fusionauth.http.log.SystemOutLoggerFactory;
 import io.fusionauth.http.server.CountingInstrumenter;
 import io.fusionauth.http.server.HTTPHandler;
-import io.fusionauth.http.server.HTTPListenerConfiguration;
 import io.fusionauth.http.server.HTTPServer;
 import org.testng.annotations.Test;
 import static org.testng.Assert.assertEquals;
@@ -50,7 +49,7 @@ import static org.testng.Assert.fail;
  *
  * @author Brian Pontarelli
  */
-public class ChunkedTest {
+public class ChunkedTest extends BaseTest {
   public static final String ExpectedResponse = "{\"version\":\"42\"}";
 
   public static final String RequestBody = "{\"message\":\"Hello World\"";
@@ -61,8 +60,8 @@ public class ChunkedTest {
     SystemOutLoggerFactory.FACTORY.getLogger(ChunkedTest.class).setLevel(Level.Info);
   }
 
-  @Test
-  public void chunkedRequest() throws Exception {
+  @Test(dataProvider = "schemes")
+  public void chunkedRequest(String scheme) throws Exception {
     HTTPHandler handler = (req, res) -> {
       assertTrue(req.isChunked());
 
@@ -87,10 +86,9 @@ public class ChunkedTest {
     };
 
     CountingInstrumenter instrumenter = new CountingInstrumenter();
-    try (HTTPServer ignore = new HTTPServer().withHandler(handler).withInstrumenter(instrumenter).withNumberOfWorkerThreads(1)
-                                             .withListener(new HTTPListenerConfiguration(4242)).start()) {
+    try (HTTPServer ignore = makeServer(scheme, handler, instrumenter)) {
+      URI uri = makeURI(scheme, "");
       var client = HttpClient.newHttpClient();
-      URI uri = URI.create("http://localhost:4242/api/system/version");
       Supplier<InputStream> supplier = () -> new ByteArrayInputStream(RequestBody.getBytes());
       var response = client.send(
           HttpRequest.newBuilder().uri(uri).header(Headers.ContentType, "application/json").POST(BodyPublishers.ofInputStream(supplier)).build(),
@@ -103,8 +101,8 @@ public class ChunkedTest {
     }
   }
 
-  @Test
-  public void chunkedResponse() throws Exception {
+  @Test(dataProvider = "schemes")
+  public void chunkedResponse(String scheme) throws Exception {
     HTTPHandler handler = (req, res) -> {
       res.setHeader(Headers.ContentType, "text/plain");
       res.setStatus(200);
@@ -119,10 +117,9 @@ public class ChunkedTest {
     };
 
     CountingInstrumenter instrumenter = new CountingInstrumenter();
-    try (HTTPServer ignore = new HTTPServer().withHandler(handler).withInstrumenter(instrumenter).withNumberOfWorkerThreads(1)
-                                             .withListener(new HTTPListenerConfiguration(4242)).start()) {
+    try (HTTPServer ignore = makeServer(scheme, handler, instrumenter)) {
+      URI uri = makeURI(scheme, "");
       var client = HttpClient.newHttpClient();
-      URI uri = URI.create("http://localhost:4242/api/system/version");
       var response = client.send(
           HttpRequest.newBuilder().uri(uri).header(Headers.ContentType, "application/json").GET().build(),
           r -> BodySubscribers.ofString(StandardCharsets.UTF_8)
@@ -134,8 +131,8 @@ public class ChunkedTest {
     }
   }
 
-  @Test
-  public void chunkedResponseRestify() {
+  @Test(dataProvider = "schemes")
+  public void chunkedResponseRestify(String scheme) {
     String html = """
         Success!
         parm=some values
@@ -155,9 +152,9 @@ public class ChunkedTest {
     };
 
     CountingInstrumenter instrumenter = new CountingInstrumenter();
-    try (HTTPServer ignore = new HTTPServer().withHandler(handler).withInstrumenter(instrumenter).withNumberOfWorkerThreads(1)
-                                             .withListener(new HTTPListenerConfiguration(4242)).start()) {
-      var response = new RESTClient<>(String.class, String.class).url("http://localhost:4242/api/system/version")
+    try (HTTPServer ignore = makeServer(scheme, handler, instrumenter)) {
+      URI uri = makeURI(scheme, "");
+      var response = new RESTClient<>(String.class, String.class).url(uri.toString())
                                                                  .get()
                                                                  .successResponseHandler(new TextResponseHandler())
                                                                  .errorResponseHandler(new TextResponseHandler())
@@ -168,8 +165,8 @@ public class ChunkedTest {
     }
   }
 
-  @Test
-  public void chunkedResponseStreamingFile() throws Exception {
+  @Test(dataProvider = "schemes")
+  public void chunkedResponseStreamingFile(String scheme) throws Exception {
     Path file = Paths.get("src/test/java/io/fusionauth/http/ChunkedTest.java");
     HTTPHandler handler = (req, res) -> {
       res.setHeader(Headers.ContentType, "text/plain");
@@ -185,10 +182,9 @@ public class ChunkedTest {
     };
 
     CountingInstrumenter instrumenter = new CountingInstrumenter();
-    try (HTTPServer ignore = new HTTPServer().withHandler(handler).withInstrumenter(instrumenter).withNumberOfWorkerThreads(1)
-                                             .withListener(new HTTPListenerConfiguration(4242)).start()) {
+    try (HTTPServer ignore = makeServer(scheme, handler, instrumenter)) {
+      URI uri = makeURI(scheme, "");
       var client = HttpClient.newHttpClient();
-      URI uri = URI.create("http://localhost:4242/api/system/version");
       var response = client.send(
           HttpRequest.newBuilder().uri(uri).header(Headers.ContentType, "application/json").GET().build(),
           r -> BodySubscribers.ofString(StandardCharsets.UTF_8)
@@ -200,8 +196,8 @@ public class ChunkedTest {
     }
   }
 
-  @Test
-  public void chunkedResponseWriter() throws Exception {
+  @Test(dataProvider = "schemes")
+  public void chunkedResponseWriter(String scheme) throws Exception {
     String html = """
         Success!
         parm=some values
@@ -221,10 +217,9 @@ public class ChunkedTest {
     };
 
     CountingInstrumenter instrumenter = new CountingInstrumenter();
-    try (HTTPServer ignore = new HTTPServer().withHandler(handler).withInstrumenter(instrumenter).withNumberOfWorkerThreads(1)
-                                             .withListener(new HTTPListenerConfiguration(4242)).start()) {
+    try (HTTPServer ignore = makeServer(scheme, handler, instrumenter)) {
+      URI uri = makeURI(scheme, "");
       var client = HttpClient.newHttpClient();
-      URI uri = URI.create("http://localhost:4242/api/system/version");
       var response = client.send(
           HttpRequest.newBuilder().uri(uri).GET().build(),
           r -> BodySubscribers.ofString(StandardCharsets.UTF_8)
@@ -235,8 +230,8 @@ public class ChunkedTest {
     }
   }
 
-  @Test
-  public void performanceChunked() throws Exception {
+  @Test(dataProvider = "schemes")
+  public void performanceChunked(String scheme) throws Exception {
     HTTPHandler handler = (req, res) -> {
       res.setHeader(Headers.ContentType, "text/plain");
       res.setStatus(200);
@@ -251,10 +246,9 @@ public class ChunkedTest {
     };
 
     CountingInstrumenter instrumenter = new CountingInstrumenter();
-    try (HTTPServer ignore = new HTTPServer().withHandler(handler).withInstrumenter(instrumenter).withNumberOfWorkerThreads(1)
-                                             .withListener(new HTTPListenerConfiguration(4242)).start()) {
+    try (HTTPServer ignore = makeServer(scheme, handler, instrumenter)) {
+      URI uri = makeURI(scheme, "");
       var client = HttpClient.newHttpClient();
-      URI uri = URI.create("http://localhost:4242/api/system/version");
       long start = System.currentTimeMillis();
       for (int i = 0; i < 100_000; i++) {
         var response = client.send(

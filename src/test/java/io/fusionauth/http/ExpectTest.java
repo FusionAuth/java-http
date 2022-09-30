@@ -28,9 +28,9 @@ import java.util.concurrent.atomic.AtomicBoolean;
 import io.fusionauth.http.HTTPValues.Headers;
 import io.fusionauth.http.log.Level;
 import io.fusionauth.http.log.SystemOutLoggerFactory;
+import io.fusionauth.http.server.CountingInstrumenter;
 import io.fusionauth.http.server.ExpectValidator;
 import io.fusionauth.http.server.HTTPHandler;
-import io.fusionauth.http.server.HTTPListenerConfiguration;
 import io.fusionauth.http.server.HTTPServer;
 import org.testng.annotations.Test;
 import static org.testng.Assert.assertEquals;
@@ -42,7 +42,7 @@ import static org.testng.Assert.fail;
  *
  * @author Brian Pontarelli
  */
-public class ExpectTest {
+public class ExpectTest extends BaseTest {
   public static final String ExpectedResponse = "{\"version\":\"42\"}";
 
   public static final String RequestBody = "{\"message\":\"Hello World\"";
@@ -53,8 +53,8 @@ public class ExpectTest {
     SystemOutLoggerFactory.FACTORY.getLogger(ExpectTest.class).setLevel(Level.Info);
   }
 
-  @Test
-  public void expect() throws Exception {
+  @Test(dataProvider = "schemes")
+  public void expect(String scheme) throws Exception {
     HTTPHandler handler = (req, res) -> {
       System.out.println("Handling");
       assertEquals(req.getHeader(Headers.ContentType), "application/json"); // Mixed case
@@ -92,10 +92,10 @@ public class ExpectTest {
       res.setStatusMessage("Continue");
     };
 
-    try (HTTPServer ignore = new HTTPServer().withExpectValidator(validator).withHandler(handler).withNumberOfWorkerThreads(1)
-                                             .withListener(new HTTPListenerConfiguration(4242)).start()) {
+    CountingInstrumenter instrumenter = new CountingInstrumenter();
+    try (HTTPServer ignore = makeServer(scheme, handler, instrumenter, validator)) {
+      URI uri = makeURI(scheme, "");
       var client = HttpClient.newHttpClient();
-      URI uri = URI.create("http://localhost:4242/api/system/version");
       var response = client.send(
           HttpRequest.newBuilder().uri(uri).header(Headers.ContentType, "application/json").expectContinue(true).POST(BodyPublishers.ofString(RequestBody)).build(),
           r -> BodySubscribers.ofString(StandardCharsets.UTF_8)
@@ -107,8 +107,8 @@ public class ExpectTest {
     }
   }
 
-  @Test
-  public void expectReject() throws Exception {
+  @Test(dataProvider = "schemes")
+  public void expectReject(String scheme) throws Exception {
     HTTPHandler handler = (req, res) -> fail("Should not have been called");
 
     ExpectValidator validator = (req, res) -> {
@@ -118,10 +118,10 @@ public class ExpectTest {
       res.setStatus(417);
     };
 
-    try (HTTPServer ignore = new HTTPServer().withExpectValidator(validator).withHandler(handler).withNumberOfWorkerThreads(1)
-                                             .withListener(new HTTPListenerConfiguration(4242)).start()) {
+    CountingInstrumenter instrumenter = new CountingInstrumenter();
+    try (HTTPServer ignore = makeServer(scheme, handler, instrumenter, validator)) {
+      URI uri = makeURI(scheme, "");
       var client = HttpClient.newHttpClient();
-      URI uri = URI.create("http://localhost:4242/api/system/version");
       var response = client.send(
           HttpRequest.newBuilder().uri(uri).header(Headers.ContentType, "application/json").expectContinue(true).POST(BodyPublishers.ofString(RequestBody)).build(),
           r -> BodySubscribers.ofString(StandardCharsets.UTF_8)

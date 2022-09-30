@@ -28,8 +28,8 @@ import java.util.List;
 
 import io.fusionauth.http.Cookie.SameSite;
 import io.fusionauth.http.HTTPValues.Headers;
+import io.fusionauth.http.server.CountingInstrumenter;
 import io.fusionauth.http.server.HTTPHandler;
-import io.fusionauth.http.server.HTTPListenerConfiguration;
 import io.fusionauth.http.server.HTTPServer;
 import org.testng.annotations.Test;
 import static org.testng.Assert.assertEquals;
@@ -37,7 +37,7 @@ import static org.testng.Assert.assertFalse;
 import static org.testng.Assert.assertNull;
 import static org.testng.Assert.assertTrue;
 
-public class CookieTest {
+public class CookieTest extends BaseTest {
   @Test
   public void fromRequestHeader() {
     List<Cookie> cookies = Cookie.fromRequestHeader("foo=bar; baz=fred");
@@ -226,10 +226,10 @@ public class CookieTest {
     assertNull(cookie);
   }
 
-  @Test
-  public void roundTripMultiple() throws Exception {
+  @Test(dataProvider = "schemes")
+  public void roundTripMultiple(String scheme) throws Exception {
     HTTPHandler handler = (req, res) -> {
-      assertEquals(req.getPath(), "/cookies");
+      assertEquals(req.getPath(), "/api/system/version");
       assertEquals(req.getCookie("request").value, "request-value");
       assertEquals(req.getCookie("request-2").value, "request-value-2");
 
@@ -238,16 +238,17 @@ public class CookieTest {
       res.setStatus(200);
     };
 
-    try (var ignore = new HTTPServer().withHandler(handler).withListener(new HTTPListenerConfiguration(4242)).start()) {
+    CountingInstrumenter instrumenter = new CountingInstrumenter();
+    try (HTTPServer ignore = makeServer(scheme, handler, instrumenter)) {
+      URI uri = makeURI(scheme, "");
       CookieManager cookieHandler = new CookieManager();
       var client = HttpClient.newBuilder().cookieHandler(cookieHandler).build();
-      URI uri = URI.create("http://localhost:4242/cookies");
       var response = client.send(
           HttpRequest.newBuilder().uri(uri).header(Headers.Cookie, "request=request-value").header(Headers.Cookie, "request-2=request-value-2").header(Headers.ContentType, "application/json").GET().build(),
           r -> BodySubscribers.ofString(StandardCharsets.UTF_8)
       );
 
-      List<HttpCookie> cookies = cookieHandler.getCookieStore().get(URI.create("http://localhost:4242/cookies"));
+      List<HttpCookie> cookies = cookieHandler.getCookieStore().get(uri);
       assertEquals(response.statusCode(), 200);
       assertEquals(cookies.size(), 2);
       assertEquals(cookies.stream().filter(c -> c.getName().equals("response")).findFirst().orElseThrow().getValue(), "response-value");
@@ -257,26 +258,27 @@ public class CookieTest {
     }
   }
 
-  @Test
-  public void roundTripSingle() throws Exception {
+  @Test(dataProvider = "schemes")
+  public void roundTripSingle(String scheme) throws Exception {
     HTTPHandler handler = (req, res) -> {
-      assertEquals(req.getPath(), "/cookies");
+      assertEquals(req.getPath(), "/api/system/version");
       assertEquals(req.getCookie("request").value, "request-value");
 
       res.addCookie(new Cookie("response", "response-value").with(c -> c.setSameSite(SameSite.Lax)));
       res.setStatus(200);
     };
 
-    try (var ignore = new HTTPServer().withHandler(handler).withListener(new HTTPListenerConfiguration(4242)).start()) {
+    CountingInstrumenter instrumenter = new CountingInstrumenter();
+    try (HTTPServer ignore = makeServer(scheme, handler, instrumenter)) {
+      URI uri = makeURI(scheme, "");
       CookieManager cookieHandler = new CookieManager();
       var client = HttpClient.newBuilder().cookieHandler(cookieHandler).build();
-      URI uri = URI.create("http://localhost:4242/cookies");
       var response = client.send(
           HttpRequest.newBuilder().uri(uri).header(Headers.Cookie, "request=request-value").header(Headers.ContentType, "application/json").GET().build(),
           r -> BodySubscribers.ofString(StandardCharsets.UTF_8)
       );
 
-      List<HttpCookie> cookies = cookieHandler.getCookieStore().get(URI.create("http://localhost:4242/cookies"));
+      List<HttpCookie> cookies = cookieHandler.getCookieStore().get(uri);
       assertEquals(response.statusCode(), 200);
       assertEquals(cookies.size(), 1);
       assertEquals(cookies.get(0).getName(), "response");

@@ -27,7 +27,6 @@ import io.fusionauth.http.HTTPValues.ContentTypes;
 import io.fusionauth.http.HTTPValues.Headers;
 import io.fusionauth.http.server.CountingInstrumenter;
 import io.fusionauth.http.server.HTTPHandler;
-import io.fusionauth.http.server.HTTPListenerConfiguration;
 import io.fusionauth.http.server.HTTPServer;
 import org.testng.annotations.Test;
 import static org.testng.Assert.assertEquals;
@@ -37,11 +36,11 @@ import static org.testng.Assert.assertEquals;
  *
  * @author Brian Pontarelli
  */
-public class ParameterTest {
-  @Test
-  public void form() throws Exception {
+public class ParameterTest extends BaseTest {
+  @Test(dataProvider = "schemes")
+  public void form(String scheme) throws Exception {
     HTTPHandler handler = (req, res) -> {
-      assertEquals(req.getPath(), "/parameters");
+      assertEquals(req.getPath(), "/api/system/version");
       assertEquals(req.getURLParameters().get("one"), List.of("two"));
       assertEquals(req.getURLParameters().get("three"), List.of("four"));
       assertEquals(req.getFormData().get("five"), List.of("six"));
@@ -54,10 +53,10 @@ public class ParameterTest {
       res.setStatus(200);
     };
 
-    var instrumenter = new CountingInstrumenter();
-    try (var ignore = new HTTPServer().withHandler(handler).withInstrumenter(instrumenter).withListener(new HTTPListenerConfiguration(4242)).start()) {
+    CountingInstrumenter instrumenter = new CountingInstrumenter();
+    try (HTTPServer ignore = makeServer(scheme, handler, instrumenter)) {
+      URI uri = makeURI(scheme, "?one=two&three=four");
       var client = HttpClient.newHttpClient();
-      URI uri = URI.create("http://localhost:4242/parameters?one=two&three=four");
       var response = client.send(
           HttpRequest.newBuilder().uri(uri).header(Headers.ContentType, ContentTypes.Form).POST(BodyPublishers.ofString("one=again&five=six&seven=eight")).build(),
           r -> BodySubscribers.ofString(StandardCharsets.UTF_8)
@@ -69,20 +68,20 @@ public class ParameterTest {
     }
   }
 
-  @Test
-  public void urlParameters() throws Exception {
+  @Test(dataProvider = "schemes")
+  public void urlParameters(String scheme) throws Exception {
     HTTPHandler handler = (req, res) -> {
-      assertEquals(req.getPath(), "/parameters");
+      assertEquals(req.getPath(), "/api/system/version");
       assertEquals(req.getURLParameter("one"), "two");
       assertEquals(req.getURLParameter("three"), "four");
 
       res.setStatus(200);
     };
 
-    var instrumenter = new CountingInstrumenter();
-    try (var ignore = new HTTPServer().withHandler(handler).withInstrumenter(instrumenter).withListener(new HTTPListenerConfiguration(4242)).start()) {
+    CountingInstrumenter instrumenter = new CountingInstrumenter();
+    try (HTTPServer ignore = makeServer(scheme, handler, instrumenter)) {
+      URI uri = makeURI(scheme, "?one=two&three=four");
       var client = HttpClient.newHttpClient();
-      URI uri = URI.create("http://localhost:4242/parameters?one=two&three=four");
       var response = client.send(
           HttpRequest.newBuilder().uri(uri).GET().build(),
           r -> BodySubscribers.ofString(StandardCharsets.UTF_8)

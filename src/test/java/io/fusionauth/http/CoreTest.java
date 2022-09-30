@@ -31,7 +31,6 @@ import java.util.Locale;
 import io.fusionauth.http.HTTPValues.Connections;
 import io.fusionauth.http.HTTPValues.Headers;
 import io.fusionauth.http.log.Level;
-import io.fusionauth.http.log.SystemOutLogger;
 import io.fusionauth.http.log.SystemOutLoggerFactory;
 import io.fusionauth.http.server.CountingInstrumenter;
 import io.fusionauth.http.server.HTTPHandler;
@@ -184,12 +183,13 @@ public class CoreTest extends BaseTest {
       }
     };
 
+    int iterations = 100_000;
     CountingInstrumenter instrumenter = new CountingInstrumenter();
     try (HTTPServer ignore = makeServer(scheme, handler, instrumenter)) {
       URI uri = makeURI(scheme, "");
       var client = HttpClient.newHttpClient();
       long start = System.currentTimeMillis();
-      for (int i = 0; i < 100_000; i++) {
+      for (int i = 0; i < iterations; i++) {
         var response = client.send(
             HttpRequest.newBuilder().uri(uri).GET().build(),
             r -> BodySubscribers.ofString(StandardCharsets.UTF_8)
@@ -204,7 +204,7 @@ public class CoreTest extends BaseTest {
       }
 
       long end = System.currentTimeMillis();
-      double average = (end - start) / 10_000D;
+      double average = (end - start) / (double) iterations;
       System.out.println("Average linear request time is [" + average + "]ms");
     }
 
@@ -213,10 +213,6 @@ public class CoreTest extends BaseTest {
 
   @Test(dataProvider = "schemes")
   public void performanceNoKeepAlive(String scheme) throws Exception {
-    if (scheme.equals("http")) {
-      return;
-    }
-
     HTTPHandler handler = (req, res) -> {
       res.setHeader(Headers.ContentType, "text/plain");
       res.setHeader("Content-Length", "16");
@@ -231,16 +227,13 @@ public class CoreTest extends BaseTest {
       }
     };
 
-    if (scheme.equals("https")) {
-      SystemOutLogger.level = Level.Trace;
-    }
-
+    int iterations = 1_000;
     CountingInstrumenter instrumenter = new CountingInstrumenter();
     try (HTTPServer ignore = makeServer(scheme, handler, instrumenter)) {
       URI uri = makeURI(scheme, "");
       var client = HttpClient.newHttpClient();
       long start = System.currentTimeMillis();
-      for (int i = 0; i < 10_000; i++) {
+      for (int i = 0; i < iterations; i++) {
         var response = client.send(
             HttpRequest.newBuilder().uri(uri).header(Headers.Connection, Connections.Close).GET().build(),
             r -> BodySubscribers.ofString(StandardCharsets.UTF_8)
@@ -248,15 +241,14 @@ public class CoreTest extends BaseTest {
 
         assertEquals(response.statusCode(), 200);
         assertEquals(response.body(), ExpectedResponse);
-        System.out.println(i);
       }
 
       long end = System.currentTimeMillis();
-      double average = (end - start) / 10_000D;
+      double average = (end - start) / (double) iterations;
       System.out.println("Average linear request time without keep-alive is [" + average + "]ms");
     }
 
-    assertEquals(instrumenter.getConnections(), 10000);
+    assertEquals(instrumenter.getConnections(), iterations);
   }
 
   @Test(dataProvider = "schemes")

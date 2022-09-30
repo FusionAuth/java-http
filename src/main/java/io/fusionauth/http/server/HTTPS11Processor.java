@@ -19,7 +19,6 @@ import javax.net.ssl.SSLContext;
 import javax.net.ssl.SSLEngine;
 import javax.net.ssl.SSLEngineResult.HandshakeStatus;
 import javax.net.ssl.SSLEngineResult.Status;
-import javax.net.ssl.SSLParameters;
 import javax.net.ssl.SSLSession;
 import java.io.IOException;
 import java.nio.ByteBuffer;
@@ -284,7 +283,7 @@ public class HTTPS11Processor implements HTTPProcessor {
   }
 
   @Override
-  public ProcessorState wrote(long num) {
+  public ProcessorState wrote(long num) throws IOException {
     delegate.markUsed();
 
     if (handshakeState == null) {
@@ -315,7 +314,7 @@ public class HTTPS11Processor implements HTTPProcessor {
     return buffer;
   }
 
-  private ProcessorState handleHandshake(HandshakeStatus newTLSStatus) {
+  private ProcessorState handleHandshake(HandshakeStatus newTLSStatus) throws IOException {
     if (newTLSStatus == HandshakeStatus.NEED_TASK) {
       logger.trace("(HTTPS-HS-T)");
 
@@ -343,6 +342,13 @@ public class HTTPS11Processor implements HTTPProcessor {
       if (!myNetData[0].hasRemaining()) {
         logger.trace("(HTTPS-HS-DONE)" + newTLSStatus.name() + "-" + delegate.state());
         handshakeState = null;
+
+        // This indicates that the client sent along part of the HTTP request preamble with its last handshake. We need to consume that before we continue
+        if (peerNetData.position() > 0) {
+          peerNetData.flip();
+          return read(peerNetData);
+        }
+
         return delegate.state();
       }
     }

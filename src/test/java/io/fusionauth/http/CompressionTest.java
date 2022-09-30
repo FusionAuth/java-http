@@ -31,8 +31,8 @@ import java.util.zip.InflaterInputStream;
 
 import io.fusionauth.http.HTTPValues.ContentEncodings;
 import io.fusionauth.http.HTTPValues.Headers;
+import io.fusionauth.http.server.CountingInstrumenter;
 import io.fusionauth.http.server.HTTPHandler;
-import io.fusionauth.http.server.HTTPListenerConfiguration;
 import io.fusionauth.http.server.HTTPServer;
 import org.testng.annotations.DataProvider;
 import org.testng.annotations.Test;
@@ -44,16 +44,21 @@ import static org.testng.Assert.assertNull;
  *
  * @author Brian Pontarelli
  */
-public class CompressionTest {
+public class CompressionTest extends BaseTest {
   private final Path file = Paths.get("src/test/java/io/fusionauth/http/ChunkedTest.java");
 
-  @DataProvider(name = "booleans")
-  public Object[][] booleans() {
-    return new Object[][]{{true}, {false}};
+  @DataProvider(name = "chunkedSchemes")
+  public Object[][] chunkedSchemes() {
+    return new Object[][]{
+        {true, "http"},
+        {true, "https"},
+        {false, "http"},
+        {false, "https"}
+    };
   }
 
-  @Test(dataProvider = "booleans")
-  public void compressDeflate(boolean chunked) throws Exception {
+  @Test(dataProvider = "chunkedSchemes")
+  public void compressDeflate(boolean chunked, String scheme) throws Exception {
     HTTPHandler handler = (req, res) -> {
       res.setCompress(true);
       res.setHeader(Headers.ContentType, "text/plain");
@@ -72,9 +77,10 @@ public class CompressionTest {
       }
     };
 
-    try (HTTPServer ignore = new HTTPServer().withHandler(handler).withNumberOfWorkerThreads(1).withListener(new HTTPListenerConfiguration(4242)).start()) {
+    CountingInstrumenter instrumenter = new CountingInstrumenter();
+    try (HTTPServer ignore = makeServer(scheme, handler, instrumenter)) {
+      URI uri = makeURI(scheme, "");
       var client = HttpClient.newHttpClient();
-      URI uri = URI.create("http://localhost:4242/api/system/version");
       var response = client.send(
           HttpRequest.newBuilder().header(Headers.AcceptEncoding, "deflate, gzip").uri(uri).GET().build(),
           r -> BodySubscribers.ofInputStream()
@@ -87,8 +93,8 @@ public class CompressionTest {
     }
   }
 
-  @Test(dataProvider = "booleans")
-  public void compressGzip(boolean chunked) throws Exception {
+  @Test(dataProvider = "chunkedSchemes")
+  public void compressGzip(boolean chunked, String scheme) throws Exception {
     HTTPHandler handler = (req, res) -> {
       res.setCompress(true);
       res.setHeader(Headers.ContentType, "text/plain");
@@ -107,9 +113,10 @@ public class CompressionTest {
       }
     };
 
-    try (HTTPServer ignore = new HTTPServer().withHandler(handler).withNumberOfWorkerThreads(1).withListener(new HTTPListenerConfiguration(4242)).start()) {
+    CountingInstrumenter instrumenter = new CountingInstrumenter();
+    try (HTTPServer ignore = makeServer(scheme, handler, instrumenter)) {
+      URI uri = makeURI(scheme, "");
       var client = HttpClient.newHttpClient();
-      URI uri = URI.create("http://localhost:4242/api/system/version");
       var response = client.send(
           HttpRequest.newBuilder().header(Headers.AcceptEncoding, "gzip, deflate").uri(uri).GET().build(),
           r -> BodySubscribers.ofInputStream()
@@ -122,8 +129,8 @@ public class CompressionTest {
     }
   }
 
-  @Test(dataProvider = "booleans")
-  public void requestedButNotAccepted(boolean chunked) throws Exception {
+  @Test(dataProvider = "chunkedSchemes")
+  public void requestedButNotAccepted(boolean chunked, String scheme) throws Exception {
     HTTPHandler handler = (req, res) -> {
       res.setCompress(true);
       res.setHeader(Headers.ContentType, "text/plain");
@@ -142,9 +149,10 @@ public class CompressionTest {
       }
     };
 
-    try (HTTPServer ignore = new HTTPServer().withHandler(handler).withNumberOfWorkerThreads(1).withListener(new HTTPListenerConfiguration(4242)).start()) {
+    CountingInstrumenter instrumenter = new CountingInstrumenter();
+    try (HTTPServer ignore = makeServer(scheme, handler, instrumenter)) {
+      URI uri = makeURI(scheme, "");
       var client = HttpClient.newHttpClient();
-      URI uri = URI.create("http://localhost:4242/api/system/version");
       var response = client.send(
           HttpRequest.newBuilder().uri(uri).GET().build(),
           r -> BodySubscribers.ofString(StandardCharsets.UTF_8)
