@@ -87,11 +87,6 @@ public class SystemOutLogger implements Logger {
   }
 
   @Override
-  public void setLevel(Level level) {
-    this.level = level;
-  }
-
-  @Override
   public void trace(String message) {
     if (level.ordinal() == Level.Trace.ordinal()) {
       System.out.println(message);

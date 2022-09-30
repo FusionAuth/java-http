@@ -35,7 +35,7 @@ import com.inversoft.rest.RESTClient;
 import com.inversoft.rest.TextResponseHandler;
 import io.fusionauth.http.HTTPValues.Headers;
 import io.fusionauth.http.log.Level;
-import io.fusionauth.http.log.SystemOutLoggerFactory;
+import io.fusionauth.http.log.SystemOutLogger;
 import io.fusionauth.http.server.CountingInstrumenter;
 import io.fusionauth.http.server.HTTPHandler;
 import io.fusionauth.http.server.HTTPServer;
@@ -57,7 +57,7 @@ public class ChunkedTest extends BaseTest {
   static {
     System.setProperty("sun.net.http.retryPost", "false");
     System.setProperty("jdk.httpclient.allowRestrictedHeaders", "connection");
-    SystemOutLoggerFactory.FACTORY.getLogger(ChunkedTest.class).setLevel(Level.Info);
+    SystemOutLogger.level = Level.Info;
   }
 
   @Test(dataProvider = "schemes")

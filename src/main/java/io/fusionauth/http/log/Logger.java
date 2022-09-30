@@ -81,13 +81,6 @@ public interface Logger {
   boolean isDebuggable();
 
   /**
-   * Sets the level for this logger.
-   *
-   * @param level The level.
-   */
-  void setLevel(Level level);
-
-  /**
    * Logs a trace message with values.
    *
    * @param message The message.

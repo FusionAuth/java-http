@@ -27,7 +27,7 @@ import java.util.concurrent.atomic.AtomicBoolean;
 
 import io.fusionauth.http.HTTPValues.Headers;
 import io.fusionauth.http.log.Level;
-import io.fusionauth.http.log.SystemOutLoggerFactory;
+import io.fusionauth.http.log.SystemOutLogger;
 import io.fusionauth.http.server.CountingInstrumenter;
 import io.fusionauth.http.server.ExpectValidator;
 import io.fusionauth.http.server.HTTPHandler;
@@ -50,7 +50,7 @@ public class ExpectTest extends BaseTest {
   static {
     System.setProperty("sun.net.http.retryPost", "false");
     System.setProperty("jdk.httpclient.allowRestrictedHeaders", "connection");
-    SystemOutLoggerFactory.FACTORY.getLogger(ExpectTest.class).setLevel(Level.Info);
+    SystemOutLogger.level = Level.Info;
   }
 
   @Test(dataProvider = "schemes")

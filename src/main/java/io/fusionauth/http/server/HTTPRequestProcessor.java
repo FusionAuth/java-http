@@ -112,10 +112,10 @@ public class HTTPRequestProcessor {
 
           int size = Math.max(buffer.remaining(), bufferSize);
           if (contentLength != null) {
-            logger.info("Handling body using Content-Length header");
+            logger.debug("Handling body using Content-Length header");
             bodyProcessor = new ContentLengthBodyProcessor(size, contentLength);
           } else {
-            logger.info("Handling body using Chunked data");
+            logger.debug("Handling body using Chunked data");
             bodyProcessor = new ChunkedBodyProcessor(size);
             configuration.getInstrumenter().chunkedRequest();
           }

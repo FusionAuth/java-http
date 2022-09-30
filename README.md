@@ -2,8 +2,9 @@
 
 **NOTE:** This project is in progress.
 
-The goal of this project is to build a full-featured HTTP server and client in plain Java without the use of any libraries. The general
-requirements and roadmap are as follows:
+The goal of this project is to build a full-featured HTTP server and client in plain Java without the use of any libraries. The client and server will use non-blocking NIO in order to provide the highest performance possible.
+
+The general requirements and roadmap are as follows:
 
 ### Server tasks
 
@@ -18,6 +19,7 @@ requirements and roadmap are as follows:
 * [x] Clean up HTTPRequest
 * [x] Support form data
 * [x] Support multipart form data
+* [x] Support TLS
 * [ ] Support trailers
 * [ ] Support HTTP 2
 
@@ -25,6 +27,7 @@ requirements and roadmap are as follows:
 
 * [ ] Basic HTTP 1.1
 * [ ] Support Keep-Alive
+* [ ] Support TLS
 * [ ] Support HTTP 2
 * [ ] Support Expect-Continue 100
 * [ ] Support chunked request and response
@@ -37,6 +40,7 @@ requirements and roadmap are as follows:
 Creating a server is simple:
 
 ```java
+import io.fusionauth.http.server.HTTPListenerConfiguration;
 import io.fusionauth.http.server.HTTPServer;
 import io.fusionauth.http.server.HTTPHandler;
 
@@ -46,7 +50,7 @@ public class Example {
       // Handler code goes here
     };
 
-    HTTPServer server = new HTTPServer().withHandler(handler).withPort(4242);
+    HTTPServer server = new HTTPServer().withHandler(handler).withListener(new HTTPListenerConfiguration(4242));
     server.start();
     // Use server
     server.close();
@@ -57,6 +61,7 @@ public class Example {
 Since the `HTTPServer` class implements `java.io.Closeable`, you can also use a try-resource block like this:
 
 ```java
+import io.fusionauth.http.server.HTTPListenerConfiguration;
 import io.fusionauth.http.server.HTTPServer;
 import io.fusionauth.http.server.HTTPHandler;
 
@@ -66,7 +71,7 @@ public class Example {
       // Handler code goes here
     };
 
-    try (HTTPServer server = new HTTPServer().withHandler(handler).withPort(4242)) {
+    try (HTTPServer server = new HTTPServer().withHandler(handler).withListener(new HTTPListenerConfiguration(4242))) {
       server.start();
       // When this block exits, the server will be shutdown
     }
@@ -79,6 +84,7 @@ You can also set various options on the server using the `with` methods on the c
 ```java
 import java.time.Duration;
 
+import io.fusionauth.http.server.HTTPListenerConfiguration;
 import io.fusionauth.http.server.HTTPServer;
 import io.fusionauth.http.server.HTTPHandler;
 
@@ -91,7 +97,7 @@ public class Example {
     HTTPServer server = new HTTPServer().withHandler(handler)
                                         .withNumberOfWorkerThreads(42)
                                         .withShutdownDuration(Duration.ofSeconds(10L))
-                                        .withPort(4242);
+                                        .withListener(new HTTPListenerConfiguration(4242));
     server.start();
     // Use server
     server.close();

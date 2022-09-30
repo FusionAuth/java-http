@@ -81,6 +81,12 @@ public class HTTPServerThread extends Thread implements Closeable, Notifier {
 
   @Override
   public void close() {
+    // Close all the client connections as cleanly as possible
+    var keys = selector.keys();
+    for (SelectionKey key : keys) {
+      cancelAndCloseKey(key);
+    }
+
     try {
       selector.close();
     } catch (Throwable t) {
@@ -172,6 +178,14 @@ public class HTTPServerThread extends Thread implements Closeable, Notifier {
     client.configureBlocking(false);
     client.register(key.selector(), tlsProcessor.initialKeyOps(), tlsProcessor);
 
+    if (logger.isDebuggable()) {
+      try {
+        logger.debug("Accepted connection from client [{}]", client.getRemoteAddress().toString());
+      } catch (IOException e) {
+        /// Ignore because we are just debugging
+      }
+    }
+
     if (instrumenter != null) {
       instrumenter.acceptedConnection();
     }
@@ -179,7 +193,11 @@ public class HTTPServerThread extends Thread implements Closeable, Notifier {
 
   private void cancelAndCloseKey(SelectionKey key) {
     if (key != null) {
-      try (var ignore = key.channel()) {
+      try (var client = key.channel()) {
+        if (logger.isDebuggable() && client instanceof SocketChannel socketChannel) {
+          logger.debug("Closing connection to client [{}]", socketChannel.getRemoteAddress().toString());
+        }
+
         key.cancel();
       } catch (Throwable t) {
         logger.error("An exception was thrown while trying to cancel a SelectionKey and close a channel with a client due to an exception being thrown for that specific client. Enable debug logging to see the error", t);
@@ -197,10 +215,12 @@ public class HTTPServerThread extends Thread implements Closeable, Notifier {
             .filter(key -> ((HTTPProcessor) key.attachment()).lastUsed() < now - clientTimeout.toMillis())
             .forEach(key -> {
               var client = (SocketChannel) key.channel();
-              try {
-                logger.debug("Closing client connection [{}] due to inactivity", client.getRemoteAddress().toString());
-              } catch (IOException e) {
-                // Ignore because we are just debugging
+              if (logger.isDebuggable()) {
+                try {
+                  logger.debug("Closing client connection [{}] due to inactivity", client.getRemoteAddress().toString());
+                } catch (IOException e) {
+                  // Ignore because we are just debugging
+                }
               }
 
               try {

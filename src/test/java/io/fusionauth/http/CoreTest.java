@@ -29,10 +29,12 @@ import java.time.Duration;
 import java.util.List;
 import java.util.Locale;
 
+import com.inversoft.rest.RESTClient;
+import com.inversoft.rest.TextResponseHandler;
 import io.fusionauth.http.HTTPValues.Connections;
 import io.fusionauth.http.HTTPValues.Headers;
 import io.fusionauth.http.log.Level;
-import io.fusionauth.http.log.SystemOutLoggerFactory;
+import io.fusionauth.http.log.SystemOutLogger;
 import io.fusionauth.http.server.CountingInstrumenter;
 import io.fusionauth.http.server.HTTPHandler;
 import io.fusionauth.http.server.HTTPListenerConfiguration;
@@ -55,7 +57,7 @@ public class CoreTest extends BaseTest {
   static {
     System.setProperty("sun.net.http.retryPost", "false");
     System.setProperty("jdk.httpclient.allowRestrictedHeaders", "connection");
-    SystemOutLoggerFactory.FACTORY.getLogger(CoreTest.class).setLevel(Level.Info);
+    SystemOutLogger.level = Level.Info;
   }
 
 
@@ -250,6 +252,55 @@ public class CoreTest extends BaseTest {
     }
 
     assertEquals(instrumenter.getConnections(), iterations);
+  }
+
+  /**
+   * This test uses Restify in order to leverage the URLConnection implementation of the JDK. That implementation is not smart enough to
+   * realize that a socket in the connection pool that was using Keep-Alives with the server is potentially dead. Since we are shutting down
+   * the server and doing another request, this ensures that the server itself is sending a socket close signal back to the URLConnection
+   * and removing the socket form the connection pool.
+   */
+  @Test(dataProvider = "schemes")
+  public void restifyMultipleServers(String scheme) {
+    HTTPHandler handler = (req, res) -> {
+      res.setHeader(Headers.ContentType, "text/plain");
+      res.setHeader("Content-Length", "16");
+      res.setStatus(200);
+
+      try {
+        OutputStream outputStream = res.getOutputStream();
+        outputStream.write(ExpectedResponse.getBytes());
+        outputStream.close();
+      } catch (IOException e) {
+        throw new RuntimeException(e);
+      }
+    };
+
+    try (HTTPServer ignore = makeServer(scheme, handler).start()) {
+      URI uri = makeURI(scheme, "");
+      var response = new RESTClient<>(String.class, String.class).url(uri.toString())
+                                                                 .connectTimeout(600_000)
+                                                                 .readTimeout(600_000)
+                                                                 .get()
+                                                                 .successResponseHandler(new TextResponseHandler())
+                                                                 .errorResponseHandler(new TextResponseHandler())
+                                                                 .go();
+      assertEquals(response.status, 200);
+      assertEquals(response.successResponse, ExpectedResponse);
+    }
+
+    try (HTTPServer ignore = makeServer(scheme, handler).start()) {
+      URI uri = makeURI(scheme, "");
+      var response = new RESTClient<>(String.class, String.class).url(uri.toString())
+                                                                 .connectTimeout(600_000)
+                                                                 .readTimeout(600_000)
+                                                                 .get()
+                                                                 .successResponseHandler(new TextResponseHandler())
+                                                                 .errorResponseHandler(new TextResponseHandler())
+                                                                 .go();
+      assertEquals(response.status, 200);
+      assertEquals(response.successResponse, ExpectedResponse);
+    }
   }
 
   @Test(dataProvider = "schemes")
