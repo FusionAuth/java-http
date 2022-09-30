@@ -45,7 +45,7 @@ public class ThreadPool {
    */
   public ThreadPool(int numberOfThreads, String namePrefix, Duration shutdown) {
     AtomicInteger threadCount = new AtomicInteger(1);
-    this.executor = Executors.newFixedThreadPool(numberOfThreads, runnable -> new Thread(runnable, namePrefix + threadCount.incrementAndGet()));
+    this.executor = Executors.newFixedThreadPool(numberOfThreads, runnable -> new Thread(runnable, namePrefix + " " + threadCount.getAndIncrement()));
     this.shutdown = shutdown;
   }
 

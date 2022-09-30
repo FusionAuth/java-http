@@ -19,17 +19,23 @@ import javax.net.ssl.SSLContext;
 import javax.net.ssl.SSLEngine;
 import javax.net.ssl.SSLEngineResult.HandshakeStatus;
 import javax.net.ssl.SSLEngineResult.Status;
+import javax.net.ssl.SSLParameters;
 import javax.net.ssl.SSLSession;
 import java.io.IOException;
 import java.nio.ByteBuffer;
 import java.nio.channels.SelectionKey;
 import java.security.GeneralSecurityException;
+import java.util.concurrent.ExecutorService;
+import java.util.concurrent.Executors;
+import java.util.concurrent.atomic.AtomicInteger;
 
 import io.fusionauth.http.log.Logger;
 import io.fusionauth.http.security.SecurityTools;
 
 public class HTTPS11Processor implements HTTPProcessor {
-  private final HTTP11Processor delegate;
+  private static final AtomicInteger threadCount = new AtomicInteger(1);
+
+  private static final ExecutorService executor = Executors.newCachedThreadPool(r -> new Thread(r, "TLS Handshake Thread " + threadCount.getAndIncrement()));
 
   private final SSLEngine engine;
 
@@ -40,6 +46,8 @@ public class HTTPS11Processor implements HTTPProcessor {
   private final ByteBuffer[] myNetData;
 
   private final ByteBuffer peerAppData;
+
+  private HTTP11Processor delegate;
 
   private volatile ProcessorState handshakeState;
 
@@ -144,7 +152,7 @@ public class HTTPS11Processor implements HTTPProcessor {
     var tlsStatus = engine.getHandshakeStatus();
     ByteBuffer decryptBuffer;
     if (tlsStatus != HandshakeStatus.NOT_HANDSHAKING && tlsStatus != HandshakeStatus.FINISHED) {
-      logger.trace("(HTTPS-R-HS)");
+      logger.trace("(HTTPS-R-HS)" + tlsStatus);
       decryptBuffer = peerAppData;
     } else {
       logger.trace("(HTTPS-R-RQ)");
@@ -184,7 +192,6 @@ public class HTTPS11Processor implements HTTPProcessor {
       throw new IllegalStateException("A buffer underflow is not expected during a wrap operation according to the Javadoc. Maybe this is something we need to fix.");
     }
 
-    var newTLSStatus = result.getHandshakeStatus();
     if (tlsStatus == HandshakeStatus.NOT_HANDSHAKING || tlsStatus == HandshakeStatus.FINISHED) {
       logger.trace("(HTTPS-R-RQ-R)");
       handshakeState = null;
@@ -192,6 +199,7 @@ public class HTTPS11Processor implements HTTPProcessor {
       return delegate.read(decryptBuffer);
     }
 
+    var newTLSStatus = result.getHandshakeStatus();
     return handleHandshake(newTLSStatus);
   }
 
@@ -216,6 +224,10 @@ public class HTTPS11Processor implements HTTPProcessor {
     }
 
     return handshakeState != null ? handshakeState : delegate.state();
+  }
+
+  public void updateDelegate(HTTP11Processor delegate) {
+    this.delegate = delegate;
   }
 
   @Override
@@ -314,8 +326,7 @@ public class HTTPS11Processor implements HTTPProcessor {
 
         Runnable task;
         while ((task = engine.getDelegatedTask()) != null) {
-          Thread thread = new Thread(task);
-          thread.start();
+          executor.submit(task);
         }
       } while (newTLSStatus == HandshakeStatus.NEED_TASK);
     }
@@ -327,8 +338,13 @@ public class HTTPS11Processor implements HTTPProcessor {
       logger.trace("(HTTPS-HS-W)");
       handshakeState = ProcessorState.Write;
     } else {
-      logger.trace("(HTTPS-HS-DONE-" + newTLSStatus.name() + ")");
-      handshakeState = null;
+      logger.trace("(HTTPS-HS-DONE)" + newTLSStatus.name());
+
+      if (!myNetData[0].hasRemaining()) {
+        logger.trace("(HTTPS-HS-DONE)" + newTLSStatus.name() + "-" + delegate.state());
+        handshakeState = null;
+        return delegate.state();
+      }
     }
 
     return handshakeState;

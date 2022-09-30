@@ -30,6 +30,7 @@ import java.time.Duration;
 import java.util.Iterator;
 
 import io.fusionauth.http.log.Logger;
+import io.fusionauth.http.util.ThreadPool;
 
 /**
  * A thread that manages the Selection process for a single server socket. Since some server resources are shared, this separates the shared
@@ -42,25 +43,32 @@ public class HTTPServerThread extends Thread implements Closeable, Notifier {
 
   private final Duration clientTimeout;
 
+  private final HTTPServerConfiguration configuration;
+
   private final Instrumenter instrumenter;
+
+  private final HTTPListenerConfiguration listenerConfiguration;
 
   private final Logger logger;
 
   private final ByteBuffer preambleBuffer;
 
-  private final HTTPProcessorFactory processorFactory;
-
   private final Selector selector;
 
-  public HTTPServerThread(HTTPServerConfiguration configuration, HTTPListenerConfiguration listenerConfiguration,
-                          HTTPProcessorFactory processorFactory)
+  private final ThreadPool threadPool;
+
+  public HTTPServerThread(HTTPServerConfiguration configuration, HTTPListenerConfiguration listenerConfiguration, ThreadPool threadPool)
       throws IOException {
+    super("HTTP Server Thread");
     this.clientTimeout = configuration.getClientTimeoutDuration();
+    this.configuration = configuration;
+    this.listenerConfiguration = listenerConfiguration;
     this.instrumenter = configuration.getInstrumenter();
-    this.processorFactory = processorFactory;
     this.logger = configuration.getLoggerFactory().getLogger(HTTPServerThread.class);
     this.preambleBuffer = ByteBuffer.allocate(configuration.getPreambleBufferSize());
     this.selector = Selector.open();
+    this.threadPool = threadPool;
+
     this.channel = ServerSocketChannel.open();
     this.channel.configureBlocking(false);
     this.channel.bind(new InetSocketAddress(listenerConfiguration.getBindAddress(), listenerConfiguration.getPort()));
@@ -159,9 +167,10 @@ public class HTTPServerThread extends Thread implements Closeable, Notifier {
   @SuppressWarnings("MagicConstant")
   private void accept(SelectionKey key) throws GeneralSecurityException, IOException {
     var client = channel.accept();
-    HTTPProcessor processor = processorFactory.build(this, preambleBuffer, ipAddress(client));
+    HTTP11Processor httpProcessor = new HTTP11Processor(configuration, listenerConfiguration, this, preambleBuffer, threadPool, ipAddress(client));
+    HTTPS11Processor tlsProcessor = new HTTPS11Processor(httpProcessor, configuration, listenerConfiguration);
     client.configureBlocking(false);
-    client.register(key.selector(), processor.initialKeyOps(), processor);
+    client.register(key.selector(), tlsProcessor.initialKeyOps(), tlsProcessor);
 
     if (instrumenter != null) {
       instrumenter.acceptedConnection();
@@ -175,6 +184,8 @@ public class HTTPServerThread extends Thread implements Closeable, Notifier {
       } catch (Throwable t) {
         logger.error("An exception was thrown while trying to cancel a SelectionKey and close a channel with a client due to an exception being thrown for that specific client. Enable debug logging to see the error", t);
       }
+
+      logger.trace("(C)");
     }
   }
 
@@ -238,7 +249,7 @@ public class HTTPServerThread extends Thread implements Closeable, Notifier {
   }
 
   private void write(SelectionKey key) throws GeneralSecurityException, IOException {
-    HTTPProcessor processor = (HTTPProcessor) key.attachment();
+    HTTPS11Processor processor = (HTTPS11Processor) key.attachment();
     ProcessorState state = processor.state();
     SocketChannel client = (SocketChannel) key.channel();
     ByteBuffer[] buffers = processor.writeBuffers();
@@ -270,8 +281,8 @@ public class HTTPServerThread extends Thread implements Closeable, Notifier {
     } else if (state == ProcessorState.Read) {
       key.interestOps(SelectionKey.OP_READ);
     } else if (state == ProcessorState.Reset) {
-      processor = processorFactory.build(this, preambleBuffer, ipAddress(client));
-      key.attach(processor);
+      HTTP11Processor httpProcessor = new HTTP11Processor(configuration, listenerConfiguration, this, preambleBuffer, threadPool, ipAddress(client));
+      processor.updateDelegate(httpProcessor);
       key.interestOps(SelectionKey.OP_READ);
     }
   }

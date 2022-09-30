@@ -24,6 +24,7 @@ import java.time.Duration;
 import io.fusionauth.http.server.HTTPHandler;
 import io.fusionauth.http.server.HTTPListenerConfiguration;
 import io.fusionauth.http.server.HTTPServer;
+import io.fusionauth.http.server.Instrumenter;
 import org.testng.annotations.BeforeSuite;
 import org.testng.annotations.DataProvider;
 
@@ -44,8 +45,12 @@ public class BaseTest {
     privateKey = Files.readString(Paths.get(homeDir + "/dev/certificates/fusionauth.key"));
   }
 
-  @SuppressWarnings("resource")
   public HTTPServer makeServer(String scheme, HTTPHandler handler) {
+    return makeServer(scheme, handler, null);
+  }
+
+  @SuppressWarnings("resource")
+  public HTTPServer makeServer(String scheme, HTTPHandler handler, Instrumenter instrumenter) {
     boolean tls = scheme.equals("https");
     HTTPListenerConfiguration listenerConfiguration;
     if (tls) {
@@ -56,6 +61,7 @@ public class BaseTest {
 
     return new HTTPServer().withHandler(handler)
                            .withClientTimeout(Duration.ofSeconds(600_000L))
+                           .withInstrumenter(instrumenter)
                            .withNumberOfWorkerThreads(1)
                            .withListener(listenerConfiguration)
                            .start();

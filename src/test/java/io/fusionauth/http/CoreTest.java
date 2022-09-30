@@ -25,7 +25,6 @@ import java.net.http.HttpRequest;
 import java.net.http.HttpRequest.BodyPublishers;
 import java.net.http.HttpResponse.BodySubscribers;
 import java.nio.charset.StandardCharsets;
-import java.time.Duration;
 import java.util.List;
 import java.util.Locale;
 
@@ -60,8 +59,8 @@ public class CoreTest extends BaseTest {
   }
 
 
-  @Test
-  public void clientTimeout() {
+  @Test(dataProvider = "schemes")
+  public void clientTimeout(String scheme) {
     HTTPHandler handler = (req, res) -> {
       System.out.println("Handling");
       res.setStatus(200);
@@ -69,10 +68,8 @@ public class CoreTest extends BaseTest {
       res.getOutputStream().close();
     };
 
-    try (HTTPServer server = new HTTPServer().withHandler(handler).withClientTimeout(Duration.ofSeconds(1)).withNumberOfWorkerThreads(1).withListener(new HTTPListenerConfiguration(4242))) {
-      server.start();
-
-      URI uri = URI.create("http://localhost:4242/api/system/version");
+    try (HTTPServer ignore = makeServer(scheme, handler)) {
+      URI uri = makeURI(scheme, "");
       try {
         HttpURLConnection connection = (HttpURLConnection) uri.toURL().openConnection();
         connection.setConnectTimeout(10_000);
@@ -96,16 +93,16 @@ public class CoreTest extends BaseTest {
     }
   }
 
-  @Test
-  public void emptyContentType() throws Exception {
+  @Test(dataProvider = "schemes")
+  public void emptyContentType(String scheme) throws Exception {
     HTTPHandler handler = (req, res) -> {
       assertNull(req.getContentType());
       res.setStatus(200);
     };
 
-    try (HTTPServer ignore = new HTTPServer().withHandler(handler).withNumberOfWorkerThreads(1).withListener(new HTTPListenerConfiguration(4242)).start()) {
+    try (HTTPServer ignore = makeServer(scheme, handler)) {
+      URI uri = makeURI(scheme, "");
       var client = HttpClient.newHttpClient();
-      URI uri = URI.create("http://localhost:4242/api/system/version");
       var response = client.send(
           HttpRequest.newBuilder().uri(uri).header(Headers.ContentType, "").POST(BodyPublishers.noBody()).build(),
           r -> BodySubscribers.ofString(StandardCharsets.UTF_8)
@@ -115,17 +112,17 @@ public class CoreTest extends BaseTest {
     }
   }
 
-  @Test
-  public void emptyContentTypeWithEncoding() throws Exception {
+  @Test(dataProvider = "schemes")
+  public void emptyContentTypeWithEncoding(String scheme) throws Exception {
     HTTPHandler handler = (req, res) -> {
       assertEquals(req.getContentType(), "");
       assertEquals(req.getCharacterEncoding(), StandardCharsets.UTF_16);
       res.setStatus(200);
     };
 
-    try (HTTPServer ignore = new HTTPServer().withHandler(handler).withNumberOfWorkerThreads(1).withListener(new HTTPListenerConfiguration(4242)).start()) {
+    try (HTTPServer ignore = makeServer(scheme, handler)) {
+      URI uri = makeURI(scheme, "");
       var client = HttpClient.newHttpClient();
-      URI uri = URI.create("http://localhost:4242/api/system/version");
       var response = client.send(
           HttpRequest.newBuilder().uri(uri).header(Headers.ContentType, "; charset=UTF-16").POST(BodyPublishers.noBody()).build(),
           r -> BodySubscribers.ofString(StandardCharsets.UTF_8)
@@ -135,15 +132,15 @@ public class CoreTest extends BaseTest {
     }
   }
 
-  @Test
-  public void handlerFailureGet() throws Exception {
+  @Test(dataProvider = "schemes")
+  public void handlerFailureGet(String scheme) throws Exception {
     HTTPHandler handler = (req, res) -> {
       throw new IllegalStateException("Bad state");
     };
 
-    try (HTTPServer ignore = new HTTPServer().withHandler(handler).withNumberOfWorkerThreads(1).withListener(new HTTPListenerConfiguration(4242)).start()) {
+    try (HTTPServer ignore = makeServer(scheme, handler)) {
+      URI uri = makeURI(scheme, "");
       var client = HttpClient.newHttpClient();
-      URI uri = URI.create("http://localhost:4242/api/system/version");
       var response = client.send(
           HttpRequest.newBuilder().uri(uri).GET().build(),
           r -> BodySubscribers.ofString(StandardCharsets.UTF_8)
@@ -153,15 +150,15 @@ public class CoreTest extends BaseTest {
     }
   }
 
-  @Test
-  public void handlerFailurePost() throws Exception {
+  @Test(dataProvider = "schemes")
+  public void handlerFailurePost(String scheme) throws Exception {
     HTTPHandler handler = (req, res) -> {
       throw new IllegalStateException("Bad state");
     };
 
-    try (HTTPServer ignore = new HTTPServer().withHandler(handler).withNumberOfWorkerThreads(1).withListener(new HTTPListenerConfiguration(4242)).start()) {
+    try (HTTPServer ignore = makeServer(scheme, handler)) {
+      URI uri = makeURI(scheme, "");
       var client = HttpClient.newHttpClient();
-      URI uri = URI.create("http://localhost:4242/api/system/version");
       var response = client.send(
           HttpRequest.newBuilder().uri(uri).header(Headers.ContentType, "application/json").POST(BodyPublishers.ofString(RequestBody)).build(),
           r -> BodySubscribers.ofString(StandardCharsets.UTF_8)
@@ -171,8 +168,8 @@ public class CoreTest extends BaseTest {
     }
   }
 
-  @Test
-  public void performance() throws Exception {
+  @Test(dataProvider = "schemes")
+  public void performance(String scheme) throws Exception {
     HTTPHandler handler = (req, res) -> {
       res.setHeader(Headers.ContentType, "text/plain");
       res.setHeader("Content-Length", "16");
@@ -187,11 +184,10 @@ public class CoreTest extends BaseTest {
       }
     };
 
-//    SystemOutLogger.level = Level.Trace;
     CountingInstrumenter instrumenter = new CountingInstrumenter();
-    try (HTTPServer ignore = new HTTPServer().withHandler(handler).withInstrumenter(instrumenter).withNumberOfWorkerThreads(1).withListener(new HTTPListenerConfiguration(4242)).start()) {
+    try (HTTPServer ignore = makeServer(scheme, handler, instrumenter)) {
+      URI uri = makeURI(scheme, "");
       var client = HttpClient.newHttpClient();
-      URI uri = URI.create("http://localhost:4242/api/system/version");
       long start = System.currentTimeMillis();
       for (int i = 0; i < 100_000; i++) {
         var response = client.send(
@@ -215,8 +211,12 @@ public class CoreTest extends BaseTest {
     assertEquals(instrumenter.getConnections(), 1);
   }
 
-  @Test
-  public void performanceNoKeepAlive() throws Exception {
+  @Test(dataProvider = "schemes")
+  public void performanceNoKeepAlive(String scheme) throws Exception {
+    if (scheme.equals("http")) {
+      return;
+    }
+
     HTTPHandler handler = (req, res) -> {
       res.setHeader(Headers.ContentType, "text/plain");
       res.setHeader("Content-Length", "16");
@@ -231,11 +231,16 @@ public class CoreTest extends BaseTest {
       }
     };
 
+    if (scheme.equals("https")) {
+      SystemOutLogger.level = Level.Trace;
+    }
+
     CountingInstrumenter instrumenter = new CountingInstrumenter();
-    try (HTTPServer ignore = new HTTPServer().withHandler(handler).withInstrumenter(instrumenter).withNumberOfWorkerThreads(1).withListener(new HTTPListenerConfiguration(4242)).start()) {
+    try (HTTPServer ignore = makeServer(scheme, handler, instrumenter)) {
+      URI uri = makeURI(scheme, "");
       var client = HttpClient.newHttpClient();
-      URI uri = URI.create("http://localhost:4242/api/system/version");
-      for (int i = 0; i < 500; i++) {
+      long start = System.currentTimeMillis();
+      for (int i = 0; i < 10_000; i++) {
         var response = client.send(
             HttpRequest.newBuilder().uri(uri).header(Headers.Connection, Connections.Close).GET().build(),
             r -> BodySubscribers.ofString(StandardCharsets.UTF_8)
@@ -243,10 +248,15 @@ public class CoreTest extends BaseTest {
 
         assertEquals(response.statusCode(), 200);
         assertEquals(response.body(), ExpectedResponse);
+        System.out.println(i);
       }
+
+      long end = System.currentTimeMillis();
+      double average = (end - start) / 10_000D;
+      System.out.println("Average linear request time without keep-alive is [" + average + "]ms");
     }
 
-    assertEquals(instrumenter.getConnections(), 500);
+    assertEquals(instrumenter.getConnections(), 10000);
   }
 
   @Test(dataProvider = "schemes")
@@ -283,7 +293,6 @@ public class CoreTest extends BaseTest {
       }
     };
 
-    SystemOutLogger.level = Level.Trace;
     try (HTTPServer ignore = makeServer(scheme, handler)) {
       var client = HttpClient.newHttpClient();
       URI uri = makeURI(scheme, "?foo=bar");
@@ -324,6 +333,7 @@ public class CoreTest extends BaseTest {
                                              .withNumberOfWorkerThreads(1)
                                              .withListener(new HTTPListenerConfiguration(4242))
                                              .withListener(new HTTPListenerConfiguration(4243))
+                                             .withListener(new HTTPListenerConfiguration(4244, certificate, privateKey))
                                              .start()) {
       var client = HttpClient.newHttpClient();
       URI uri = URI.create("http://localhost:4242/api/system/version?foo=bar");
@@ -335,6 +345,14 @@ public class CoreTest extends BaseTest {
 
       // Try the other port
       uri = URI.create("http://localhost:4243/api/system/version?foo=bar");
+      request = HttpRequest.newBuilder().uri(uri).GET().build();
+      response = client.send(request, r -> BodySubscribers.ofString(StandardCharsets.UTF_8));
+
+      assertEquals(response.statusCode(), 200);
+      assertEquals(response.body(), ExpectedResponse);
+
+      // Try the TLS port
+      uri = URI.create("https://local.fusionauth.io:4244/api/system/version?foo=bar");
       request = HttpRequest.newBuilder().uri(uri).GET().build();
       response = client.send(request, r -> BodySubscribers.ofString(StandardCharsets.UTF_8));
 
@@ -372,7 +390,6 @@ public class CoreTest extends BaseTest {
       }
     };
 
-    SystemOutLogger.level = Level.Trace;
     try (HTTPServer ignore = makeServer(scheme, handler)) {
       var client = HttpClient.newHttpClient();
       URI uri = makeURI(scheme, "?foo=bar");
@@ -386,13 +403,13 @@ public class CoreTest extends BaseTest {
     }
   }
 
-  @Test
-  public void statusOnly() throws Exception {
+  @Test(dataProvider = "schemes")
+  public void statusOnly(String scheme) throws Exception {
     HTTPHandler handler = (req, res) -> res.setStatus(200);
 
-    try (HTTPServer ignore = new HTTPServer().withHandler(handler).withNumberOfWorkerThreads(1).withListener(new HTTPListenerConfiguration(4242)).start()) {
+    try (HTTPServer ignore = makeServer(scheme, handler)) {
+      URI uri = makeURI(scheme, "");
       var client = HttpClient.newHttpClient();
-      URI uri = URI.create("http://localhost:4242/api/system/version");
       var response = client.send(
           HttpRequest.newBuilder().uri(uri).header(Headers.ContentType, "application/json").POST(BodyPublishers.ofString(RequestBody)).build(),
           r -> BodySubscribers.ofString(StandardCharsets.UTF_8)
@@ -402,8 +419,8 @@ public class CoreTest extends BaseTest {
     }
   }
 
-  @Test
-  public void writer() throws Exception {
+  @Test(dataProvider = "schemes")
+  public void writer(String scheme) throws Exception {
     HTTPHandler handler = (req, res) -> {
       try {
         req.getInputStream().readAllBytes();
@@ -420,9 +437,9 @@ public class CoreTest extends BaseTest {
       }
     };
 
-    try (HTTPServer ignore = new HTTPServer().withHandler(handler).withNumberOfWorkerThreads(1).withListener(new HTTPListenerConfiguration(4242)).start()) {
+    try (HTTPServer ignore = makeServer(scheme, handler)) {
+      URI uri = makeURI(scheme, "");
       var client = HttpClient.newHttpClient();
-      URI uri = URI.create("http://localhost:4242/api/system/version");
       var response = client.send(
           HttpRequest.newBuilder().uri(uri).header(Headers.ContentType, "application/json").POST(BodyPublishers.ofString(RequestBody)).build(),
           r -> BodySubscribers.ofString(StandardCharsets.UTF_16)

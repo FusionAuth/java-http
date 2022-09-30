@@ -87,7 +87,7 @@ public class HTTPServer implements Closeable, Configurable<HTTPServer> {
 
     try {
       for (HTTPListenerConfiguration listener : configuration.getListeners()) {
-        HTTPServerThread thread = new HTTPServerThread(configuration, listener, new HTTPProcessorFactory(configuration, listener, threadPool));
+        HTTPServerThread thread = new HTTPServerThread(configuration, listener, threadPool);
         thread.start();
         threads.add(thread);
 
