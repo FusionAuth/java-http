@@ -15,7 +15,6 @@
  */
 package io.fusionauth.http.server;
 
-import java.net.InetAddress;
 import java.nio.file.Path;
 import java.time.Duration;
 
@@ -48,19 +47,8 @@ public interface Configurable<T extends Configurable<T>> {
   }
 
   /**
-   * Sets the certificate used for TLS as a PEM encoded X.509 DER String. Generally, you can load the contents of an X.509 certificate file
-   * using {@code Files.readString(path)}.
-   *
-   * @param certificateString The certificate String.
-   * @return This.
-   */
-  default T withCertificateString(String certificateString) {
-    configuration().withCertificateString(certificateString);
-    return (T) this;
-  }
-
-  /**
    * Sets the duration that the server will allow client connections to remain open. This includes Keep-Alive as well as read timeout.
+   * Defaults to 20 seconds.
    *
    * @param duration The duration.
    * @return This.
@@ -181,18 +169,6 @@ public interface Configurable<T extends Configurable<T>> {
    */
   default T withPreambleBufferSize(int size) {
     configuration().withPreambleBufferSize(size);
-    return (T) this;
-  }
-
-  /**
-   * Sets the private key used for TLS as a PCKS8 encoded DER String. Generally, you can load the contents of an PCKS8 private key file
-   * using {@code Files.readString(path)}.
-   *
-   * @param privateKeyString The private key String.
-   * @return This.
-   */
-  default T withPrivateKeyString(String privateKeyString) {
-    configuration().withPrivateKeyString(privateKeyString);
     return (T) this;
   }
 

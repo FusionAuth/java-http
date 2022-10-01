@@ -29,9 +29,7 @@ public class HTTPServerConfiguration implements Configurable<HTTPServerConfigura
 
   private Path baseDir = Path.of("");
 
-  private String certificateString;
-
-  private Duration clientTimeoutDuration = Duration.ofSeconds(10);
+  private Duration clientTimeoutDuration = Duration.ofSeconds(20);
 
   private String contextPath = "";
 
@@ -51,8 +49,6 @@ public class HTTPServerConfiguration implements Configurable<HTTPServerConfigura
 
   private int preambleBufferSize = 16 * 1024;
 
-  private String privateKeyString;
-
   private int requestBufferSize = 16 * 1024;
 
   private int responseBufferSize = 16 * 1024;
@@ -69,10 +65,6 @@ public class HTTPServerConfiguration implements Configurable<HTTPServerConfigura
 
   public Path getBaseDir() {
     return baseDir;
-  }
-
-  public String getCertificateString() {
-    return certificateString;
   }
 
   public Duration getClientTimeoutDuration() {
@@ -119,10 +111,6 @@ public class HTTPServerConfiguration implements Configurable<HTTPServerConfigura
     return preambleBufferSize;
   }
 
-  public String getPrivateKeyString() {
-    return privateKeyString;
-  }
-
   public int getRequestBufferSize() {
     return requestBufferSize;
   }
@@ -141,15 +129,6 @@ public class HTTPServerConfiguration implements Configurable<HTTPServerConfigura
   @Override
   public HTTPServerConfiguration withBaseDir(Path baseDir) {
     this.baseDir = baseDir;
-    return this;
-  }
-
-  /**
-   * {@inheritDoc}
-   */
-  @Override
-  public HTTPServerConfiguration withCertificateString(String certificateString) {
-    this.certificateString = certificateString;
     return this;
   }
 
@@ -250,15 +229,6 @@ public class HTTPServerConfiguration implements Configurable<HTTPServerConfigura
   @Override
   public HTTPServerConfiguration withPreambleBufferSize(int size) {
     this.preambleBufferSize = size;
-    return this;
-  }
-
-  /**
-   * {@inheritDoc}
-   */
-  @Override
-  public HTTPServerConfiguration withPrivateKeyString(String privateKeyString) {
-    this.privateKeyString = privateKeyString;
     return this;
   }
 
