@@ -113,11 +113,11 @@ The load test configuration is set to 10 clients with 500,000 requests each. The
 
 Here are the current test results:
 
-| Server      | RPS    | Failure rate |
-|-------------|--------|--------------|
-| `java-http` | 63,216 | 0            |
-| `Tomcat`    | 51,351 | 0.103        |
-| `Netty`     | 540    | 1.818        |
+| Server      | RPS    | Failures per second |
+|-------------|--------|---------------------|
+| `java-http` | 63,216 | 0                   |
+| `Tomcat`    | 51,351 | 0.103               |
+| `Netty`     | 540    | 1.818               |
 
 Netty and Tomcat both seem to suffer from buffering and connection issues at very high scale. Regardless of the configuration, both servers always begins to fail with connection timeout problems at scale. `java-http` does not have these issues because of the way it handles connections via the selector. Connections don't back up and client connection pools can always be re-used with Keep-Alive.
 
