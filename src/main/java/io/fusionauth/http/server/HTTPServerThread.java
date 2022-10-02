@@ -154,6 +154,9 @@ public class HTTPServerThread extends Thread implements Closeable, Notifier {
 
           iterator.remove();
           key = null;
+
+          // Always clear the preamble for good measure
+          preambleBuffer.clear();
         }
 
         cleanup();
@@ -166,6 +169,9 @@ public class HTTPServerThread extends Thread implements Closeable, Notifier {
       } catch (Throwable t) {
         logger.error("An exception was thrown during processing", t);
         cancelAndCloseKey(key);
+      } finally {
+        // Always clear the preamble for good measure
+        preambleBuffer.clear();
       }
     }
   }
