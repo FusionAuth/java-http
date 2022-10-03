@@ -21,6 +21,8 @@ package io.fusionauth.http.server;
  * @author Brian Pontarelli
  */
 public class CountingInstrumenter implements Instrumenter {
+  private long badRequests;
+
   private long bytesRead;
 
   private long bytesWritten;
@@ -39,6 +41,11 @@ public class CountingInstrumenter implements Instrumenter {
   }
 
   @Override
+  public void badRequest() {
+    badRequests++;
+  }
+
+  @Override
   public void chunkedRequest() {
     chunkedRequests++;
   }
@@ -46,6 +53,10 @@ public class CountingInstrumenter implements Instrumenter {
   @Override
   public void chunkedResponse() {
     chunkedResponses++;
+  }
+
+  public long getBadRequests() {
+    return badRequests;
   }
 
   public long getBytesRead() {

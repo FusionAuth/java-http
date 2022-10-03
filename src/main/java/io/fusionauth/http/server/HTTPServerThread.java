@@ -29,6 +29,7 @@ import java.security.GeneralSecurityException;
 import java.time.Duration;
 import java.util.Iterator;
 
+import io.fusionauth.http.ParseException;
 import io.fusionauth.http.log.Logger;
 import io.fusionauth.http.util.ThreadPool;
 
@@ -165,6 +166,10 @@ public class HTTPServerThread extends Thread implements Closeable, Notifier {
         break;
       } catch (SocketException se) {
         logger.debug("A socket exception was thrown during processing. These are pretty common.", se);
+        cancelAndCloseKey(key);
+      } catch (ParseException pe) {
+        logger.debug("The HTTP request was unparseable. These are pretty common with fuzzers/hackers, so we just debug them here.", pe);
+        instrumenter.badRequest();
         cancelAndCloseKey(key);
       } catch (Throwable t) {
         logger.error("An exception was thrown during processing", t);

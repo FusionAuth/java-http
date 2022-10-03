@@ -27,6 +27,11 @@ public interface Instrumenter {
   void acceptedConnection();
 
   /**
+   * Called when a client sends in a bad HTTP request.
+   */
+  void badRequest();
+
+  /**
    * Called when a client sends in chunked request data.
    */
   void chunkedRequest();

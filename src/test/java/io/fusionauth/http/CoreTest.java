@@ -60,6 +60,34 @@ public class CoreTest extends BaseTest {
     SystemOutLogger.level = Level.Info;
   }
 
+  @Test
+  public void badPreambleButReset() throws Exception {
+    HTTPHandler handler = (req, res) -> {
+      assertNull(req.getHeader("Bad-Header"));
+      assertEquals(req.getHeader("Good-Header"), "Good-Header");
+      res.setStatus(200);
+    };
+
+    var instrumenter = new CountingInstrumenter();
+    try (HTTPServer ignore = makeServer("http", handler, instrumenter).start()) {
+      sendBadRequest("""
+          GET / HTTP/1.1\r
+          X-Bad-Header: Bad-Header\r\r
+          """);
+
+      var client = HttpClient.newHttpClient();
+      URI uri = makeURI("http", "");
+      HttpRequest request = HttpRequest.newBuilder()
+                                       .uri(uri)
+                                       .header("Good-Header", "Good-Header")
+                                       .GET()
+                                       .build();
+      var response = client.send(request, r -> BodySubscribers.ofString(StandardCharsets.UTF_8));
+      assertEquals(response.statusCode(), 200);
+    }
+
+    assertEquals(instrumenter.getBadRequests(), 1);
+  }
 
   @Test(dataProvider = "schemes")
   public void clientTimeout(String scheme) {

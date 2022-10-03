@@ -16,6 +16,9 @@
 package io.fusionauth.http;
 
 import java.io.IOException;
+import java.io.InputStream;
+import java.io.OutputStream;
+import java.net.Socket;
 import java.net.URI;
 import java.nio.file.Files;
 import java.nio.file.Paths;
@@ -28,6 +31,8 @@ import io.fusionauth.http.server.HTTPServer;
 import io.fusionauth.http.server.Instrumenter;
 import org.testng.annotations.BeforeSuite;
 import org.testng.annotations.DataProvider;
+import static org.testng.Assert.assertEquals;
+import static org.testng.Assert.fail;
 
 /**
  * Base class for tests in order to provide data providers and other reusable code.
@@ -78,6 +83,20 @@ public class BaseTest {
     }
 
     return URI.create("http://localhost:4242/api/system/version" + params);
+  }
+
+  public void sendBadRequest(String message) {
+    try (Socket socket = new Socket("127.0.0.1", 4242); OutputStream os = socket.getOutputStream(); InputStream is = socket.getInputStream()) {
+      os.write(message.getBytes());
+      os.flush();
+
+      // Sockets are pretty resilient, so this will be closed by the server, but we'll just see that close are zero bytes read. If we were
+      // to continue writing above, then that likely would throw an exception because the pipe would be broken
+      byte[] buffer = is.readAllBytes();
+      assertEquals(buffer.length, 0);
+    } catch (Exception e) {
+      fail(e.getMessage());
+    }
   }
 
   /**
