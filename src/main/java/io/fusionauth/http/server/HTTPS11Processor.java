@@ -188,7 +188,7 @@ public class HTTPS11Processor implements HTTPProcessor {
       logger.trace("(HTTPS-R-C)");
       return close(false);
     } else if (result.getStatus() == Status.BUFFER_OVERFLOW) {
-      throw new IllegalStateException("A buffer overflow is not expected during an unwap operation. This occurs because the preamble or body buffers are too small. Increase their sizes to avoid this issue.");
+      throw new IllegalStateException("A buffer overflow is not expected during an unwrap operation. This occurs because the preamble or body buffers are too small. Increase their sizes to avoid this issue.");
     }
 
     if (tlsStatus == HandshakeStatus.NOT_HANDSHAKING || tlsStatus == HandshakeStatus.FINISHED) {
@@ -248,6 +248,7 @@ public class HTTPS11Processor implements HTTPProcessor {
       return null;
     }
 
+    // TODO : can bytes be in the handshake that clear() doesn't even provide enough protection
     ByteBuffer[] plainTextBuffers;
     if (tlsStatus == HandshakeStatus.NEED_WRAP) {
       logger.trace("(HTTPS-W-HS)");

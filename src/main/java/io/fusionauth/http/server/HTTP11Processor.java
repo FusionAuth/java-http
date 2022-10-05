@@ -127,9 +127,6 @@ public class HTTP11Processor implements HTTPProcessor {
 
       requestState = requestProcessor.processPreambleBytes(buffer);
 
-      // Reset the preamble buffer because it is shared
-      buffer.clear();
-
       // If the next state is not preamble, that means we are done processing that and ready to handle the request in a separate thread
       if (requestState != RequestState.Preamble && requestState != RequestState.Expect) {
         logger.trace("(RWo)");

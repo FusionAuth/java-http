@@ -34,6 +34,7 @@ import io.fusionauth.http.log.Logger;
 public class HTTPRequestProcessor {
   private final int bufferSize;
 
+  // TODO : Should this be sized with a configuration parameter?
   private final StringBuilder builder = new StringBuilder();
 
   private final HTTPServerConfiguration configuration;
@@ -76,6 +77,8 @@ public class HTTPRequestProcessor {
 
   public RequestState processPreambleBytes(ByteBuffer buffer) {
     while (buffer.hasRemaining()) {
+      // TODO : Can we get some performance using ByteBuffer rather than StringBuilder here?
+
       // If there is a state transition, store the value properly and reset the builder (if needed)
       byte ch = buffer.get();
       RequestPreambleState nextState = preambleState.next(ch);

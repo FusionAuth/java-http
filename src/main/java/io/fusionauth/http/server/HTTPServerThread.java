@@ -27,7 +27,6 @@ import java.nio.channels.ServerSocketChannel;
 import java.nio.channels.SocketChannel;
 import java.security.GeneralSecurityException;
 import java.time.Duration;
-import java.util.Iterator;
 
 import io.fusionauth.http.ParseException;
 import io.fusionauth.http.log.Logger;
@@ -142,7 +141,7 @@ public class HTTPServerThread extends Thread implements Closeable, Notifier {
         selector.select(1_000L);
 
         var keys = selector.selectedKeys();
-        Iterator<SelectionKey> iterator = keys.iterator();
+        var iterator = keys.iterator();
         while (iterator.hasNext()) {
           key = iterator.next();
           if (key.isAcceptable()) {
@@ -234,12 +233,7 @@ public class HTTPServerThread extends Thread implements Closeable, Notifier {
                 }
               }
 
-              try {
-                key.channel().close();
-                key.cancel();
-              } catch (Throwable t) {
-                logger.error("Error while closing client connection", t);
-              }
+              cancelAndCloseKey(key);
             });
   }
 
