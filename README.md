@@ -4,36 +4,29 @@
 
 The goal of this project is to build a full-featured HTTP server and client in plain Java without the use of any libraries. The client and server will use non-blocking NIO in order to provide the highest performance possible.
 
-The general requirements and roadmap are as follows:
+## Installation
 
-## Server tasks
+To add this library to your project, you can include this dependency in your Maven POM:
 
-* [x] Basic HTTP 1.1
-* [x] Support Keep-Alive
-* [x] Support Expect-Continue 100
-* [x] Support chunked request
-* [x] Support chunked response
-* [x] Support streaming entity bodies (via chunking likely)
-* [x] Support compression
-* [x] Support cookies in request and response
-* [x] Clean up HTTPRequest
-* [x] Support form data
-* [x] Support multipart form data
-* [x] Support TLS
-* [ ] Support trailers
-* [ ] Support HTTP 2
+```xml
+<dependency>
+  <groupId>io.fusionauth</groupId>
+  <artifactId>java-http</artifactId>
+  <version>0.1.0</version>
+</dependency>
+```
 
-## Client tasks
+If you are using Gradle, you can add this to your build file:
 
-* [ ] Basic HTTP 1.1
-* [ ] Support Keep-Alive
-* [ ] Support TLS
-* [ ] Support HTTP 2
-* [ ] Support Expect-Continue 100
-* [ ] Support chunked request and response
-* [ ] Support streaming entity bodies
-* [ ] Support form data
-* [ ] Support multipart form data
+```groovy
+implementation 'io.fusionauth:java-http:0.1.0'
+```
+
+If you are using Savant, you can add this to your build file:
+
+```groovy
+dependency(id: "io.fusionauth:java-http:0.1.0")
+```
 
 ## Examples Usages:
 
@@ -121,10 +114,42 @@ Here are the current test results:
 
 Netty and Tomcat both seem to suffer from buffering and connection issues at very high scale. Regardless of the configuration, both servers always begins to fail with connection timeout problems at scale. `java-http` does not have these issues because of the way it handles connections via the selector. Connections don't back up and client connection pools can always be re-used with Keep-Alive.
 
+The general requirements and roadmap are as follows:
+
+## Todos and Roadmap
+
+### Server tasks
+
+* [x] Basic HTTP 1.1
+* [x] Support Keep-Alive
+* [x] Support Expect-Continue 100
+* [x] Support chunked request
+* [x] Support chunked response
+* [x] Support streaming entity bodies (via chunking likely)
+* [x] Support compression
+* [x] Support cookies in request and response
+* [x] Clean up HTTPRequest
+* [x] Support form data
+* [x] Support multipart form data
+* [x] Support TLS
+* [ ] Support trailers
+* [ ] Support HTTP 2
+
+### Client tasks
+
+* [ ] Basic HTTP 1.1
+* [ ] Support Keep-Alive
+* [ ] Support TLS
+* [ ] Support HTTP 2
+* [ ] Support Expect-Continue 100
+* [ ] Support chunked request and response
+* [ ] Support streaming entity bodies
+* [ ] Support form data
+* [ ] Support multipart form data
+
 ## Helping out
 
-We are looking for Java developers that are interested in helping us build the client and server. If you know a ton about networks and
-protocols and love writing clean, high-performance Java, contact us at dev@fusionauth.io.
+We are looking for Java developers that are interested in helping us build the client and server. If you know a ton about networks and protocols and love writing clean, high-performance Java, contact us at dev@fusionauth.io.
 
 ## Building with Savant
 
