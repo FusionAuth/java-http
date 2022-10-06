@@ -189,7 +189,7 @@ public class HTTPServerConfiguration implements Configurable<HTTPServerConfigura
    */
   @Override
   public HTTPServerConfiguration withListener(HTTPListenerConfiguration listener) {
-    Objects.requireNonNull(handler, "You cannot set HTTPListenerConfiguration to null");
+    Objects.requireNonNull(listener, "You cannot set HTTPListenerConfiguration to null");
     this.listeners.add(listener);
     return this;
   }
