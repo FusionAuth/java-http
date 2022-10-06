@@ -137,6 +137,12 @@ public class HTTPServerConfiguration implements Configurable<HTTPServerConfigura
    */
   @Override
   public HTTPServerConfiguration withClientTimeout(Duration duration) {
+    Objects.requireNonNull(duration, "You cannot set the client timeout to null");
+    if (duration.isZero() || duration.isNegative()) {
+      throw new IllegalArgumentException("You cannot set the client timeout less than 0");
+    }
+
+
     this.clientTimeoutDuration = duration;
     return this;
   }
@@ -164,6 +170,7 @@ public class HTTPServerConfiguration implements Configurable<HTTPServerConfigura
    */
   @Override
   public HTTPServerConfiguration withHandler(HTTPHandler handler) {
+    Objects.requireNonNull(handler, "You cannot set HTTPHandler to null");
     this.handler = handler;
     return this;
   }
@@ -182,6 +189,7 @@ public class HTTPServerConfiguration implements Configurable<HTTPServerConfigura
    */
   @Override
   public HTTPServerConfiguration withListener(HTTPListenerConfiguration listener) {
+    Objects.requireNonNull(handler, "You cannot set HTTPListenerConfiguration to null");
     this.listeners.add(listener);
     return this;
   }
@@ -191,7 +199,7 @@ public class HTTPServerConfiguration implements Configurable<HTTPServerConfigura
    */
   @Override
   public HTTPServerConfiguration withLoggerFactory(LoggerFactory loggerFactory) {
-    Objects.requireNonNull(loggerFactory);
+    Objects.requireNonNull(loggerFactory, "You cannot set LoggerFactory to null");
     this.loggerFactory = loggerFactory;
     return this;
   }
@@ -201,6 +209,10 @@ public class HTTPServerConfiguration implements Configurable<HTTPServerConfigura
    */
   @Override
   public HTTPServerConfiguration withMaxPreambleLength(int maxLength) {
+    if (maxLength <= 0) {
+      throw new IllegalArgumentException("You cannot set the max preamble length than 0");
+    }
+
     this.maxHeadLength = maxLength;
     return this;
   }
@@ -210,6 +222,10 @@ public class HTTPServerConfiguration implements Configurable<HTTPServerConfigura
    */
   @Override
   public HTTPServerConfiguration withMultipartBufferSize(int multipartBufferSize) {
+    if (multipartBufferSize <= 0) {
+      throw new IllegalArgumentException("You cannot set the multipart buffer size less than 0");
+    }
+
     this.multipartBufferSize = multipartBufferSize;
     return this;
   }
@@ -219,6 +235,10 @@ public class HTTPServerConfiguration implements Configurable<HTTPServerConfigura
    */
   @Override
   public HTTPServerConfiguration withNumberOfWorkerThreads(int numberOfWorkerThreads) {
+    if (numberOfWorkerThreads <= 0) {
+      throw new IllegalArgumentException("You cannot set the number of worker threads less than 0");
+    }
+
     this.numberOfWorkerThreads = numberOfWorkerThreads;
     return this;
   }
@@ -228,6 +248,10 @@ public class HTTPServerConfiguration implements Configurable<HTTPServerConfigura
    */
   @Override
   public HTTPServerConfiguration withPreambleBufferSize(int size) {
+    if (size <= 0) {
+      throw new IllegalArgumentException("You cannot set the preamble buffer size less than 0");
+    }
+
     this.preambleBufferSize = size;
     return this;
   }
@@ -237,6 +261,10 @@ public class HTTPServerConfiguration implements Configurable<HTTPServerConfigura
    */
   @Override
   public HTTPServerConfiguration withRequestBufferSize(int requestBufferSize) {
+    if (requestBufferSize <= 0) {
+      throw new IllegalArgumentException("You cannot set the request buffer size less than 0");
+    }
+
     this.requestBufferSize = requestBufferSize;
     return this;
   }
@@ -246,6 +274,10 @@ public class HTTPServerConfiguration implements Configurable<HTTPServerConfigura
    */
   @Override
   public HTTPServerConfiguration withResponseBufferSize(int responseBufferSize) {
+    if (responseBufferSize <= 0) {
+      throw new IllegalArgumentException("You cannot set the response buffer size less than 0");
+    }
+
     this.responseBufferSize = responseBufferSize;
     return this;
   }
@@ -255,6 +287,12 @@ public class HTTPServerConfiguration implements Configurable<HTTPServerConfigura
    */
   @Override
   public HTTPServerConfiguration withShutdownDuration(Duration duration) {
+    Objects.requireNonNull(duration, "You cannot set the shutdown duration to null");
+
+    if (duration.isZero() || duration.isNegative()) {
+      throw new IllegalArgumentException("You cannot set the shutdown duration less than 0");
+    }
+
     this.shutdownDuration = duration;
     return this;
   }

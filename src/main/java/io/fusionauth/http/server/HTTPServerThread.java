@@ -168,7 +168,10 @@ public class HTTPServerThread extends Thread implements Closeable, Notifier {
         cancelAndCloseKey(key);
       } catch (ParseException pe) {
         logger.debug("The HTTP request was unparseable. These are pretty common with fuzzers/hackers, so we just debug them here.", pe);
-        instrumenter.badRequest();
+        if (instrumenter != null) {
+          instrumenter.badRequest();
+        }
+
         cancelAndCloseKey(key);
       } catch (Throwable t) {
         logger.error("An exception was thrown during processing", t);

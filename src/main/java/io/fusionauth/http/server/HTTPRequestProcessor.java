@@ -120,7 +120,11 @@ public class HTTPRequestProcessor {
           } else {
             logger.debug("Handling body using Chunked data");
             bodyProcessor = new ChunkedBodyProcessor(size);
-            configuration.getInstrumenter().chunkedRequest();
+
+            var instrumenter = configuration.getInstrumenter();
+            if (instrumenter != null) {
+              instrumenter.chunkedRequest();
+            }
           }
 
           // Create the input stream and add any body data that is left over in the buffer
