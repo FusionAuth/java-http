@@ -98,11 +98,64 @@ public class Example {
 }
 ```
 
+### TLS
+
+The HTTP server implements TLS 1.0-1.3 using the Java SSLEngine. To enable TLS for your server, you need to create an `HTTPListenerConfiguration` that includes a certificate and private key. Most production use-cases will use a proxy such as Apache, Nginx, ALBs, etc. In development, it is recommended that you set up self-signed certificates and load those into the HTTP server.
+
+To set up self-signed certificates on macOS, you can use the program `mkcert`. Here is an example:
+
+```shell
+brew install mkcert
+mkcert -install
+mkdir -p ~/dev/certificates
+mkcert -cert-file ~/dev/certificates/example.org.pem -key-file ~/dev/certificates/example.org.key example.org
+```
+
+Now you can load these into the HTTP server like this:
+
+```java
+import java.nio.file.Files;
+import java.nio.file.Paths;
+import java.time.Duration;
+
+import io.fusionauth.http.server.HTTPHandler;
+import io.fusionauth.http.server.HTTPServer;
+
+public class Example {
+  private String certificate;
+
+  private String privateKey;
+
+  public static void main(String[] args) {
+    String homeDir = System.getProperty("user.home");
+    certificate = Files.readString(Paths.get(homeDir + "/dev/certificates/example.org.pem"));
+    privateKey = Files.readString(Paths.get(homeDir + "/dev/certificates/example.org.key"));
+
+    HTTPHandler handler = (req, res) -> {
+      // Handler code goes here
+    };
+
+    HTTPServer server = new HTTPServer().withHandler(handler)
+                                        .withListener(new HTTPListenerConfiguration(4242, certificate, privateKey));
+    // Use server
+    server.close();
+  }
+}
+```
+
+And finally, you'll need to add the domain name to your hosts file to ensure that the SNI lookup handles the certificate correctly. For this example, you would use this entry in the `/etc/hosts` file:
+
+```text
+127.0.0.1 example.org
+```
+
+Then you can open `https://example.org` in a browser or call it using an HTTP client (i.e. Insomnia, Postman, etc or in code).
+
 ## Performance
 
 A key component for this project is to have awesome performance. Here are some basic metrics using the FusionAuth load test suite against a simple application using the Prime Framework MVC. The controller does nothing except return a simple 200. Here are some simple comparisons between `Tomcat`, `Netty`, and `java-http`.
 
-The load test configuration is set to 10 clients with 500,000 requests each. The client is Restify which is a FusionAuth library that uses URLConnection under the hoods. All the servers were HTTP so that TLS would not introduce any additional latency. 
+The load test configuration is set to 10 clients with 500,000 requests each. The client is Restify which is a FusionAuth library that uses URLConnection under the hoods. All the servers were HTTP so that TLS would not introduce any additional latency.
 
 Here are the current test results:
 
