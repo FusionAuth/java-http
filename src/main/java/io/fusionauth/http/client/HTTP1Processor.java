@@ -15,6 +15,7 @@
  */
 package io.fusionauth.http.client;
 
+import java.net.URI;
 import java.nio.ByteBuffer;
 import java.util.ArrayList;
 import java.util.HashMap;
@@ -22,7 +23,7 @@ import java.util.List;
 import java.util.Map;
 import java.util.concurrent.CompletableFuture;
 
-public class HTTPData {
+public class HTTP1Processor {
   public static final int BufferSize = 1024;
 
   public final List<ByteBuffer> buffers = new ArrayList<>();
@@ -39,7 +40,7 @@ public class HTTPData {
 
   public int code;
 
-  public CompletableFuture<Integer> future;
+  public CompletableFuture<HTTPClientResponse> future;
 
   public boolean hasBody;
 
@@ -51,13 +52,21 @@ public class HTTPData {
 
   public String message;
 
+  public String method;
+
   public int offset;
 
-  public String protocl;
+  public int port;
+
+  public String protocol;
+
+  public long read;
 
   public ByteBuffer request;
 
-  public ResponseParserState state = ResponseParserState.ResponseProtocol;
+  public HTTPClientResponseParserState state = HTTPClientResponseParserState.ResponseProtocol;
+
+  public URI url;
 
   public ByteBuffer currentBuffer() {
     ByteBuffer last = buffers.isEmpty() ? null : buffers.get(buffers.size() - 1);
@@ -71,7 +80,13 @@ public class HTTPData {
 
   public boolean isResponseComplete() {
     int index = offset / BufferSize;
-    ByteBuffer buffer = buffers.get(index);
+    ByteBuffer buffer;
+    try {
+      buffer = buffers.get(index);
+    } catch (IndexOutOfBoundsException e) {
+      throw e;
+    }
+
     byte[] array = buffer.array();
     for (int i = 0; i < buffer.position(); i++) {
       if (hasBody) {
@@ -85,12 +100,12 @@ public class HTTPData {
       }
 
       // If there is a state transition, store the value properly and reset the builder (if needed)
-      ResponseParserState nextState = state.next(array[i], headers);
+      HTTPClientResponseParserState nextState = state.next(array[i], headers);
       if (nextState != state) {
         switch (state) {
           case ResponseStatusCode -> code = Integer.parseInt(builder.toString());
           case ResponseStatusMessage -> message = builder.toString();
-          case ResponseProtocol -> protocl = builder.toString();
+          case ResponseProtocol -> protocol = builder.toString();
           case HeaderName -> headerName = builder.toString();
           case HeaderValue -> headers.computeIfAbsent(headerName.toLowerCase(), key -> new ArrayList<>()).add(builder.toString());
         }
@@ -106,15 +121,16 @@ public class HTTPData {
       }
 
       state = nextState;
-      if (state == ResponseParserState.ResponseComplete) {
+      if (state == HTTPClientResponseParserState.ResponseComplete) {
         hasBody = headers.containsKey("content-length");
         bodyOffset = offset;
         bodyLength = Integer.parseInt(headers.get("content-length").get(0));
 
         // If there is a body, we continue in this loop, and we'll keep parsing
-        if (!hasBody) {
-          return true;
-        }
+//        if (!hasBody) {
+//          return true;
+//        }
+        return true;
       }
 
       // Increment the offset across all the buffers
@@ -128,7 +144,7 @@ public class HTTPData {
     lastUsed = System.currentTimeMillis();
   }
 
-  public void reset() {
+  public void  reset() {
     bodyBytes = 0;
     bodyLength = 0;
     bodyOffset = 0;
@@ -141,7 +157,14 @@ public class HTTPData {
     code = 0;
     offset = 0;
     message = null;
-    protocl = null;
-    state = ResponseParserState.ResponseStatusCode;
+    protocol = null;
+    state = HTTPClientResponseParserState.ResponseStatusCode;
+  }
+
+  /**
+   * @return The instant that this processor was last used.
+   */
+  long lastUsed() {
+    return lastUsed;
   }
 }

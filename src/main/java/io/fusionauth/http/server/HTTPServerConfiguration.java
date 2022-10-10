@@ -142,7 +142,6 @@ public class HTTPServerConfiguration implements Configurable<HTTPServerConfigura
       throw new IllegalArgumentException("You cannot set the client timeout less than 0");
     }
 
-
     this.clientTimeoutDuration = duration;
     return this;
   }

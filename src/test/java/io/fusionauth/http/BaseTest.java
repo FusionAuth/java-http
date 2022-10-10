@@ -39,7 +39,7 @@ import static org.testng.Assert.fail;
  *
  * @author Brian Pontarelli
  */
-public class BaseTest {
+public abstract class BaseTest {
   public static String certificate;
 
   public static String privateKey;
@@ -51,12 +51,14 @@ public class BaseTest {
     privateKey = Files.readString(Paths.get(homeDir + "/dev/certificates/fusionauth.key"));
   }
 
-  public HTTPServer makeServer(String scheme, HTTPHandler handler) {
-    return makeServer(scheme, handler, null);
-  }
-
-  public HTTPServer makeServer(String scheme, HTTPHandler handler, Instrumenter instrumenter) {
-    return makeServer(scheme, handler, instrumenter, null);
+  @DataProvider
+  public Object[][] connection() {
+    // TODO: One at a time works, but doing all of them fails with a connection reset issue.
+    return new Object[][]{
+        {""},
+        {"close"},
+        {"keep-alive"}
+    };
   }
 
   @SuppressWarnings("resource")
@@ -77,12 +79,31 @@ public class BaseTest {
                            .withListener(listenerConfiguration);
   }
 
+  public HTTPServer makeServer(String scheme, HTTPHandler handler) {
+    return makeServer(scheme, handler, null);
+  }
+
+  public HTTPServer makeServer(String scheme, HTTPHandler handler, Instrumenter instrumenter) {
+    return makeServer(scheme, handler, instrumenter, null);
+  }
+
   public URI makeURI(String scheme, String params) {
     if (scheme.equals("https")) {
       return URI.create("https://local.fusionauth.io:4242/api/system/version" + params);
     }
 
     return URI.create("http://localhost:4242/api/system/version" + params);
+  }
+
+  /**
+   * @return The possible schemes - {@code http} and {@code https}.
+   */
+  @DataProvider
+  public Object[][] schemes() {
+    return new Object[][]{
+        {"http"},
+        {"https"}
+    };
   }
 
   public void sendBadRequest(String message) {
@@ -97,16 +118,5 @@ public class BaseTest {
     } catch (Exception e) {
       fail(e.getMessage());
     }
-  }
-
-  /**
-   * @return The possible schemes - {@code http} and {@code https}.
-   */
-  @DataProvider
-  public Object[][] schemes() {
-    return new Object[][]{
-        {"http"},
-        {"https"}
-    };
   }
 }

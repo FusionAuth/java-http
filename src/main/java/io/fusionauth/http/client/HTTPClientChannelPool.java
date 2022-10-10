@@ -22,12 +22,12 @@ import java.util.Map;
 import java.util.Queue;
 
 /**
- * Models a pool of available Channels that are already connected to a remote server and are in a Keep-Alive state. At any point, a HTTP client
- * request might check out a Channel from the pool and return it when finished.
+ * Models a pool of available Channels that are already connected to a remote server and are in a Keep-Alive state. At any point, a HTTP
+ * client request might check out a Channel from the pool and return it when finished.
  *
  * @author Brian Pontarelli
  */
-public class ChannelPool {
+public class HTTPClientChannelPool {
   private final Map<String, Queue<SocketChannel>> pool = new HashMap<>();
 
   public synchronized void checkin(String host, SocketChannel channel) {

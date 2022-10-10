@@ -21,10 +21,13 @@ import java.util.Map;
 import io.fusionauth.http.ParseException;
 import io.fusionauth.http.util.HTTPTools;
 
-public enum ResponseParserState {
+/**
+ * @author Brian Pontarelli
+ */
+public enum HTTPClientResponseParserState {
   ResponseProtocol {
     @Override
-    public ResponseParserState next(byte ch, Map<String, List<String>> headers) {
+    public HTTPClientResponseParserState next(byte ch, Map<String, List<String>> headers) {
       if (ch == 'H' || ch == 'T' || ch == 'P' || ch == '/' || ch == '1' || ch == '.') {
         return ResponseProtocol;
       } else if (ch == ' ') {
@@ -42,7 +45,7 @@ public enum ResponseParserState {
 
   ResponseProtocolSP {
     @Override
-    public ResponseParserState next(byte ch, Map<String, List<String>> headers) {
+    public HTTPClientResponseParserState next(byte ch, Map<String, List<String>> headers) {
       if (ch == ' ') {
         return ResponseProtocolSP;
       } else if (HTTPTools.isDigitCharacter(ch)) {
@@ -59,7 +62,7 @@ public enum ResponseParserState {
   },
 
   ResponseStatusCode {
-    public ResponseParserState next(byte ch, Map<String, List<String>> headers) {
+    public HTTPClientResponseParserState next(byte ch, Map<String, List<String>> headers) {
       if (ch == ' ') {
         return ResponseStatusCodeSP;
       } else if (HTTPTools.isDigitCharacter(ch)) {
@@ -76,11 +79,15 @@ public enum ResponseParserState {
 
   ResponseStatusCodeSP {
     @Override
-    public ResponseParserState next(byte ch, Map<String, List<String>> headers) {
+    public HTTPClientResponseParserState next(byte ch, Map<String, List<String>> headers) {
       if (ch == ' ') {
         return ResponseStatusCodeSP;
       } else if (HTTPTools.isValueCharacter(ch)) {
         return ResponseStatusMessage;
+      } else if (ch == '\n') {
+        return ResponseStatusMessageLF;
+      } else if (ch == '\r') {
+        return ResponseStatusMessageCR;
       } else {
         throw new ParseException();
       }
@@ -94,7 +101,7 @@ public enum ResponseParserState {
 
   ResponseStatusMessage {
     @Override
-    public ResponseParserState next(byte ch, Map<String, List<String>> headers) {
+    public HTTPClientResponseParserState next(byte ch, Map<String, List<String>> headers) {
       if (ch == '\r') {
         return ResponseStatusMessageCR;
       } else if (HTTPTools.isValueCharacter(ch)) {
@@ -112,7 +119,7 @@ public enum ResponseParserState {
 
   ResponseStatusMessageCR {
     @Override
-    public ResponseParserState next(byte ch, Map<String, List<String>> headers) {
+    public HTTPClientResponseParserState next(byte ch, Map<String, List<String>> headers) {
       if (ch == '\n') {
         return ResponseStatusMessageLF;
       } else {
@@ -128,7 +135,7 @@ public enum ResponseParserState {
 
   ResponseStatusMessageLF {
     @Override
-    public ResponseParserState next(byte ch, Map<String, List<String>> headers) {
+    public HTTPClientResponseParserState next(byte ch, Map<String, List<String>> headers) {
       if (ch == '\r') {
         return ResponseMessageCR;
       } else if (HTTPTools.isTokenCharacter(ch)) {
@@ -146,7 +153,7 @@ public enum ResponseParserState {
 
   ResponseMessageCR {
     @Override
-    public ResponseParserState next(byte ch, Map<String, List<String>> headers) {
+    public HTTPClientResponseParserState next(byte ch, Map<String, List<String>> headers) {
       if (ch == '\n') {
         return ResponseComplete;
       } else {
@@ -162,7 +169,7 @@ public enum ResponseParserState {
 
   ResponseComplete {
     @Override
-    public ResponseParserState next(byte ch, Map<String, List<String>> headers) {
+    public HTTPClientResponseParserState next(byte ch, Map<String, List<String>> headers) {
       return ResponseComplete;
     }
 
@@ -174,7 +181,7 @@ public enum ResponseParserState {
 
   HeaderName {
     @Override
-    public ResponseParserState next(byte ch, Map<String, List<String>> headers) {
+    public HTTPClientResponseParserState next(byte ch, Map<String, List<String>> headers) {
       if (HTTPTools.isTokenCharacter(ch)) {
         return HeaderName;
       } else if (ch == ':') {
@@ -192,7 +199,7 @@ public enum ResponseParserState {
 
   HeaderColon {
     @Override
-    public ResponseParserState next(byte ch, Map<String, List<String>> headers) {
+    public HTTPClientResponseParserState next(byte ch, Map<String, List<String>> headers) {
       if (ch == ' ') {
         return HeaderColon; // Re-using this state because HeaderSP would be the same
       } else if (HTTPTools.isTokenCharacter(ch)) {
@@ -210,7 +217,7 @@ public enum ResponseParserState {
 
   HeaderValue {
     @Override
-    public ResponseParserState next(byte ch, Map<String, List<String>> headers) {
+    public HTTPClientResponseParserState next(byte ch, Map<String, List<String>> headers) {
       if (ch == '\r') {
         return HeaderCR;
       } else if (HTTPTools.isValueCharacter(ch)) {
@@ -228,7 +235,7 @@ public enum ResponseParserState {
 
   HeaderCR {
     @Override
-    public ResponseParserState next(byte ch, Map<String, List<String>> headers) {
+    public HTTPClientResponseParserState next(byte ch, Map<String, List<String>> headers) {
       if (ch == '\n') {
         return HeaderLF;
       } else {
@@ -244,7 +251,7 @@ public enum ResponseParserState {
 
   HeaderLF {
     @Override
-    public ResponseParserState next(byte ch, Map<String, List<String>> headers) {
+    public HTTPClientResponseParserState next(byte ch, Map<String, List<String>> headers) {
       if (ch == '\r') {
         return ResponseMessageCR;
       } else if (HTTPTools.isTokenCharacter(ch)) {
@@ -260,7 +267,7 @@ public enum ResponseParserState {
     }
   };
 
-  public abstract ResponseParserState next(byte ch, Map<String, List<String>> headers);
+  public abstract HTTPClientResponseParserState next(byte ch, Map<String, List<String>> headers);
 
   public abstract boolean store();
 }
