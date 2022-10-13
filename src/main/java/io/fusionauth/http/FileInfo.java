@@ -54,6 +54,10 @@ public class FileInfo {
     return file;
   }
 
+  public String getFileName() {
+    return fileName;
+  }
+
   public String getName() {
     return name;
   }

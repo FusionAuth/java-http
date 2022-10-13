@@ -389,12 +389,13 @@ public class CoreTest extends BaseTest {
       assertEquals(req.getIPAddress(), "127.0.0.1");
       assertEquals(req.getLocales(), List.of(Locale.ENGLISH, Locale.GERMAN, Locale.FRENCH));
       assertEquals(req.getMethod(), HTTPMethod.GET);
-      assertEquals(req.getParameter("foo"), "bar");
+      assertEquals(req.getParameter("foo "), "bar ");
       assertEquals(req.getPath(), "/api/system/version");
       assertEquals(req.getPort(), 4242);
       assertEquals(req.getProtocol(), "HTTP/1.1");
+      assertEquals(req.getQueryString(), "foo%20=bar%20");
       assertEquals(req.getScheme(), scheme);
-      assertEquals(req.getURLParameter("foo"), "bar");
+      assertEquals(req.getURLParameter("foo "), "bar ");
 
       res.setHeader(Headers.ContentType, "text/plain");
       res.setHeader("Content-Length", "16");
@@ -411,7 +412,7 @@ public class CoreTest extends BaseTest {
 
     try (HTTPServer ignore = makeServer(scheme, handler).start()) {
       var client = HttpClient.newHttpClient();
-      URI uri = makeURI(scheme, "?foo=bar");
+      URI uri = makeURI(scheme, "?foo%20=bar%20");
       HttpRequest request = HttpRequest.newBuilder()
                                        .uri(uri)
                                        .header(Headers.AcceptEncoding, "deflate, compress, br;q=0.5, gzip;q=0.8, identity;q=1.0")

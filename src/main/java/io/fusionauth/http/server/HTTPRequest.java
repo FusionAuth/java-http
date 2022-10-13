@@ -109,6 +109,8 @@ public class HTTPRequest implements Buildable<HTTPRequest> {
 
   private String protocol;
 
+  private String queryString;
+
   private String scheme;
 
   public HTTPRequest() {
@@ -496,7 +498,8 @@ public class HTTPRequest implements Buildable<HTTPRequest> {
     // Parse the parameters
     byte[] chars = path.getBytes(StandardCharsets.UTF_8);
     int questionMark = path.indexOf('?');
-    if (questionMark > 0 && questionMark != path.length() - 1) {
+    if (questionMark > 0 && questionMark != chars.length - 1) {
+      queryString = new String(chars, questionMark + 1, chars.length - questionMark - 1);
       HTTPTools.parseEncodedData(chars, questionMark + 1, chars.length, urlParameters);
     }
 
@@ -519,6 +522,10 @@ public class HTTPRequest implements Buildable<HTTPRequest> {
 
   public void setProtocol(String protocol) {
     this.protocol = protocol;
+  }
+
+  public String getQueryString() {
+    return queryString;
   }
 
   public String getScheme() {
