@@ -193,12 +193,12 @@ The general requirements and roadmap are as follows:
 * [ ] Basic HTTP 1.1
 * [ ] Support Keep-Alive
 * [ ] Support TLS
-* [ ] Support HTTP 2
 * [ ] Support Expect-Continue 100
 * [ ] Support chunked request and response
 * [ ] Support streaming entity bodies
 * [ ] Support form data
 * [ ] Support multipart form data
+* [ ] Support HTTP 2
 
 ## Helping out
 
