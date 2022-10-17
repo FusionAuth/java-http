@@ -21,7 +21,6 @@ import java.io.InputStream;
 import java.io.OutputStream;
 import java.io.Writer;
 import java.net.URI;
-import java.net.http.HttpClient;
 import java.net.http.HttpRequest;
 import java.net.http.HttpRequest.BodyPublishers;
 import java.net.http.HttpResponse.BodySubscribers;
@@ -31,6 +30,7 @@ import java.nio.file.Path;
 import java.nio.file.Paths;
 import java.util.function.Supplier;
 
+import com.inversoft.net.ssl.SSLTools;
 import com.inversoft.rest.RESTClient;
 import com.inversoft.rest.TextResponseHandler;
 import io.fusionauth.http.HTTPValues.Headers;
@@ -88,7 +88,7 @@ public class ChunkedTest extends BaseTest {
     CountingInstrumenter instrumenter = new CountingInstrumenter();
     try (HTTPServer ignore = makeServer(scheme, handler, instrumenter).start()) {
       URI uri = makeURI(scheme, "");
-      var client = HttpClient.newHttpClient();
+      var client = makeClient(scheme, null);
       Supplier<InputStream> supplier = () -> new ByteArrayInputStream(RequestBody.getBytes());
       var response = client.send(
           HttpRequest.newBuilder().uri(uri).header(Headers.ContentType, "application/json").POST(BodyPublishers.ofInputStream(supplier)).build(),
@@ -119,7 +119,7 @@ public class ChunkedTest extends BaseTest {
     CountingInstrumenter instrumenter = new CountingInstrumenter();
     try (HTTPServer ignore = makeServer(scheme, handler, instrumenter).start()) {
       URI uri = makeURI(scheme, "");
-      var client = HttpClient.newHttpClient();
+      var client = makeClient(scheme, null);
       var response = client.send(
           HttpRequest.newBuilder().uri(uri).header(Headers.ContentType, "application/json").GET().build(),
           r -> BodySubscribers.ofString(StandardCharsets.UTF_8)
@@ -153,6 +153,7 @@ public class ChunkedTest extends BaseTest {
 
     CountingInstrumenter instrumenter = new CountingInstrumenter();
     try (HTTPServer ignore = makeServer(scheme, handler, instrumenter).start()) {
+      SSLTools.disableSSLValidation();
       URI uri = makeURI(scheme, "");
       var response = new RESTClient<>(String.class, String.class).url(uri.toString())
                                                                  .get()
@@ -162,6 +163,8 @@ public class ChunkedTest extends BaseTest {
       assertEquals(response.status, 200);
       assertEquals(response.successResponse, html);
       assertEquals(instrumenter.getChunkedResponses(), 1);
+    } finally {
+      SSLTools.enableSSLValidation();
     }
   }
 
@@ -184,7 +187,7 @@ public class ChunkedTest extends BaseTest {
     CountingInstrumenter instrumenter = new CountingInstrumenter();
     try (HTTPServer ignore = makeServer(scheme, handler, instrumenter).start()) {
       URI uri = makeURI(scheme, "");
-      var client = HttpClient.newHttpClient();
+      var client = makeClient(scheme, null);
       var response = client.send(
           HttpRequest.newBuilder().uri(uri).header(Headers.ContentType, "application/json").GET().build(),
           r -> BodySubscribers.ofString(StandardCharsets.UTF_8)
@@ -219,7 +222,7 @@ public class ChunkedTest extends BaseTest {
     CountingInstrumenter instrumenter = new CountingInstrumenter();
     try (HTTPServer ignore = makeServer(scheme, handler, instrumenter).start()) {
       URI uri = makeURI(scheme, "");
-      var client = HttpClient.newHttpClient();
+      var client = makeClient(scheme, null);
       var response = client.send(
           HttpRequest.newBuilder().uri(uri).GET().build(),
           r -> BodySubscribers.ofString(StandardCharsets.UTF_8)
@@ -248,7 +251,7 @@ public class ChunkedTest extends BaseTest {
     CountingInstrumenter instrumenter = new CountingInstrumenter();
     try (HTTPServer ignore = makeServer(scheme, handler, instrumenter).start()) {
       URI uri = makeURI(scheme, "");
-      var client = HttpClient.newHttpClient();
+      var client = makeClient(scheme, null);
       long start = System.currentTimeMillis();
       for (int i = 0; i < 100_000; i++) {
         var response = client.send(

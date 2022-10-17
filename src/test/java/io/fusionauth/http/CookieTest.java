@@ -18,7 +18,6 @@ package io.fusionauth.http;
 import java.net.CookieManager;
 import java.net.HttpCookie;
 import java.net.URI;
-import java.net.http.HttpClient;
 import java.net.http.HttpRequest;
 import java.net.http.HttpResponse.BodySubscribers;
 import java.nio.charset.StandardCharsets;
@@ -242,7 +241,7 @@ public class CookieTest extends BaseTest {
     try (HTTPServer ignore = makeServer(scheme, handler, instrumenter).start()) {
       URI uri = makeURI(scheme, "");
       CookieManager cookieHandler = new CookieManager();
-      var client = HttpClient.newBuilder().cookieHandler(cookieHandler).build();
+      var client = makeClient(scheme, cookieHandler);
       var response = client.send(
           HttpRequest.newBuilder().uri(uri).header(Headers.Cookie, "request=request-value").header(Headers.Cookie, "request-2=request-value-2").header(Headers.ContentType, "application/json").GET().build(),
           r -> BodySubscribers.ofString(StandardCharsets.UTF_8)
@@ -272,7 +271,7 @@ public class CookieTest extends BaseTest {
     try (HTTPServer ignore = makeServer(scheme, handler, instrumenter).start()) {
       URI uri = makeURI(scheme, "");
       CookieManager cookieHandler = new CookieManager();
-      var client = HttpClient.newBuilder().cookieHandler(cookieHandler).build();
+      var client = makeClient(scheme, cookieHandler);
       var response = client.send(
           HttpRequest.newBuilder().uri(uri).header(Headers.Cookie, "request=request-value").header(Headers.ContentType, "application/json").GET().build(),
           r -> BodySubscribers.ofString(StandardCharsets.UTF_8)

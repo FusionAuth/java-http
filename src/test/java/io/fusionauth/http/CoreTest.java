@@ -29,6 +29,7 @@ import java.time.Duration;
 import java.util.List;
 import java.util.Locale;
 
+import com.inversoft.net.ssl.SSLTools;
 import com.inversoft.rest.RESTClient;
 import com.inversoft.rest.TextResponseHandler;
 import io.fusionauth.http.HTTPValues.Connections;
@@ -99,6 +100,7 @@ public class CoreTest extends BaseTest {
     };
 
     try (HTTPServer ignore = makeServer(scheme, handler).withClientTimeout(Duration.ofSeconds(1)).start()) {
+      SSLTools.disableSSLValidation();
       URI uri = makeURI(scheme, "");
       try {
         HttpURLConnection connection = (HttpURLConnection) uri.toURL().openConnection();
@@ -120,6 +122,8 @@ public class CoreTest extends BaseTest {
         // Expected
         e.printStackTrace();
       }
+    } finally {
+      SSLTools.enableSSLValidation();
     }
   }
 
@@ -132,7 +136,7 @@ public class CoreTest extends BaseTest {
 
     try (HTTPServer ignore = makeServer(scheme, handler).start()) {
       URI uri = makeURI(scheme, "");
-      var client = HttpClient.newHttpClient();
+      var client = makeClient(scheme, null);
       var response = client.send(
           HttpRequest.newBuilder().uri(uri).header(Headers.ContentType, "").POST(BodyPublishers.noBody()).build(),
           r -> BodySubscribers.ofString(StandardCharsets.UTF_8)
@@ -152,7 +156,7 @@ public class CoreTest extends BaseTest {
 
     try (HTTPServer ignore = makeServer(scheme, handler).start()) {
       URI uri = makeURI(scheme, "");
-      var client = HttpClient.newHttpClient();
+      var client = makeClient(scheme, null);
       var response = client.send(
           HttpRequest.newBuilder().uri(uri).header(Headers.ContentType, "; charset=UTF-16").POST(BodyPublishers.noBody()).build(),
           r -> BodySubscribers.ofString(StandardCharsets.UTF_8)
@@ -170,7 +174,7 @@ public class CoreTest extends BaseTest {
 
     try (HTTPServer ignore = makeServer(scheme, handler).start()) {
       URI uri = makeURI(scheme, "");
-      var client = HttpClient.newHttpClient();
+      var client = makeClient(scheme, null);
       var response = client.send(
           HttpRequest.newBuilder().uri(uri).GET().build(),
           r -> BodySubscribers.ofString(StandardCharsets.UTF_8)
@@ -188,7 +192,7 @@ public class CoreTest extends BaseTest {
 
     try (HTTPServer ignore = makeServer(scheme, handler).start()) {
       URI uri = makeURI(scheme, "");
-      var client = HttpClient.newHttpClient();
+      var client = makeClient(scheme, null);
       var response = client.send(
           HttpRequest.newBuilder().uri(uri).header(Headers.ContentType, "application/json").POST(BodyPublishers.ofString(RequestBody)).build(),
           r -> BodySubscribers.ofString(StandardCharsets.UTF_8)
@@ -224,7 +228,7 @@ public class CoreTest extends BaseTest {
 
     try (HTTPServer ignore = makeServer(scheme, handler).start()) {
       URI uri = makeURI(scheme, "");
-      var client = HttpClient.newHttpClient();
+      var client = makeClient(scheme, null);
       var response = client.send(
           HttpRequest.newBuilder()
                      .uri(uri)
@@ -262,7 +266,7 @@ public class CoreTest extends BaseTest {
     CountingInstrumenter instrumenter = new CountingInstrumenter();
     try (HTTPServer ignore = makeServer(scheme, handler, instrumenter).start()) {
       URI uri = makeURI(scheme, "");
-      var client = HttpClient.newHttpClient();
+      var client = makeClient(scheme, null);
       long start = System.currentTimeMillis();
       for (int i = 0; i < iterations; i++) {
         var response = client.send(
@@ -306,7 +310,7 @@ public class CoreTest extends BaseTest {
     CountingInstrumenter instrumenter = new CountingInstrumenter();
     try (HTTPServer ignore = makeServer(scheme, handler, instrumenter).start()) {
       URI uri = makeURI(scheme, "");
-      var client = HttpClient.newHttpClient();
+      var client = makeClient(scheme, null);
       long start = System.currentTimeMillis();
       for (int i = 0; i < iterations; i++) {
         var response = client.send(
@@ -349,6 +353,7 @@ public class CoreTest extends BaseTest {
     };
 
     try (HTTPServer ignore = makeServer(scheme, handler).start()) {
+      SSLTools.disableSSLValidation();
       URI uri = makeURI(scheme, "");
       var response = new RESTClient<>(String.class, String.class).url(uri.toString())
                                                                  .connectTimeout(600_000)
@@ -359,9 +364,12 @@ public class CoreTest extends BaseTest {
                                                                  .go();
       assertEquals(response.status, 200);
       assertEquals(response.successResponse, ExpectedResponse);
+    } finally {
+      SSLTools.enableSSLValidation();
     }
 
     try (HTTPServer ignore = makeServer(scheme, handler).start()) {
+      SSLTools.disableSSLValidation();
       URI uri = makeURI(scheme, "");
       var response = new RESTClient<>(String.class, String.class).url(uri.toString())
                                                                  .connectTimeout(600_000)
@@ -372,6 +380,8 @@ public class CoreTest extends BaseTest {
                                                                  .go();
       assertEquals(response.status, 200);
       assertEquals(response.successResponse, ExpectedResponse);
+    } finally {
+      SSLTools.enableSSLValidation();
     }
   }
 
@@ -411,7 +421,7 @@ public class CoreTest extends BaseTest {
     };
 
     try (HTTPServer ignore = makeServer(scheme, handler).start()) {
-      var client = HttpClient.newHttpClient();
+      var client = makeClient(scheme, null);
       URI uri = makeURI(scheme, "?foo%20=bar%20");
       HttpRequest request = HttpRequest.newBuilder()
                                        .uri(uri)
@@ -446,13 +456,15 @@ public class CoreTest extends BaseTest {
       }
     };
 
+    keyPair = generateNewRSAKeyPair();
+    certificate = generateSelfSignedCertificate(keyPair.getPublic(), keyPair.getPrivate());
     try (HTTPServer ignore = new HTTPServer().withHandler(handler)
                                              .withNumberOfWorkerThreads(1)
                                              .withListener(new HTTPListenerConfiguration(4242))
                                              .withListener(new HTTPListenerConfiguration(4243))
-                                             .withListener(new HTTPListenerConfiguration(4244, certificate, privateKey))
+                                             .withListener(new HTTPListenerConfiguration(4244, certificate, keyPair.getPrivate()))
                                              .start()) {
-      var client = HttpClient.newHttpClient();
+      var client = makeClient("https", null);
       URI uri = URI.create("http://localhost:4242/api/system/version?foo=bar");
       HttpRequest request = HttpRequest.newBuilder().uri(uri).GET().build();
       var response = client.send(request, r -> BodySubscribers.ofString(StandardCharsets.UTF_8));
@@ -508,7 +520,7 @@ public class CoreTest extends BaseTest {
     };
 
     try (HTTPServer ignore = makeServer(scheme, handler).start()) {
-      var client = HttpClient.newHttpClient();
+      var client = makeClient(scheme, null);
       URI uri = makeURI(scheme, "?foo=bar");
       var response = client.send(
           HttpRequest.newBuilder().uri(uri).header(Headers.ContentType, "application/json").POST(BodyPublishers.ofString(RequestBody)).build(),
@@ -526,7 +538,7 @@ public class CoreTest extends BaseTest {
 
     try (HTTPServer ignore = makeServer(scheme, handler).start()) {
       URI uri = makeURI(scheme, "");
-      var client = HttpClient.newHttpClient();
+      var client = makeClient(scheme, null);
       var response = client.send(
           HttpRequest.newBuilder().uri(uri).header(Headers.ContentType, "application/json").POST(BodyPublishers.ofString(RequestBody)).build(),
           r -> BodySubscribers.ofString(StandardCharsets.UTF_8)
@@ -556,7 +568,7 @@ public class CoreTest extends BaseTest {
 
     try (HTTPServer ignore = makeServer(scheme, handler).start()) {
       URI uri = makeURI(scheme, "");
-      var client = HttpClient.newHttpClient();
+      var client = makeClient(scheme, null);
       var response = client.send(
           HttpRequest.newBuilder().uri(uri).header(Headers.ContentType, "application/json").POST(BodyPublishers.ofString(RequestBody)).build(),
           r -> BodySubscribers.ofString(StandardCharsets.UTF_16)

@@ -19,7 +19,6 @@ import java.io.IOException;
 import java.io.InputStream;
 import java.io.OutputStream;
 import java.net.URI;
-import java.net.http.HttpClient;
 import java.net.http.HttpRequest;
 import java.net.http.HttpResponse.BodySubscribers;
 import java.nio.charset.StandardCharsets;
@@ -80,7 +79,7 @@ public class CompressionTest extends BaseTest {
     CountingInstrumenter instrumenter = new CountingInstrumenter();
     try (HTTPServer ignore = makeServer(scheme, handler, instrumenter).start()) {
       URI uri = makeURI(scheme, "");
-      var client = HttpClient.newHttpClient();
+      var client = makeClient(scheme, null);
       var response = client.send(
           HttpRequest.newBuilder().header(Headers.AcceptEncoding, "deflate, gzip").uri(uri).GET().build(),
           r -> BodySubscribers.ofInputStream()
@@ -116,7 +115,7 @@ public class CompressionTest extends BaseTest {
     CountingInstrumenter instrumenter = new CountingInstrumenter();
     try (HTTPServer ignore = makeServer(scheme, handler, instrumenter).start()) {
       URI uri = makeURI(scheme, "");
-      var client = HttpClient.newHttpClient();
+      var client = makeClient(scheme, null);
       var response = client.send(
           HttpRequest.newBuilder().header(Headers.AcceptEncoding, "gzip, deflate").uri(uri).GET().build(),
           r -> BodySubscribers.ofInputStream()
@@ -152,7 +151,7 @@ public class CompressionTest extends BaseTest {
     CountingInstrumenter instrumenter = new CountingInstrumenter();
     try (HTTPServer ignore = makeServer(scheme, handler, instrumenter).start()) {
       URI uri = makeURI(scheme, "");
-      var client = HttpClient.newHttpClient();
+      var client = makeClient(scheme, null);
       var response = client.send(
           HttpRequest.newBuilder().uri(uri).GET().build(),
           r -> BodySubscribers.ofString(StandardCharsets.UTF_8)

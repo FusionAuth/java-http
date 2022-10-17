@@ -18,12 +18,12 @@ package io.fusionauth.http;
 import java.io.IOException;
 import java.io.OutputStream;
 import java.net.URI;
-import java.net.http.HttpClient;
 import java.net.http.HttpRequest;
 import java.net.http.HttpRequest.BodyPublishers;
 import java.net.http.HttpResponse.BodySubscribers;
 import java.nio.charset.StandardCharsets;
 import java.nio.file.Files;
+import java.security.GeneralSecurityException;
 import java.util.List;
 import java.util.Map;
 
@@ -55,7 +55,7 @@ public class MultipartTest extends BaseTest {
   public static final String ExpectedResponse = "{\"version\":\"42\"}";
 
   @Test(dataProvider = "schemes")
-  public void post(String scheme) throws IOException, InterruptedException {
+  public void post(String scheme) throws IOException, InterruptedException, GeneralSecurityException {
     HTTPHandler handler = (req, res) -> {
       System.out.println("Handling");
       assertEquals(req.getContentType(), "multipart/form-data");
@@ -89,7 +89,7 @@ public class MultipartTest extends BaseTest {
     CountingInstrumenter instrumenter = new CountingInstrumenter();
     try (HTTPServer ignore = makeServer(scheme, handler, instrumenter).start()) {
       URI uri = makeURI(scheme, "");
-      var client = HttpClient.newHttpClient();
+      var client = makeClient(scheme, null);
       var response = client.send(
           HttpRequest.newBuilder().uri(uri).header(Headers.ContentType, "multipart/form-data; boundary=----WebKitFormBoundaryTWfMVJErBoLURJIe").POST(BodyPublishers.ofString(Body)).build(),
           r -> BodySubscribers.ofString(StandardCharsets.UTF_8)

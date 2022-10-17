@@ -16,7 +16,6 @@
 package io.fusionauth.http;
 
 import java.net.URI;
-import java.net.http.HttpClient;
 import java.net.http.HttpRequest;
 import java.net.http.HttpRequest.BodyPublishers;
 import java.net.http.HttpResponse.BodySubscribers;
@@ -56,7 +55,7 @@ public class ParameterTest extends BaseTest {
     CountingInstrumenter instrumenter = new CountingInstrumenter();
     try (HTTPServer ignore = makeServer(scheme, handler, instrumenter).start()) {
       URI uri = makeURI(scheme, "?one=two&three=four");
-      var client = HttpClient.newHttpClient();
+      var client = makeClient(scheme, null);
       var response = client.send(
           HttpRequest.newBuilder().uri(uri).header(Headers.ContentType, ContentTypes.Form).POST(BodyPublishers.ofString("one=again&five=six&seven=eight")).build(),
           r -> BodySubscribers.ofString(StandardCharsets.UTF_8)
@@ -81,7 +80,7 @@ public class ParameterTest extends BaseTest {
     CountingInstrumenter instrumenter = new CountingInstrumenter();
     try (HTTPServer ignore = makeServer(scheme, handler, instrumenter).start()) {
       URI uri = makeURI(scheme, "?one=two&three=four");
-      var client = HttpClient.newHttpClient();
+      var client = makeClient(scheme, null);
       var response = client.send(
           HttpRequest.newBuilder().uri(uri).GET().build(),
           r -> BodySubscribers.ofString(StandardCharsets.UTF_8)

@@ -17,7 +17,12 @@ package io.fusionauth.http.server;
 
 import java.net.InetAddress;
 import java.net.UnknownHostException;
+import java.security.GeneralSecurityException;
+import java.security.PrivateKey;
+import java.security.cert.Certificate;
 import java.util.Objects;
+
+import io.fusionauth.http.security.SecurityTools;
 
 /**
  * A listener configuration that is used to construct the HTTP server and bind various listeners.
@@ -27,11 +32,11 @@ import java.util.Objects;
 public class HTTPListenerConfiguration {
   private final InetAddress bindAddress;
 
-  private final String certificate;
+  private final Certificate certificate;
 
   private final int port;
 
-  private final String privateKey;
+  private final PrivateKey privateKey;
 
   private final boolean tls;
 
@@ -55,8 +60,27 @@ public class HTTPListenerConfiguration {
    * @param port        The port of this listener.
    * @param certificate The certificate as a PEM encoded X.509 certificate String.
    * @param privateKey  The private key as a PKCS8 encoded DER private key.
+   * @throws GeneralSecurityException If the private key or certificate Strings were not valid and could not be parsed.
    */
-  public HTTPListenerConfiguration(int port, String certificate, String privateKey) {
+  public HTTPListenerConfiguration(int port, String certificate, String privateKey) throws GeneralSecurityException {
+    Objects.requireNonNull(certificate);
+    Objects.requireNonNull(privateKey);
+
+    this.bindAddress = allInterfaces();
+    this.port = port;
+    this.tls = true;
+    this.certificate = SecurityTools.parseCertificate(certificate);
+    this.privateKey = SecurityTools.parsePrivateKey(privateKey);
+  }
+
+  /**
+   * Stores the configuration for a single HTTP listener for the server. This constructor sets up a TLS based listener.
+   *
+   * @param port        The port of this listener.
+   * @param certificate The certificate Object.
+   * @param privateKey  The private key Object.
+   */
+  public HTTPListenerConfiguration(int port, Certificate certificate, PrivateKey privateKey) {
     Objects.requireNonNull(certificate);
     Objects.requireNonNull(privateKey);
 
@@ -90,8 +114,30 @@ public class HTTPListenerConfiguration {
    * @param port        The port of this listener.
    * @param certificate The certificate as a PEM ecnoded X.509 certificate String.
    * @param privateKey  The private key as a PKCS8 encoded DER private key.
+   * @throws GeneralSecurityException If the private key or certificate Strings were not valid and could not be parsed.
    */
-  public HTTPListenerConfiguration(InetAddress bindAddress, int port, String certificate, String privateKey) {
+  public HTTPListenerConfiguration(InetAddress bindAddress, int port, String certificate, String privateKey)
+      throws GeneralSecurityException {
+    Objects.requireNonNull(bindAddress);
+    Objects.requireNonNull(certificate);
+    Objects.requireNonNull(privateKey);
+
+    this.bindAddress = bindAddress;
+    this.port = port;
+    this.tls = true;
+    this.certificate = SecurityTools.parseCertificate(certificate);
+    this.privateKey = SecurityTools.parsePrivateKey(privateKey);
+  }
+
+  /**
+   * Stores the configuration for a single HTTP listener for the server. This constructor sets up a TLS based listener.
+   *
+   * @param bindAddress The bind address of this listener.
+   * @param port        The port of this listener.
+   * @param certificate The certificate Object.
+   * @param privateKey  The private key Object.
+   */
+  public HTTPListenerConfiguration(InetAddress bindAddress, int port, Certificate certificate, PrivateKey privateKey) {
     Objects.requireNonNull(bindAddress);
     Objects.requireNonNull(certificate);
     Objects.requireNonNull(privateKey);
@@ -107,7 +153,7 @@ public class HTTPListenerConfiguration {
     return bindAddress;
   }
 
-  public String getCertificate() {
+  public Certificate getCertificate() {
     return certificate;
   }
 
@@ -115,7 +161,7 @@ public class HTTPListenerConfiguration {
     return port;
   }
 
-  public String getPrivateKey() {
+  public PrivateKey getPrivateKey() {
     return privateKey;
   }
 

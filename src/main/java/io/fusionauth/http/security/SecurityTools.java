@@ -15,9 +15,9 @@
  */
 package io.fusionauth.http.security;
 
-import javax.net.ssl.KeyManager;
 import javax.net.ssl.KeyManagerFactory;
 import javax.net.ssl.SSLContext;
+import javax.net.ssl.TrustManagerFactory;
 import java.io.ByteArrayInputStream;
 import java.io.IOException;
 import java.security.GeneralSecurityException;
@@ -28,7 +28,6 @@ import java.security.PrivateKey;
 import java.security.cert.Certificate;
 import java.security.cert.CertificateException;
 import java.security.cert.CertificateFactory;
-import java.security.cert.X509Certificate;
 import java.security.interfaces.RSAPrivateKey;
 import java.security.spec.InvalidKeySpecException;
 import java.security.spec.PKCS8EncodedKeySpec;
@@ -57,46 +56,31 @@ public final class SecurityTools {
   }
 
   /**
-   * This creates an in-memory keystore containing the certificate and private key and initializes the SSLContext with the key material it
-   * contains.
+   * This creates an in-memory trust store containing the certificate and initializes the SSLContext with it.
    *
-   * @param certificateString A PEM formatted Certificate.
-   * @param keyString         A PKCS8 PEM formatted Private Key.
-   * @return A SSLContext configured with the Certificate and Private Key.
+   * @param certificate A Certificate object.
+   * @return A SSLContext configured with the Certificate.
    */
-  public static SSLContext getServerContext(String certificateString, String keyString) throws GeneralSecurityException, IOException {
-    byte[] certBytes = parseDERFromPEM(certificateString, CERT_START, CERT_END);
-    byte[] keyBytes = parseDERFromPEM(keyString, P8_KEY_START, P8_KEY_END);
-
-    X509Certificate cert = generateCertificateFromDER(certBytes);
-    PrivateKey key = generatePrivateKeyFromPKCS8DER(keyBytes);
+  public static SSLContext clientContext(Certificate certificate) throws GeneralSecurityException, IOException {
     KeyStore keystore = KeyStore.getInstance("JKS");
     keystore.load(null);
-    keystore.setCertificateEntry("cert-alias", cert);
-    keystore.setKeyEntry("key-alias", key, "changeit".toCharArray(), new Certificate[]{cert});
+    keystore.setCertificateEntry("cert-alias", certificate);
 
-    KeyManagerFactory kmf = KeyManagerFactory.getInstance("SunX509");
-    kmf.init(keystore, "changeit".toCharArray());
-
-    KeyManager[] km = kmf.getKeyManagers();
+    TrustManagerFactory tmf = TrustManagerFactory.getInstance("SunX509");
+    tmf.init(keystore);
 
     SSLContext context = SSLContext.getInstance("TLS");
-    context.init(km, null, null);
+    context.init(null, tmf.getTrustManagers(), null);
     return context;
   }
 
-  private static X509Certificate generateCertificateFromDER(byte[] certBytes) throws CertificateException {
+  public static Certificate parseCertificate(String certificate) throws CertificateException {
     CertificateFactory factory = CertificateFactory.getInstance("X.509");
-    return (X509Certificate) factory.generateCertificate(new ByteArrayInputStream(certBytes));
+    byte[] certBytes = parseDERFromPEM(certificate, CERT_START, CERT_END);
+    return factory.generateCertificate(new ByteArrayInputStream(certBytes));
   }
 
-  private static RSAPrivateKey generatePrivateKeyFromPKCS8DER(byte[] keyBytes) throws InvalidKeySpecException, NoSuchAlgorithmException {
-    PKCS8EncodedKeySpec spec = new PKCS8EncodedKeySpec(keyBytes);
-    KeyFactory factory = KeyFactory.getInstance("RSA");
-    return (RSAPrivateKey) factory.generatePrivate(spec);
-  }
-
-  private static byte[] parseDERFromPEM(String pem, String beginDelimiter, String endDelimiter) {
+  public static byte[] parseDERFromPEM(String pem, String beginDelimiter, String endDelimiter) {
     int startIndex = pem.indexOf(beginDelimiter);
     if (startIndex < 0) {
       throw new IllegalArgumentException("Invalid PEM format");
@@ -110,5 +94,34 @@ public final class SecurityTools {
     // Strip all the whitespace since the PEM and DER allow them but they aren't valid in Base 64 encoding
     String base64 = pem.substring(startIndex + beginDelimiter.length(), endIndex).replaceAll("\\s", "");
     return Base64.getDecoder().decode(base64);
+  }
+
+  public static RSAPrivateKey parsePrivateKey(String privateKey) throws InvalidKeySpecException, NoSuchAlgorithmException {
+    byte[] keyBytes = parseDERFromPEM(privateKey, P8_KEY_START, P8_KEY_END);
+    PKCS8EncodedKeySpec spec = new PKCS8EncodedKeySpec(keyBytes);
+    KeyFactory factory = KeyFactory.getInstance("RSA");
+    return (RSAPrivateKey) factory.generatePrivate(spec);
+  }
+
+  /**
+   * This creates an in-memory keystore containing the certificate and private key and initializes the SSLContext with the key material it
+   * contains.
+   *
+   * @param certificate A Certificate object.
+   * @param privateKey  A PrivateKey object.
+   * @return A SSLContext configured with the Certificate and Private Key.
+   */
+  public static SSLContext serverContext(Certificate certificate, PrivateKey privateKey) throws GeneralSecurityException, IOException {
+    KeyStore keystore = KeyStore.getInstance("JKS");
+    keystore.load(null);
+    keystore.setCertificateEntry("cert-alias", certificate);
+    keystore.setKeyEntry("key-alias", privateKey, "changeit".toCharArray(), new Certificate[]{certificate});
+
+    KeyManagerFactory kmf = KeyManagerFactory.getInstance("SunX509");
+    kmf.init(keystore, "changeit".toCharArray());
+
+    SSLContext context = SSLContext.getInstance("TLS");
+    context.init(kmf.getKeyManagers(), null, null);
+    return context;
   }
 }

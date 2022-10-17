@@ -18,19 +18,41 @@ package io.fusionauth.http;
 import java.io.IOException;
 import java.io.InputStream;
 import java.io.OutputStream;
+import java.math.BigInteger;
+import java.net.CookieHandler;
 import java.net.Socket;
 import java.net.URI;
-import java.nio.file.Files;
-import java.nio.file.Paths;
+import java.net.http.HttpClient;
+import java.security.GeneralSecurityException;
+import java.security.KeyPair;
+import java.security.KeyPairGenerator;
+import java.security.NoSuchAlgorithmException;
+import java.security.PrivateKey;
+import java.security.PublicKey;
+import java.security.cert.Certificate;
 import java.time.Duration;
+import java.time.Instant;
+import java.util.Date;
+import java.util.UUID;
 
+import io.fusionauth.http.security.SecurityTools;
 import io.fusionauth.http.server.ExpectValidator;
 import io.fusionauth.http.server.HTTPHandler;
 import io.fusionauth.http.server.HTTPListenerConfiguration;
 import io.fusionauth.http.server.HTTPServer;
 import io.fusionauth.http.server.Instrumenter;
-import org.testng.annotations.BeforeSuite;
 import org.testng.annotations.DataProvider;
+import sun.security.util.KnownOIDs;
+import sun.security.util.ObjectIdentifier;
+import sun.security.x509.AlgorithmId;
+import sun.security.x509.CertificateAlgorithmId;
+import sun.security.x509.CertificateSerialNumber;
+import sun.security.x509.CertificateValidity;
+import sun.security.x509.CertificateVersion;
+import sun.security.x509.CertificateX509Key;
+import sun.security.x509.X500Name;
+import sun.security.x509.X509CertImpl;
+import sun.security.x509.X509CertInfo;
 import static org.testng.Assert.assertEquals;
 import static org.testng.Assert.fail;
 
@@ -40,23 +62,29 @@ import static org.testng.Assert.fail;
  * @author Brian Pontarelli
  */
 public class BaseTest {
-  public static String certificate;
+  public Certificate certificate;
 
-  public static String privateKey;
+  public KeyPair keyPair;
 
-  @BeforeSuite
-  public static void loadFiles() throws IOException {
-    String homeDir = System.getProperty("user.home");
-    certificate = Files.readString(Paths.get(homeDir + "/dev/certificates/fusionauth.pem"));
-    privateKey = Files.readString(Paths.get(homeDir + "/dev/certificates/fusionauth.key"));
-  }
+  public HttpClient makeClient(String scheme, CookieHandler cookieHandler) throws GeneralSecurityException, IOException {
+    var builder = HttpClient.newBuilder();
+    if (scheme.equals("https")) {
+      builder.sslContext(SecurityTools.clientContext(certificate));
+    }
 
-  public HTTPServer makeServer(String scheme, HTTPHandler handler) {
-    return makeServer(scheme, handler, null);
+    if (cookieHandler != null) {
+      builder.cookieHandler(cookieHandler);
+    }
+
+    return builder.build();
   }
 
   public HTTPServer makeServer(String scheme, HTTPHandler handler, Instrumenter instrumenter) {
     return makeServer(scheme, handler, instrumenter, null);
+  }
+
+  public HTTPServer makeServer(String scheme, HTTPHandler handler) {
+    return makeServer(scheme, handler, null);
   }
 
   @SuppressWarnings("resource")
@@ -64,7 +92,9 @@ public class BaseTest {
     boolean tls = scheme.equals("https");
     HTTPListenerConfiguration listenerConfiguration;
     if (tls) {
-      listenerConfiguration = new HTTPListenerConfiguration(4242, certificate, privateKey);
+      keyPair = generateNewRSAKeyPair();
+      certificate = generateSelfSignedCertificate(keyPair.getPublic(), keyPair.getPrivate());
+      listenerConfiguration = new HTTPListenerConfiguration(4242, certificate, keyPair.getPrivate());
     } else {
       listenerConfiguration = new HTTPListenerConfiguration(4242);
     }
@@ -85,6 +115,17 @@ public class BaseTest {
     return URI.create("http://localhost:4242/api/system/version" + params);
   }
 
+  /**
+   * @return The possible schemes - {@code http} and {@code https}.
+   */
+  @DataProvider
+  public Object[][] schemes() {
+    return new Object[][]{
+        {"http"},
+        {"https"}
+    };
+  }
+
   public void sendBadRequest(String message) {
     try (Socket socket = new Socket("127.0.0.1", 4242); OutputStream os = socket.getOutputStream(); InputStream is = socket.getInputStream()) {
       os.write(message.getBytes());
@@ -99,14 +140,35 @@ public class BaseTest {
     }
   }
 
-  /**
-   * @return The possible schemes - {@code http} and {@code https}.
-   */
-  @DataProvider
-  public Object[][] schemes() {
-    return new Object[][]{
-        {"http"},
-        {"https"}
-    };
+  protected KeyPair generateNewRSAKeyPair() {
+    try {
+      KeyPairGenerator keyPairGenerator = KeyPairGenerator.getInstance("RSA");
+      keyPairGenerator.initialize(2048);
+      return keyPairGenerator.generateKeyPair();
+    } catch (NoSuchAlgorithmException e) {
+      throw new RuntimeException(e);
+    }
+  }
+
+  protected Certificate generateSelfSignedCertificate(PublicKey publicKey, PrivateKey privateKey)
+      throws IllegalArgumentException {
+    try {
+      X509CertInfo certInfo = new X509CertInfo();
+      CertificateX509Key certKey = new CertificateX509Key(publicKey);
+      certInfo.set(X509CertInfo.KEY, certKey);
+      // X.509 Certificate version 2 (0 based)
+      certInfo.set(X509CertInfo.VERSION, new CertificateVersion(1));
+      certInfo.set(X509CertInfo.ALGORITHM_ID, new CertificateAlgorithmId(new AlgorithmId(ObjectIdentifier.of(KnownOIDs.SHA256withRSA))));
+      certInfo.set(X509CertInfo.ISSUER, new X500Name("CN=local.fusionauth.io"));
+      certInfo.set(X509CertInfo.SUBJECT, new X500Name("CN=local.fusionauth.io"));
+      certInfo.set(X509CertInfo.VALIDITY, new CertificateValidity(Date.from(Instant.now().minusSeconds(30)), Date.from(Instant.now().plusSeconds(10_000))));
+      certInfo.set(X509CertInfo.SERIAL_NUMBER, new CertificateSerialNumber(new BigInteger(UUID.randomUUID().toString().replace("-", ""), 16)));
+
+      X509CertImpl impl = new X509CertImpl(certInfo);
+      impl.sign(privateKey, "SHA256withRSA");
+      return impl;
+    } catch (Exception e) {
+      throw new IllegalArgumentException(e);
+    }
   }
 }
