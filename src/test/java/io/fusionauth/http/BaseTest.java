@@ -71,11 +71,23 @@ import static org.testng.Assert.fail;
  * @author Brian Pontarelli
  */
 public abstract class BaseTest {
+  /**
+   * This timeout is used for the HttpClient during each test. If you are in a debugger, you will need to change this timeout to be much
+   * larger, otherwise, the client might truncate the request to the server.
+   */
+  public static final Duration ClientTimeout = Duration.ofSeconds(2);
+
+  /**
+   * This timeout is used for the HTTPServer during each test. If you are in a debugger, you will need to change this timeout to be much
+   * larger, otherwise, the server will toss out the request.
+   */
+  public static final Duration ServerTimeout = Duration.ofSeconds(2);
+
+  public static AccumulatingLogger logger = (AccumulatingLogger) AccumulatingLoggerFactory.FACTORY.getLogger(BaseTest.class);
+
   public Certificate certificate;
 
   public KeyPair keyPair;
-
-  public static AccumulatingLogger logger = (AccumulatingLogger) AccumulatingLoggerFactory.FACTORY.getLogger(BaseTest.class);
 
   static {
     logger.setLevel(Level.Trace);
@@ -104,7 +116,7 @@ public abstract class BaseTest {
       builder.cookieHandler(cookieHandler);
     }
 
-    return builder.build();
+    return builder.connectTimeout(ClientTimeout).build();
   }
 
   public HTTPServer makeServer(String scheme, HTTPHandler handler, Instrumenter instrumenter) {
@@ -128,7 +140,7 @@ public abstract class BaseTest {
     }
 
     return new HTTPServer().withHandler(handler)
-                           .withClientTimeout(Duration.ofSeconds(600_000L))
+                           .withClientTimeout(ServerTimeout)
                            .withExpectValidator(expectValidator)
                            .withInstrumenter(instrumenter)
                            .withLoggerFactory(AccumulatingLoggerFactory.FACTORY)
