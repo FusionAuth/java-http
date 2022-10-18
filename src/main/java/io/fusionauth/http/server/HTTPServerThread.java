@@ -27,6 +27,7 @@ import java.nio.channels.ServerSocketChannel;
 import java.nio.channels.SocketChannel;
 import java.security.GeneralSecurityException;
 import java.time.Duration;
+import java.util.List;
 
 import io.fusionauth.http.ParseException;
 import io.fusionauth.http.log.Logger;
@@ -57,6 +58,8 @@ public class HTTPServerThread extends Thread implements Closeable, Notifier {
 
   private final ThreadPool threadPool;
 
+  private volatile boolean running = true;
+
   public HTTPServerThread(HTTPServerConfiguration configuration, HTTPListenerConfiguration listenerConfiguration, ThreadPool threadPool)
       throws IOException {
     super("HTTP Server Thread");
@@ -81,6 +84,14 @@ public class HTTPServerThread extends Thread implements Closeable, Notifier {
 
   @Override
   public void close() {
+    try {
+      running = false;
+      selector.wakeup();
+      join(2_000L);
+    } catch (InterruptedException e) {
+      logger.error("Unable to shutdown the HTTP server thread after waiting for 2 seconds. 🤷🏻‍️");
+    }
+
     // Close all the client connections as cleanly as possible
     var keys = selector.keys();
     for (SelectionKey key : keys) {
@@ -109,7 +120,7 @@ public class HTTPServerThread extends Thread implements Closeable, Notifier {
     }
 
     // Update the keys based on any changes to the processor state
-    var keys = selector.keys();
+    var keys = List.copyOf(selector.keys());
     for (SelectionKey key : keys) {
       HTTPProcessor processor = (HTTPProcessor) key.attachment();
       if (processor != null) {
@@ -130,14 +141,9 @@ public class HTTPServerThread extends Thread implements Closeable, Notifier {
 
   @Override
   public void run() {
-    while (true) {
+    while (running) {
       SelectionKey key = null;
       try {
-        // If the selector has been closed, shut the thread down
-        if (!selector.isOpen()) {
-          return;
-        }
-
         selector.select(1_000L);
 
         var keys = selector.selectedKeys();

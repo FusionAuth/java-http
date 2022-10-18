@@ -16,20 +16,17 @@
 package io.fusionauth.http.log;
 
 /**
- * A simple logger that spits out messages to System.out.
+ * Simple implementation of the LoggerFactory that always returns the same instance of a {@link AccumulatingLogger}.
  *
  * @author Brian Pontarelli
  */
-public class SystemOutLogger extends BaseLogger {
-  public static Level LEVEL = Level.Info;
+public class AccumulatingLoggerFactory implements LoggerFactory {
+  public static final AccumulatingLoggerFactory FACTORY = new AccumulatingLoggerFactory();
+
+  private static final AccumulatingLogger logger = new AccumulatingLogger();
 
   @Override
-  protected int getLevelOrdinal() {
-    return SystemOutLogger.LEVEL.ordinal();
-  }
-
-  @Override
-  protected void handleMessage(String message) {
-    System.out.println(message);
+  public Logger getLogger(Class<?> klass) {
+    return logger;
   }
 }

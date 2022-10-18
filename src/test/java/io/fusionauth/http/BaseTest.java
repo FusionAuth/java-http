@@ -23,6 +23,8 @@ import java.net.CookieHandler;
 import java.net.Socket;
 import java.net.URI;
 import java.net.http.HttpClient;
+import java.nio.file.Files;
+import java.nio.file.Path;
 import java.security.GeneralSecurityException;
 import java.security.KeyPair;
 import java.security.KeyPairGenerator;
@@ -35,13 +37,20 @@ import java.time.Instant;
 import java.util.Date;
 import java.util.UUID;
 
+import io.fusionauth.http.log.AccumulatingLogger;
+import io.fusionauth.http.log.AccumulatingLoggerFactory;
+import io.fusionauth.http.log.Level;
 import io.fusionauth.http.security.SecurityTools;
 import io.fusionauth.http.server.ExpectValidator;
 import io.fusionauth.http.server.HTTPHandler;
 import io.fusionauth.http.server.HTTPListenerConfiguration;
 import io.fusionauth.http.server.HTTPServer;
 import io.fusionauth.http.server.Instrumenter;
+import org.testng.ITestListener;
+import org.testng.ITestResult;
+import org.testng.annotations.BeforeMethod;
 import org.testng.annotations.DataProvider;
+import sun.misc.Signal;
 import sun.security.util.KnownOIDs;
 import sun.security.util.ObjectIdentifier;
 import sun.security.x509.AlgorithmId;
@@ -65,6 +74,25 @@ public abstract class BaseTest {
   public Certificate certificate;
 
   public KeyPair keyPair;
+
+  public static AccumulatingLogger logger = (AccumulatingLogger) AccumulatingLoggerFactory.FACTORY.getLogger(BaseTest.class);
+
+  static {
+    logger.setLevel(Level.Trace);
+    Signal.handle(new Signal("USR1"), signal -> {
+      try {
+        Path logFile = Path.of("build/logs.txt");
+        if (Files.isRegularFile(logFile)) {
+          Files.delete(logFile);
+        }
+
+        Files.createFile(logFile);
+        Files.writeString(logFile, logger.toString());
+      } catch (IOException e) {
+        throw new RuntimeException(e);
+      }
+    });
+  }
 
   public HttpClient makeClient(String scheme, CookieHandler cookieHandler) throws GeneralSecurityException, IOException {
     var builder = HttpClient.newBuilder();
@@ -103,6 +131,7 @@ public abstract class BaseTest {
                            .withClientTimeout(Duration.ofSeconds(600_000L))
                            .withExpectValidator(expectValidator)
                            .withInstrumenter(instrumenter)
+                           .withLoggerFactory(AccumulatingLoggerFactory.FACTORY)
                            .withNumberOfWorkerThreads(1)
                            .withListener(listenerConfiguration);
   }
@@ -113,6 +142,11 @@ public abstract class BaseTest {
     }
 
     return URI.create("http://localhost:4242/api/system/version" + params);
+  }
+
+  @BeforeMethod
+  public void resetLogger() {
+    logger.reset();
   }
 
   /**
@@ -169,6 +203,19 @@ public abstract class BaseTest {
       return impl;
     } catch (Exception e) {
       throw new IllegalArgumentException(e);
+    }
+  }
+
+  @SuppressWarnings("unused")
+  public static class TestListener implements ITestListener {
+    @Override
+    public void onTestFailure(ITestResult result) {
+      result.getThrowable().printStackTrace();
+    }
+
+    @Override
+    public void onTestStart(ITestResult result) {
+      System.out.println("Running " + result.getTestClass().getName() + "#" + result.getName());
     }
   }
 }

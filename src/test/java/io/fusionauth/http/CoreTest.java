@@ -34,8 +34,6 @@ import com.inversoft.rest.RESTClient;
 import com.inversoft.rest.TextResponseHandler;
 import io.fusionauth.http.HTTPValues.Connections;
 import io.fusionauth.http.HTTPValues.Headers;
-import io.fusionauth.http.log.Level;
-import io.fusionauth.http.log.SystemOutLogger;
 import io.fusionauth.http.server.CountingInstrumenter;
 import io.fusionauth.http.server.HTTPHandler;
 import io.fusionauth.http.server.HTTPListenerConfiguration;
@@ -58,7 +56,6 @@ public class CoreTest extends BaseTest {
   static {
     System.setProperty("sun.net.http.retryPost", "false");
     System.setProperty("jdk.httpclient.allowRestrictedHeaders", "connection");
-    SystemOutLogger.level = Level.Info;
   }
 
   @Test

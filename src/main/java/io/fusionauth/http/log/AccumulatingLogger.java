@@ -15,21 +15,29 @@
  */
 package io.fusionauth.http.log;
 
+import java.util.ArrayList;
+import java.util.List;
+
 /**
- * A simple logger that spits out messages to System.out.
+ * A logger that accumulates the log messages into an ArrayList that can later be output to a file or output to the console. Great for
+ * testing when sysout logging would be way too spammy.
  *
  * @author Brian Pontarelli
  */
-public class SystemOutLogger extends BaseLogger {
-  public static Level LEVEL = Level.Info;
+public class AccumulatingLogger extends BaseLogger {
+  private final List<String> messages = new ArrayList<>();
+
+  public void reset() {
+    messages.clear();
+  }
 
   @Override
-  protected int getLevelOrdinal() {
-    return SystemOutLogger.LEVEL.ordinal();
+  public String toString() {
+    return String.join("\n", messages);
   }
 
   @Override
   protected void handleMessage(String message) {
-    System.out.println(message);
+    messages.add(message);
   }
 }

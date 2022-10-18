@@ -23,7 +23,6 @@ import java.net.http.HttpRequest.BodyPublishers;
 import java.net.http.HttpResponse.BodySubscribers;
 import java.nio.charset.StandardCharsets;
 import java.nio.file.Files;
-import java.security.GeneralSecurityException;
 import java.util.List;
 import java.util.Map;
 
@@ -55,7 +54,7 @@ public class MultipartTest extends BaseTest {
   public static final String ExpectedResponse = "{\"version\":\"42\"}";
 
   @Test(dataProvider = "schemes")
-  public void post(String scheme) throws IOException, InterruptedException, GeneralSecurityException {
+  public void post(String scheme) throws Exception {
     HTTPHandler handler = (req, res) -> {
       System.out.println("Handling");
       assertEquals(req.getContentType(), "multipart/form-data");

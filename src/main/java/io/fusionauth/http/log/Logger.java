@@ -94,4 +94,11 @@ public interface Logger {
    * @param message The message.
    */
   void trace(String message);
+
+  /**
+   * Sets the level of this logger (optional method).
+   *
+   * @param level The level.
+   */
+  void setLevel(Level level);
 }
