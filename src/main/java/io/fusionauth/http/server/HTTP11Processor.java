@@ -193,9 +193,8 @@ public class HTTP11Processor implements HTTPProcessor {
   public ProcessorState wrote(long num) {
     markUsed();
 
-    logger.trace("(W)");
-
     if (num > 0) {
+      logger.trace("(W)");
       response.setCommitted(true);
     }
 

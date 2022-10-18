@@ -23,8 +23,6 @@ import java.net.CookieHandler;
 import java.net.Socket;
 import java.net.URI;
 import java.net.http.HttpClient;
-import java.nio.file.Files;
-import java.nio.file.Path;
 import java.security.GeneralSecurityException;
 import java.security.KeyPair;
 import java.security.KeyPairGenerator;
@@ -50,7 +48,6 @@ import org.testng.ITestListener;
 import org.testng.ITestResult;
 import org.testng.annotations.BeforeMethod;
 import org.testng.annotations.DataProvider;
-import sun.misc.Signal;
 import sun.security.util.KnownOIDs;
 import sun.security.util.ObjectIdentifier;
 import sun.security.x509.AlgorithmId;
@@ -91,19 +88,6 @@ public abstract class BaseTest {
 
   static {
     logger.setLevel(Level.Trace);
-    Signal.handle(new Signal("USR1"), signal -> {
-      try {
-        Path logFile = Path.of("build/logs.txt");
-        if (Files.isRegularFile(logFile)) {
-          Files.delete(logFile);
-        }
-
-        Files.createFile(logFile);
-        Files.writeString(logFile, logger.toString());
-      } catch (IOException e) {
-        throw new RuntimeException(e);
-      }
-    });
   }
 
   public HttpClient makeClient(String scheme, CookieHandler cookieHandler) throws GeneralSecurityException, IOException {
@@ -223,6 +207,8 @@ public abstract class BaseTest {
     @Override
     public void onTestFailure(ITestResult result) {
       result.getThrowable().printStackTrace();
+      System.out.println("Trace");
+      System.out.println(logger.toString());
     }
 
     @Override
