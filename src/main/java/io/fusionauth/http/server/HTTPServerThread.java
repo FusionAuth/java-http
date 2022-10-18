@@ -218,6 +218,10 @@ public class HTTPServerThread extends Thread implements Closeable, Notifier {
         }
 
         key.cancel();
+
+        if (client.validOps() != SelectionKey.OP_ACCEPT && instrumenter != null) {
+          instrumenter.connectionClosed();
+        }
       } catch (Throwable t) {
         logger.error("An exception was thrown while trying to cancel a SelectionKey and close a channel with a client due to an exception being thrown for that specific client. Enable debug logging to see the error", t);
       }

@@ -18,7 +18,7 @@ package io.fusionauth.http;
 import java.io.IOException;
 import java.io.OutputStream;
 import java.io.Writer;
-import java.net.HttpURLConnection;
+import java.net.Socket;
 import java.net.URI;
 import java.net.http.HttpClient;
 import java.net.http.HttpRequest;
@@ -50,6 +50,8 @@ import static org.testng.Assert.fail;
  */
 public class CoreTest extends BaseTest {
   public static final String ExpectedResponse = "{\"version\":\"42\"}";
+
+  public static final String LongString = "12345678901234567890123456789012345678901234567890123456789012345678901234567890123456789012345678901234567890123456789012345678901234567890123456789012345678901234567890123456789012345678901234567890123456789012345678901234567890123456789012345678901234567890".repeat(64);
 
   public static final String RequestBody = "{\"message\":\"Hello World\"";
 
@@ -87,8 +89,8 @@ public class CoreTest extends BaseTest {
     assertEquals(instrumenter.getBadRequests(), 1);
   }
 
-  @Test(dataProvider = "schemes")
-  public void clientTimeout(String scheme) {
+  @Test
+  public void clientTimeout() throws Exception {
     HTTPHandler handler = (req, res) -> {
       System.out.println("Handling");
       res.setStatus(200);
@@ -96,31 +98,21 @@ public class CoreTest extends BaseTest {
       res.getOutputStream().close();
     };
 
-    try (HTTPServer ignore = makeServer(scheme, handler).withClientTimeout(Duration.ofSeconds(1)).start()) {
-      SSLTools.disableSSLValidation();
-      URI uri = makeURI(scheme, "");
-      try {
-        HttpURLConnection connection = (HttpURLConnection) uri.toURL().openConnection();
-        connection.setConnectTimeout(10_000);
-        connection.setReadTimeout(10_000);
-        connection.setDoInput(true);
-        connection.setDoOutput(true);
-        connection.setRequestMethod("POST");
-        connection.addRequestProperty("Content-Length", "42");
-        connection.connect();
-        var os = connection.getOutputStream();
-        os.write("start".getBytes());
-        os.flush();
-        sleep(3_000L);
-        os.write("more".getBytes());
-        connection.getResponseCode(); // Should fail on the read
-        fail("Should have timed out");
-      } catch (Exception e) {
-        // Expected
-        e.printStackTrace();
-      }
-    } finally {
-      SSLTools.enableSSLValidation();
+    var instrumenter = new CountingInstrumenter();
+    try (HTTPServer ignore = makeServer("http", handler, instrumenter).withClientTimeout(Duration.ofSeconds(1)).start(); Socket socket = new Socket("127.0.0.1", 4242)) {
+      var out = socket.getOutputStream();
+      out.write("""
+          GET / HTTP/1.1\r
+          Content-Length: 4\r
+          \r
+          body
+          """.getBytes());
+      out.flush();
+      sleep(3_000L);
+
+      var in = socket.getInputStream();
+      assertEquals(in.read(), -1);
+      assertEquals(instrumenter.getClosedConnections(), 1);
     }
   }
 
@@ -202,16 +194,14 @@ public class CoreTest extends BaseTest {
   @Test(dataProvider = "schemes")
   public void hugeHeaders(String scheme) throws Exception {
     // 260 characters for a total of 16,640 bytes per header value. 5 headers for a total of 83,200 bytes
-    String headerValue = "12345678901234567890123456789012345678901234567890123456789012345678901234567890123456789012345678901234567890123456789012345678901234567890123456789012345678901234567890123456789012345678901234567890123456789012345678901234567890123456789012345678901234567890".repeat(64);
-
     HTTPHandler handler = (req, res) -> {
       res.setHeader(Headers.ContentType, "text/plain");
       res.setHeader("Content-Length", "16");
-      res.setHeader("X-Huge-Header-1", headerValue);
-      res.setHeader("X-Huge-Header-2", headerValue);
-      res.setHeader("X-Huge-Header-3", headerValue);
-      res.setHeader("X-Huge-Header-4", headerValue);
-      res.setHeader("X-Huge-Header-5", headerValue);
+      res.setHeader("X-Huge-Header-1", LongString);
+      res.setHeader("X-Huge-Header-2", LongString);
+      res.setHeader("X-Huge-Header-3", LongString);
+      res.setHeader("X-Huge-Header-4", LongString);
+      res.setHeader("X-Huge-Header-5", LongString);
       res.setStatus(200);
 
       try {
@@ -229,11 +219,11 @@ public class CoreTest extends BaseTest {
       var response = client.send(
           HttpRequest.newBuilder()
                      .uri(uri)
-                     .header("X-Huge-Header-1", headerValue)
-                     .header("X-Huge-Header-2", headerValue)
-                     .header("X-Huge-Header-3", headerValue)
-                     .header("X-Huge-Header-4", headerValue)
-                     .header("X-Huge-Header-5", headerValue)
+                     .header("X-Huge-Header-1", LongString)
+                     .header("X-Huge-Header-2", LongString)
+                     .header("X-Huge-Header-3", LongString)
+                     .header("X-Huge-Header-4", LongString)
+                     .header("X-Huge-Header-5", LongString)
                      .POST(BodyPublishers.ofString(RequestBody))
                      .build(),
           r -> BodySubscribers.ofString(StandardCharsets.UTF_8)

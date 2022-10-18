@@ -31,9 +31,11 @@ public class CountingInstrumenter implements Instrumenter {
 
   private long chunkedResponses;
 
-  private int connections;
+  private long closedConnections;
 
-  private int startedCount;
+  private long connections;
+
+  private long startedCount;
 
   @Override
   public void acceptedConnection() {
@@ -53,6 +55,11 @@ public class CountingInstrumenter implements Instrumenter {
   @Override
   public void chunkedResponse() {
     chunkedResponses++;
+  }
+
+  @Override
+  public void connectionClosed() {
+    closedConnections++;
   }
 
   public long getBadRequests() {
@@ -75,11 +82,15 @@ public class CountingInstrumenter implements Instrumenter {
     return chunkedResponses;
   }
 
-  public int getConnections() {
+  public long getClosedConnections() {
+    return closedConnections;
+  }
+
+  public long getConnections() {
     return connections;
   }
 
-  public int getStartedCount() {
+  public long getStartedCount() {
     return startedCount;
   }
 

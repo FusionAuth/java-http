@@ -42,6 +42,11 @@ public interface Instrumenter {
   void chunkedResponse();
 
   /**
+   * Called when a connection is closed due to an issue or a timeout.
+   */
+  void connectionClosed();
+
+  /**
    * Called when bytes are read from a client.
    *
    * @param bytes The number of bytes read.
