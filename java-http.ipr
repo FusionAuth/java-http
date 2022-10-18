@@ -12,6 +12,16 @@
   <component name="InspectionProjectProfileManager">
     <profile version="1.0">
       <option name="myName" value="Project Default" />
+      <inspection_tool class="groupsTestNG" enabled="true" level="WARNING" enabled_by_default="true">
+        <option name="groups">
+          <value>
+            <list size="2">
+              <item index="0" class="java.lang.String" itemvalue="performance" />
+              <item index="1" class="java.lang.String" itemvalue="unit" />
+            </list>
+          </value>
+        </option>
+      </inspection_tool>
     </profile>
     <version value="1.0" />
   </component>

@@ -246,7 +246,7 @@ public class CoreTest extends BaseTest {
     }
   }
 
-  @Test(dataProvider = "schemes")
+  @Test(dataProvider = "schemes", groups = "performance")
   public void performance(String scheme) throws Exception {
     HTTPHandler handler = (req, res) -> {
       res.setHeader(Headers.ContentType, "text/plain");
@@ -290,7 +290,7 @@ public class CoreTest extends BaseTest {
     assertEquals(instrumenter.getConnections(), 1);
   }
 
-  @Test(dataProvider = "schemes")
+  @Test(dataProvider = "schemes", groups = "performance")
   public void performanceNoKeepAlive(String scheme) throws Exception {
     HTTPHandler handler = (req, res) -> {
       res.setHeader(Headers.ContentType, "text/plain");

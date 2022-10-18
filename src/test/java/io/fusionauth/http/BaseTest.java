@@ -61,7 +61,7 @@ import static org.testng.Assert.fail;
  *
  * @author Brian Pontarelli
  */
-public class BaseTest {
+public abstract class BaseTest {
   public Certificate certificate;
 
   public KeyPair keyPair;

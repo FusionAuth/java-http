@@ -233,7 +233,7 @@ public class ChunkedTest extends BaseTest {
     }
   }
 
-  @Test(dataProvider = "schemes")
+  @Test(dataProvider = "schemes", groups = "performance")
   public void performanceChunked(String scheme) throws Exception {
     HTTPHandler handler = (req, res) -> {
       res.setHeader(Headers.ContentType, "text/plain");
