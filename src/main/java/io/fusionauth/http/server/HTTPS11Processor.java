@@ -255,13 +255,11 @@ public class HTTPS11Processor implements HTTPProcessor {
       myAppData[0].clear(); // TODO : Always clear for the handshake??
       plainTextBuffers = myAppData;
     } else {
-      logger.trace("(HTTPS-W-RQ)");
       handshakeState = null;
       plainTextBuffers = delegate.writeBuffers();
     }
 
     if (plainTextBuffers == null) {
-      logger.trace("(HTTPS-W-NULL)");
       return null;
     }
 
@@ -277,6 +275,7 @@ public class HTTPS11Processor implements HTTPProcessor {
     } else if (result.getStatus() == Status.BUFFER_UNDERFLOW) {
       throw new IllegalStateException("A buffer underflow is not expected during a wrap operation according to the Javadoc. Maybe this is something we need to fix.");
     } else {
+      logger.trace("(HTTPS-W-RQ)");
       myNetData[0].flip();
     }
 

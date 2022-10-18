@@ -108,12 +108,12 @@ public abstract class BaseLogger implements Logger {
     PrintWriter pw = new PrintWriter(writer);
     t.printStackTrace(pw);
     pw.flush();
-    return message + "\n" + writer;
+    return timestamp() + message + "\n" + writer;
   }
 
   protected String format(String message, Object... values) {
     if (values.length == 0) {
-      return message;
+      return timestamp() + message;
     }
 
     for (Object value : values) {
@@ -121,12 +121,16 @@ public abstract class BaseLogger implements Logger {
       message = message.replaceFirst("\\{}", replacement);
     }
 
-    return message;
+    return timestamp() + message;
+  }
+
+  protected int getLevelOrdinal() {
+    return level.ordinal();
   }
 
   protected abstract void handleMessage(String message);
 
-  protected int getLevelOrdinal() {
-    return level.ordinal();
+  protected String timestamp() {
+    return System.currentTimeMillis() + " ";
   }
 }
