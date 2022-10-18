@@ -330,7 +330,11 @@ public class HTTPS11Processor implements HTTPProcessor {
       } while (newTLSStatus == HandshakeStatus.NEED_TASK);
     }
 
-    if (newTLSStatus == HandshakeStatus.NEED_UNWRAP || newTLSStatus == HandshakeStatus.NEED_UNWRAP_AGAIN) {
+    if (newTLSStatus == HandshakeStatus.NEED_UNWRAP_AGAIN) {
+      throw new IllegalStateException("The NEED_UNWRAP_AGAIN state should not happen in HTTPS");
+    }
+
+    if (newTLSStatus == HandshakeStatus.NEED_UNWRAP) {
       logger.trace("(HTTPS-HS-R)");
       handshakeState = ProcessorState.Read;
     } else if (newTLSStatus == HandshakeStatus.NEED_WRAP) {

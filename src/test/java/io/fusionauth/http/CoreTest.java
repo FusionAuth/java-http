@@ -111,7 +111,7 @@ public class CoreTest extends BaseTest {
         var os = connection.getOutputStream();
         os.write("start".getBytes());
         os.flush();
-        sleep(3_500L);
+        sleep(3_000L);
         os.write("more".getBytes());
         connection.getResponseCode(); // Should fail on the read
         fail("Should have timed out");

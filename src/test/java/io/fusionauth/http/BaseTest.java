@@ -213,7 +213,15 @@ public abstract class BaseTest {
 
     @Override
     public void onTestStart(ITestResult result) {
-      System.out.println("Running " + result.getTestClass().getName() + "#" + result.getName());
+      String message = "Running " + result.getTestClass().getName() + "#" + result.getName();
+      if (result.getParameters() != null && result.getParameters().length == 1) {
+        String parameter = result.getParameters()[0].toString();
+        if (parameter.length() < 10) {
+          message += "(" + parameter + ")";
+        }
+      }
+
+      System.out.println(message);
     }
   }
 }
