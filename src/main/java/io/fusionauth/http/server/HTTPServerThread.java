@@ -234,6 +234,12 @@ public class HTTPServerThread extends Thread implements Closeable, Notifier {
             .filter(key -> ((HTTPProcessor) key.attachment()).lastUsed() < now - clientTimeout.toMillis())
             .forEach(key -> {
               var client = (SocketChannel) key.channel();
+              try {
+                System.out.println("Closing client connection [" + client.getRemoteAddress().toString() + "] due to inactivity");
+              } catch (IOException e) {
+                throw new RuntimeException(e);
+              }
+
               if (logger.isDebuggable()) {
                 try {
                   logger.debug("Closing client connection [{}] due to inactivity", client.getRemoteAddress().toString());
