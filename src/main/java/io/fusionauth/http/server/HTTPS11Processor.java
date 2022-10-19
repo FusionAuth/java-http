@@ -200,7 +200,14 @@ public class HTTPS11Processor implements HTTPProcessor {
 
     logger.trace("(HTTPS-HS-UW){}", peerNetData);
     var newTLSStatus = result.getHandshakeStatus();
-    return handleHandshake(newTLSStatus);
+    var newState = handleHandshake(newTLSStatus);
+
+    // Sometimes the peer network side still has more handshake data and/or request data, so we can recurse to handle whatever is remaining
+    if (handshakeState == ProcessorState.Read && peerNetData.position() > 0) {
+      return read(peerNetData);
+    }
+
+    return newState;
   }
 
   @Override
