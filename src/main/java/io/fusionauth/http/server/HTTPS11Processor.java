@@ -198,6 +198,7 @@ public class HTTPS11Processor implements HTTPProcessor {
       return delegate.read(decryptBuffer);
     }
 
+    logger.trace("(HTTPS-HS-UW){}", peerNetData);
     var newTLSStatus = result.getHandshakeStatus();
     return handleHandshake(newTLSStatus);
   }

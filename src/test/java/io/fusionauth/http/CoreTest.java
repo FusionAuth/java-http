@@ -34,6 +34,7 @@ import com.inversoft.rest.RESTClient;
 import com.inversoft.rest.TextResponseHandler;
 import io.fusionauth.http.HTTPValues.Connections;
 import io.fusionauth.http.HTTPValues.Headers;
+import io.fusionauth.http.log.AccumulatingLoggerFactory;
 import io.fusionauth.http.server.CountingInstrumenter;
 import io.fusionauth.http.server.HTTPHandler;
 import io.fusionauth.http.server.HTTPListenerConfiguration;
@@ -446,10 +447,11 @@ public class CoreTest extends BaseTest {
     keyPair = generateNewRSAKeyPair();
     certificate = generateSelfSignedCertificate(keyPair.getPublic(), keyPair.getPrivate());
     try (HTTPServer ignore = new HTTPServer().withHandler(handler)
-                                             .withNumberOfWorkerThreads(1)
                                              .withListener(new HTTPListenerConfiguration(4242))
                                              .withListener(new HTTPListenerConfiguration(4243))
                                              .withListener(new HTTPListenerConfiguration(4244, certificate, keyPair.getPrivate()))
+                                             .withLoggerFactory(AccumulatingLoggerFactory.FACTORY)
+                                             .withNumberOfWorkerThreads(1)
                                              .start()) {
       var client = makeClient("https", null);
       URI uri = URI.create("http://localhost:4242/api/system/version?foo=bar");
