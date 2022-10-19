@@ -152,7 +152,7 @@ public class HTTPS11Processor implements HTTPProcessor {
     ByteBuffer decryptBuffer;
     if (tlsStatus != HandshakeStatus.NOT_HANDSHAKING && tlsStatus != HandshakeStatus.FINISHED) {
       logger.trace("(HTTPS-R-HS)" + tlsStatus);
-      decryptBuffer = peerAppData;
+      decryptBuffer = peerAppData.clear();
     } else {
       logger.trace("(HTTPS-R-RQ)");
       handshakeState = null;
@@ -315,6 +315,10 @@ public class HTTPS11Processor implements HTTPProcessor {
   }
 
   private ProcessorState handleHandshake(HandshakeStatus newTLSStatus) throws IOException {
+    if (newTLSStatus == HandshakeStatus.NEED_UNWRAP_AGAIN) {
+      throw new IllegalStateException("The NEED_UNWRAP_AGAIN state should not happen in HTTPS");
+    }
+
     if (newTLSStatus == HandshakeStatus.NEED_TASK) {
       logger.trace("(HTTPS-HS-T)");
 
@@ -328,10 +332,6 @@ public class HTTPS11Processor implements HTTPProcessor {
           executor.submit(task);
         }
       } while (newTLSStatus == HandshakeStatus.NEED_TASK);
-    }
-
-    if (newTLSStatus == HandshakeStatus.NEED_UNWRAP_AGAIN) {
-      throw new IllegalStateException("The NEED_UNWRAP_AGAIN state should not happen in HTTPS");
     }
 
     if (newTLSStatus == HandshakeStatus.NEED_UNWRAP) {
