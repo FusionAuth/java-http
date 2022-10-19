@@ -206,9 +206,12 @@ public abstract class BaseTest {
   public static class TestListener implements ITestListener {
     @Override
     public void onTestFailure(ITestResult result) {
-      result.getThrowable().printStackTrace();
+      result.getThrowable().printStackTrace(System.out);
+      System.out.flush();
       System.out.println("Trace");
+      System.out.flush();
       System.out.println(logger.toString());
+      System.out.flush();
     }
 
     @Override
