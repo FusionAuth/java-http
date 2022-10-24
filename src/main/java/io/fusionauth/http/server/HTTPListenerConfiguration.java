@@ -15,11 +15,15 @@
  */
 package io.fusionauth.http.server;
 
+import java.net.Inet6Address;
 import java.net.InetAddress;
-import java.net.UnknownHostException;
+import java.net.InterfaceAddress;
+import java.net.NetworkInterface;
 import java.security.GeneralSecurityException;
 import java.security.PrivateKey;
 import java.security.cert.Certificate;
+import java.util.Collection;
+import java.util.Collections;
 import java.util.Objects;
 
 import io.fusionauth.http.security.SecurityTools;
@@ -171,8 +175,17 @@ public class HTTPListenerConfiguration {
 
   private InetAddress allInterfaces() {
     try {
-      return InetAddress.getByName("::");
-    } catch (UnknownHostException e) {
+      boolean ipv6Supported = Collections.list(NetworkInterface.getNetworkInterfaces()).stream()
+                                         .map(NetworkInterface::getInterfaceAddresses)
+                                         .flatMap(Collection::stream)
+                                         .map(InterfaceAddress::getAddress)
+                                         .anyMatch(i -> !i.isLoopbackAddress() && i instanceof Inet6Address);
+      if (ipv6Supported) {
+        return InetAddress.getByName("::");
+      }
+
+      return InetAddress.getByName("0.0.0.0");
+    } catch (Exception e) {
       throw new IllegalStateException(e);
     }
   }

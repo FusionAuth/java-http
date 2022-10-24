@@ -16,7 +16,7 @@
 restifyVersion = "4.1.2"
 testngVersion = "7.3.0"
 
-project(group: "io.fusionauth", name: "java-http", version: "0.1.4", licenses: ["ApacheV2_0"]) {
+project(group: "io.fusionauth", name: "java-http", version: "0.1.5", licenses: ["ApacheV2_0"]) {
   workflow {
     fetch {
       cache()
@@ -44,11 +44,11 @@ project(group: "io.fusionauth", name: "java-http", version: "0.1.4", licenses: [
 }
 
 // Plugins
-dependency = loadPlugin(id: "org.savantbuild.plugin:dependency:2.0.0-RC.1")
-java = loadPlugin(id: "org.savantbuild.plugin:java:2.0.0-RC.1")
+dependency = loadPlugin(id: "org.savantbuild.plugin:dependency:2.0.0-RC.2")
+java = loadPlugin(id: "org.savantbuild.plugin:java:2.0.0-RC.2")
 javaTestNG = loadPlugin(id: "org.savantbuild.plugin:java-testng:2.0.0-RC.3")
-idea = loadPlugin(id: "org.savantbuild.plugin:idea:2.0.0-RC.1")
-release = loadPlugin(id: "org.savantbuild.plugin:release-git:2.0.0-RC.1")
+idea = loadPlugin(id: "org.savantbuild.plugin:idea:2.0.0-RC.2")
+release = loadPlugin(id: "org.savantbuild.plugin:release-git:2.0.0-RC.2")
 
 java.settings.javaVersion = "17"
 java.settings.compilerArguments = "--add-exports java.base/sun.security.x509=ALL-UNNAMED --add-exports java.base/sun.security.util=ALL-UNNAMED -XDignore.symbol.file"
