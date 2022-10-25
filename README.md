@@ -206,7 +206,7 @@ Project Loom is an exciting development which brings a lot of great new features
 
 However, this project doesn't currently use Loom. As of Java 19, Loom is a preview release only. Therefore, you can't use it without compiled code that is difficult to use in future Java LTS releases.
 
-This project is anchored to features in Java LTS releases only to balance use of new, awesome language features and future proofing.
+This project is anchored to features in Java LTS releases only to balance use of new, awesome language features and future proofing. When Loom functionality is in the next Java LTS, it'll be evaluated for use.
 
 ## Helping out
 
