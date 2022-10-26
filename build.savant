@@ -16,7 +16,7 @@
 restifyVersion = "4.1.2"
 testngVersion = "7.3.0"
 
-project(group: "io.fusionauth", name: "java-http", version: "0.1.5", licenses: ["ApacheV2_0"]) {
+project(group: "io.fusionauth", name: "java-http", version: "0.1.6", licenses: ["ApacheV2_0"]) {
   workflow {
     fetch {
       cache()
@@ -32,7 +32,7 @@ project(group: "io.fusionauth", name: "java-http", version: "0.1.5", licenses: [
   }
 
   dependencies {
-    group(name: "test-compile") {
+    group(name: "test-compile", export: false) {
       dependency(id: "com.inversoft:restify:${restifyVersion}")
       dependency(id: "org.testng:testng:${testngVersion}")
     }
