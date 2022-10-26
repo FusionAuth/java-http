@@ -211,8 +211,8 @@ We are looking for Java developers that are interested in helping us build the c
 ```bash
 $ mkdir ~/savant
 $ cd ~/savant
-$ wget http://savant.inversoft.org/org/savantbuild/savant-core/1.0.0/savant-1.0.0.tar.gz
-$ tar xvfz savant-1.0.0.tar.gz
-$ ln -s ./savant-1.0.0 current
+$ wget http://savant.inversoft.org/org/savantbuild/savant-core/2.0.0-RC.3/savant-2.0.0-RC.3.tar.gz
+$ tar xvfz savant-2.0.0-RC.3.tar.gz
+$ ln -s ./savant-2.0.0-RC.3 current
 $ export PATH=$PATH:~/savant/current/bin/
 ```
