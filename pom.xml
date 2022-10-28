@@ -99,6 +99,7 @@
             <property>listener</property>
             <value>io.fusionauth.http.BaseTest$TestListener</value>
           </properties>
+          <excludedGroups>performance</excludedGroups>
         </configuration>
       </plugin>
       <plugin>
