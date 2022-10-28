@@ -39,16 +39,9 @@ public class DelegatingOutputStream extends OutputStream {
 
   private boolean compress;
 
-  private String encoding;
-
   private OutputStream outputStream;
 
-  // https://stackoverflow.com/questions/23228359/is-checking-a-boolean-faster-than-setting-a-boolean-in-java
-  // - This seems to indicate that if you only need to write once, and read a bunch, while more byte code is
-  //   produced by gating the write operation with a read, it should faster since you'll only write once, and
-  //   a read of a volatile is much faster than a write operation.
-  // See CompressionTest.volatileCheckPerformance for results.
-  private volatile boolean used;
+  private boolean used;
 
   public DelegatingOutputStream(HTTPRequest request, HTTPResponse response, OutputStream outputStream, boolean compressByDefault) {
     this.request = request;
@@ -120,37 +113,24 @@ public class DelegatingOutputStream extends OutputStream {
       return;
     }
 
-    // If we have not yet set compress, we need to set the header now.
-    // - We need to wait this long so that we only write this header when we know there are bytes to write.
-    if (setContentEncodingHeader()) {
+    // Attempt to honor the requested encoding(s) in order, taking the first match
+    // - If a match is not found, we will not compress the response.
+    for (String encoding : request.getAcceptEncodings()) {
       if (encoding.equalsIgnoreCase(ContentEncodings.Gzip)) {
         try {
           outputStream = new GZIPOutputStream(unCompressingOutputStream);
+          response.setHeader(Headers.ContentEncoding, ContentEncodings.Gzip);
+          return;
         } catch (IOException e) {
           throw new RuntimeException(e);
         }
       } else if (encoding.equalsIgnoreCase(ContentEncodings.Deflate)) {
         outputStream = new DeflaterOutputStream(unCompressingOutputStream);
-      }
-    }
-  }
-
-  private boolean setContentEncodingHeader() {
-    // Attempt to honor the requested encoding(s) in order, taking the first match
-    for (String encoding : request.getAcceptEncodings()) {
-      if (encoding.equalsIgnoreCase(ContentEncodings.Gzip)) {
-        response.setHeader(Headers.ContentEncoding, ContentEncodings.Gzip);
-        this.compress = true;
-        this.encoding = encoding;
-        return true;
-      } else if (encoding.equalsIgnoreCase(ContentEncodings.Deflate)) {
         response.setHeader(Headers.ContentEncoding, ContentEncodings.Deflate);
-        this.compress = true;
-        this.encoding = encoding;
-        return true;
+        return;
       }
     }
 
-    return false;
+    compress = false;
   }
 }

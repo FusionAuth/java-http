@@ -25,7 +25,6 @@ import java.nio.charset.StandardCharsets;
 import java.nio.file.Files;
 import java.nio.file.Path;
 import java.nio.file.Paths;
-import java.text.DecimalFormat;
 import java.util.zip.GZIPInputStream;
 import java.util.zip.InflaterInputStream;
 
@@ -47,12 +46,6 @@ import static org.testng.AssertJUnit.fail;
  */
 public class CompressionTest extends BaseTest {
   private final Path file = Paths.get("src/test/java/io/fusionauth/http/ChunkedTest.java");
-
-  @SuppressWarnings({"FieldCanBeLocal", "unused"})
-  private volatile boolean test1;
-
-  @SuppressWarnings("FieldCanBeLocal")
-  private volatile boolean test2;
 
   @DataProvider(name = "chunkedSchemes")
   public Object[][] chunkedSchemes() {
@@ -253,40 +246,5 @@ public class CompressionTest extends BaseTest {
       assertEquals(response.statusCode(), 200);
       assertEquals(response.body(), Files.readString(file));
     }
-  }
-
-  @Test(enabled = false)
-  public void volatileCheckPerformance() {
-    long start = System.currentTimeMillis();
-    int count = 250_000_000;
-
-    System.out.println(new DecimalFormat("#,###").format(count) + " iterations");
-    System.out.println("------------------------");
-
-    for (int i = 0; i < count; i++) {
-      test1 = true;
-    }
-
-    long end = System.currentTimeMillis();
-    System.out.println("Write:       " + (end - start) + "ms");
-
-    start = System.currentTimeMillis();
-    for (int i = 0; i < count; i++) {
-      if (!test2) {
-        test2 = true;
-      }
-    }
-
-    end = System.currentTimeMillis();
-    System.out.println("Read gate:   " + (end - start) + "ms");
-
-    // Notes on results:
-    // With a very high iteration counts, it becomes noticeable that the read gate improves performance. This gain
-    // is not likely measurable during normal runtime.
-    //
-    // 250,000,000 iterations
-    // ------------------------
-    // Write:       92ms
-    // Read gate:   142ms
   }
 }
