@@ -37,9 +37,7 @@ public class DelegatingOutputStream extends OutputStream {
 
   private final OutputStream unCompressingOutputStream;
 
-  private Boolean compress;
-
-  private boolean defaultCompress;
+  private boolean compress;
 
   private String encoding;
 
@@ -52,10 +50,11 @@ public class DelegatingOutputStream extends OutputStream {
   // See CompressionTest.volatileCheckPerformance for results.
   private volatile boolean used;
 
-  public DelegatingOutputStream(HTTPRequest request, HTTPResponse response, OutputStream outputStream) {
+  public DelegatingOutputStream(HTTPRequest request, HTTPResponse response, OutputStream outputStream, boolean compressByDefault) {
     this.request = request;
     this.response = response;
     this.outputStream = outputStream;
+    this.compress = compressByDefault;
     this.unCompressingOutputStream = outputStream;
   }
 
@@ -70,7 +69,7 @@ public class DelegatingOutputStream extends OutputStream {
   }
 
   public boolean isCompress() {
-    return (compress != null && compress) || defaultCompress;
+    return compress;
   }
 
   public void setCompress(boolean compress) {
@@ -79,25 +78,7 @@ public class DelegatingOutputStream extends OutputStream {
       throw new IllegalStateException("The HTTPResponse compression configuration cannot be modified once bytes have been written to it.");
     }
 
-    // Short circuit, no work to do.
-    if (this.compress != null && this.compress == compress) {
-      return;
-    }
-
-    if (compress) {
-      if (setContentEncodingHeader()) {
-        return;
-      }
-    }
-
-    // Fall through and disable compress, because:
-    // 1. Compress was equal to false
-    // 2. Compress was equal to true, and the acceptable encoding values did not contain [gzip, deflate]
-    this.compress = false;
-  }
-
-  public void setDefaultCompress(boolean defaultCompress) {
-    this.defaultCompress = defaultCompress;
+    this.compress = compress;
   }
 
   @Override
@@ -135,17 +116,13 @@ public class DelegatingOutputStream extends OutputStream {
     used = true;
 
     // Short circuit if there is nothing to do
-    if ((compress != null && !compress) || !defaultCompress) {
+    if (!compress) {
       return;
     }
 
     // If we have not yet set compress, we need to set the header now.
     // - We need to wait this long so that we only write this header when we know there are bytes to write.
-    if (compress == null) {
-      setContentEncodingHeader();
-    }
-
-    if (encoding != null) {
+    if (setContentEncodingHeader()) {
       if (encoding.equalsIgnoreCase(ContentEncodings.Gzip)) {
         try {
           outputStream = new GZIPOutputStream(unCompressingOutputStream);

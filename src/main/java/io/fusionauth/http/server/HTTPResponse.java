@@ -61,8 +61,8 @@ public class HTTPResponse {
 
   private Writer writer;
 
-  public HTTPResponse(OutputStream outputStream, HTTPRequest request) {
-    this.outputStream = new DelegatingOutputStream(request, this, outputStream);
+  public HTTPResponse(OutputStream outputStream, HTTPRequest request, boolean compressByDefault) {
+    this.outputStream = new DelegatingOutputStream(request, this, outputStream, compressByDefault);
   }
 
   public void addCookie(Cookie cookie) {
@@ -270,10 +270,6 @@ public class HTTPResponse {
 
   public void setDateHeader(String name, ZonedDateTime value) {
     addHeader(name, DateTimeFormatter.RFC_1123_DATE_TIME.format(value));
-  }
-
-  public void setDefaultCompress(boolean compress) {
-    outputStream.setDefaultCompress(compress);
   }
 
   /**
