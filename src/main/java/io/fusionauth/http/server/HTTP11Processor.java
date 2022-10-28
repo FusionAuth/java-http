@@ -65,6 +65,7 @@ public class HTTP11Processor implements HTTPProcessor {
 
     NonBlockingByteBufferOutputStream outputStream = new NonBlockingByteBufferOutputStream(notifier, configuration.getResponseBufferSize());
     this.response = new HTTPResponse(outputStream, request);
+    this.response.setDefaultCompress(configuration.isCompressByDefault());
     this.responseProcessor = new HTTPResponseProcessor(configuration, request, response, outputStream);
   }
 

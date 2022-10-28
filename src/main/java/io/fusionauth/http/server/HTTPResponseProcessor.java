@@ -189,7 +189,7 @@ public class HTTPResponseProcessor {
 
     for (Cookie cookie : response.getCookies()) {
       String value = cookie.toResponseHeader();
-      response.setHeader(Headers.SetCookie, value);
+      response.addHeader(Headers.SetCookie, value);
     }
   }
 }
