@@ -281,7 +281,7 @@ public class CompressionTest extends BaseTest {
     System.out.println("Read gate:   " + (end - start) + "ms");
 
     // Notes on results:
-    // With very higher iteration counts, it becomes noticeable that the read gate improves performance. This gain
+    // With a very high iteration counts, it becomes noticeable that the read gate improves performance. This gain
     // is not likely measurable during normal runtime.
     //
     // 250,000,000 iterations
