@@ -200,13 +200,17 @@ The general requirements and roadmap are as follows:
 * [ ] Support multipart form data
 * [ ] Support HTTP 2
 
-## Why no Loom?
+## FAQ
+
+### Why no Loom?
 
 Project Loom is an exciting development which brings a lot of great new features to Java, such as fibers, continuations and more.
 
-However, this project doesn't currently use Loom. As of Java 19, Loom is a preview release only. Therefore, you can't use it without compiled code that is difficult to use in future Java LTS releases.
+Loom is currently available in Java 19 as a preview feature. Therefore, you can't use it without compiled code that is difficult to use in future Java releases.
 
-This project is anchored to features in Java LTS releases only to balance use of new, awesome language features and future proofing. When Loom functionality is in the next Java LTS, it'll be evaluated for use.
+This project is anchored to the Java LTS releases to ensure compatibility. Loom will be evaluated once it is out of preview, and available in an LTS version of Java.  
+
+The next scheduled LTS release will be Java 21 set to release in September 2023. We are looking forward to that release and to see if we can leverage the Loom features in this project. 
 
 ## Helping out
 
