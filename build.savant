@@ -16,7 +16,7 @@
 restifyVersion = "4.1.2"
 testngVersion = "7.3.0"
 
-project(group: "io.fusionauth", name: "java-http", version: "0.1.6", licenses: ["ApacheV2_0"]) {
+project(group: "io.fusionauth", name: "java-http", version: "0.1.7", licenses: ["ApacheV2_0"]) {
   workflow {
     fetch {
       cache()

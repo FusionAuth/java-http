@@ -65,6 +65,10 @@ public class HTTPResponse {
     this.outputStream = new DelegatingOutputStream(request, this, outputStream, compressByDefault);
   }
 
+  public HTTPResponse(OutputStream outputStream, HTTPRequest request) {
+    this(outputStream, request, true);
+  }
+
   public void addCookie(Cookie cookie) {
     String path = cookie.path != null ? cookie.path : "/";
     cookies.computeIfAbsent(path, key -> new HashMap<>()).put(cookie.name, cookie);
