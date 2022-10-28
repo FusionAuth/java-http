@@ -31,6 +31,8 @@ public class HTTPServerConfiguration implements Configurable<HTTPServerConfigura
 
   private Duration clientTimeoutDuration = Duration.ofSeconds(20);
 
+  private boolean compressByDefault = true;
+
   private String contextPath = "";
 
   private ExpectValidator expectValidator;
@@ -123,6 +125,10 @@ public class HTTPServerConfiguration implements Configurable<HTTPServerConfigura
     return shutdownDuration;
   }
 
+  public boolean isCompressByDefault() {
+    return compressByDefault;
+  }
+
   /**
    * {@inheritDoc}
    */
@@ -144,6 +150,15 @@ public class HTTPServerConfiguration implements Configurable<HTTPServerConfigura
 
 
     this.clientTimeoutDuration = duration;
+    return this;
+  }
+
+  /**
+   * {@inheritDoc}
+   */
+  @Override
+  public HTTPServerConfiguration withCompressByDefault(boolean compressByDefault) {
+    this.compressByDefault = compressByDefault;
     return this;
   }
 

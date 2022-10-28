@@ -28,16 +28,13 @@ import java.util.HashMap;
 import java.util.List;
 import java.util.Map;
 import java.util.stream.Collectors;
-import java.util.zip.DeflaterOutputStream;
-import java.util.zip.GZIPOutputStream;
 
 import io.fusionauth.http.Cookie;
 import io.fusionauth.http.HTTPValues.Connections;
-import io.fusionauth.http.HTTPValues.ContentEncodings;
 import io.fusionauth.http.HTTPValues.ContentTypes;
 import io.fusionauth.http.HTTPValues.Headers;
 import io.fusionauth.http.HTTPValues.Status;
-import io.fusionauth.http.io.NonBlockingByteBufferOutputStream;
+import io.fusionauth.http.io.DelegatingOutputStream;
 import io.fusionauth.http.util.HTTPTools;
 import io.fusionauth.http.util.HTTPTools.HeaderValue;
 
@@ -52,17 +49,11 @@ public class HTTPResponse {
 
   private final Map<String, List<String>> headers = new HashMap<>();
 
-  private final NonBlockingByteBufferOutputStream originalOutputStream;
-
-  private final HTTPRequest request;
+  private final DelegatingOutputStream outputStream;
 
   private volatile boolean committed;
 
-  private boolean compress;
-
   private Throwable exception;
-
-  private OutputStream outputStream;
 
   private int status = 200;
 
@@ -70,10 +61,8 @@ public class HTTPResponse {
 
   private Writer writer;
 
-  public HTTPResponse(NonBlockingByteBufferOutputStream outputStream, HTTPRequest request) {
-    this.outputStream = outputStream;
-    this.originalOutputStream = outputStream;
-    this.request = request;
+  public HTTPResponse(OutputStream outputStream, HTTPRequest request, boolean compressByDefault) {
+    this.outputStream = new DelegatingOutputStream(request, this, outputStream, compressByDefault);
   }
 
   public void addCookie(Cookie cookie) {
@@ -81,7 +70,23 @@ public class HTTPResponse {
     cookies.computeIfAbsent(path, key -> new HashMap<>()).put(cookie.name, cookie);
   }
 
+  /**
+   * Add a response header. Calling this method multiple times with the same name will result in multiple headers being written to the HTTP
+   * response.
+   * <p>
+   * Optionally call {@link #setHeader(String, String)} if you wish to only write a single header by name, overwriting any previously
+   * written headers.
+   * <p>
+   * If either parameter are null, the header will not be added to the response.
+   *
+   * @param name  the header name
+   * @param value the header value
+   */
   public void addHeader(String name, String value) {
+    if (name == null || value == null) {
+      return;
+    }
+
     headers.computeIfAbsent(name.toLowerCase(), key -> new ArrayList<>()).add(value);
   }
 
@@ -226,38 +231,23 @@ public class HTTPResponse {
     this.committed = committed;
   }
 
+  /**
+   * @return true if compression will be utilized when writing the HTTP OutputStream.
+   */
   public boolean isCompress() {
-    return compress;
+    return outputStream.isCompress();
   }
 
+  /**
+   * Provides runtime configuration for HTTP response compression. This can be called as many times as you wish prior to the first byte
+   * being written to the HTTP OutputStream.
+   * <p>
+   * An {@link IllegalStateException} will be thrown if you call this method after writing to the OutputStream.
+   *
+   * @param compress true to enable the response to be written back compressed.
+   */
   public void setCompress(boolean compress) {
-    if (outputStream instanceof NonBlockingByteBufferOutputStream nbbbos) {
-      if (!nbbbos.isEmpty()) {
-        throw new IllegalStateException("The HTTPResponse can't be set for compression because bytes have already been written to it");
-      }
-    }
-
-    if (compress) {
-      for (String encoding : request.getAcceptEncodings()) {
-        if (encoding.equalsIgnoreCase(ContentEncodings.Gzip)) {
-          try {
-            outputStream = new GZIPOutputStream(originalOutputStream);
-            setHeader(Headers.ContentEncoding, ContentEncodings.Gzip);
-            this.compress = true;
-            break;
-          } catch (IOException e) {
-            throw new RuntimeException(e);
-          }
-        } else if (encoding.equalsIgnoreCase(ContentEncodings.Deflate)) {
-          outputStream = new DeflaterOutputStream(originalOutputStream);
-          setHeader(Headers.ContentEncoding, ContentEncodings.Deflate);
-          this.compress = true;
-          break;
-        }
-      }
-    } else {
-      outputStream = originalOutputStream;
-    }
+    outputStream.setCompress(compress);
   }
 
   /**
@@ -282,12 +272,21 @@ public class HTTPResponse {
     addHeader(name, DateTimeFormatter.RFC_1123_DATE_TIME.format(value));
   }
 
+  /**
+   * Set the header, replacing any existing header values. If you wish to add to existing response headers, use the
+   * {@link #addHeader(String, String)} instead.
+   * <p>
+   * If either parameter are null, the header will not be added to the response.
+   *
+   * @param name  the header name
+   * @param value the header value
+   */
   public void setHeader(String name, String value) {
     if (name == null || value == null) {
       return;
     }
 
-    addHeader(name, value);
+    headers.put(name.toLowerCase(), new ArrayList<>(List.of(value)));
   }
 }
 

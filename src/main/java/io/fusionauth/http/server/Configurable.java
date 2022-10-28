@@ -59,6 +59,18 @@ public interface Configurable<T extends Configurable<T>> {
   }
 
   /**
+   * Sets the default compression behavior for the HTTP response. This behavior can be optionally set per response. See
+   * {@link HTTPResponse#setCompress(boolean)}. Defaults to true.
+   *
+   * @param compressByDefault true if you want to compress by default, or false to not compress by default.
+   * @return This.
+   */
+  default T withCompressByDefault(boolean compressByDefault) {
+    configuration().withCompressByDefault(compressByDefault);
+    return (T) this;
+  }
+
+  /**
    * Sets the prefix of the URIs that this server handles. Technically, the server will accept all inbound connections, but if a context
    * path is set, it can assist the application with building URIs (in HTML for example). This value will be accessible via the
    * {@link HTTPRequest#getContextPath()} method.

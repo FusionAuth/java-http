@@ -28,6 +28,7 @@ import java.nio.charset.StandardCharsets;
 import java.time.Duration;
 import java.util.List;
 import java.util.Locale;
+import java.util.zip.InflaterInputStream;
 
 import com.inversoft.net.ssl.SSLTools;
 import com.inversoft.rest.RESTClient;
@@ -396,7 +397,7 @@ public class CoreTest extends BaseTest {
       assertEquals(req.getURLParameter("foo "), "bar ");
 
       res.setHeader(Headers.ContentType, "text/plain");
-      res.setHeader("Content-Length", "16");
+      // Compression is on by default, don't write a Content-Length header it will be wrong.
       res.setStatus(200);
 
       try {
@@ -421,10 +422,12 @@ public class CoreTest extends BaseTest {
                                        .header(Headers.UserAgent, "java-http test")
                                        .GET()
                                        .build();
-      var response = client.send(request, r -> BodySubscribers.ofString(StandardCharsets.UTF_8));
+
+      var response = client.send(request, r -> BodySubscribers.ofInputStream());
 
       assertEquals(response.statusCode(), 200);
-      assertEquals(response.body(), ExpectedResponse);
+      var result = new String(new InflaterInputStream(response.body()).readAllBytes(), StandardCharsets.UTF_8);
+      assertEquals(result, ExpectedResponse);
     }
   }
 

@@ -25,6 +25,7 @@ import java.nio.charset.StandardCharsets;
 import java.nio.file.Files;
 import java.nio.file.Path;
 import java.nio.file.Paths;
+import java.text.DecimalFormat;
 import java.util.zip.GZIPInputStream;
 import java.util.zip.InflaterInputStream;
 
@@ -37,6 +38,7 @@ import org.testng.annotations.DataProvider;
 import org.testng.annotations.Test;
 import static org.testng.Assert.assertEquals;
 import static org.testng.Assert.assertNull;
+import static org.testng.AssertJUnit.fail;
 
 /**
  * Tests the HTTP server handles compression properly.
@@ -45,6 +47,12 @@ import static org.testng.Assert.assertNull;
  */
 public class CompressionTest extends BaseTest {
   private final Path file = Paths.get("src/test/java/io/fusionauth/http/ChunkedTest.java");
+
+  @SuppressWarnings({"FieldCanBeLocal", "unused"})
+  private volatile boolean test1;
+
+  @SuppressWarnings("FieldCanBeLocal")
+  private volatile boolean test2;
 
   @DataProvider(name = "chunkedSchemes")
   public Object[][] chunkedSchemes() {
@@ -56,10 +64,16 @@ public class CompressionTest extends BaseTest {
     };
   }
 
-  @Test(dataProvider = "chunkedSchemes")
-  public void compressDeflate(boolean chunked, String scheme) throws Exception {
+  @Test(dataProvider = "compressedChunkedSchemes")
+  public void compress(String encoding, boolean chunked, String scheme) throws Exception {
     HTTPHandler handler = (req, res) -> {
+      // Testing an indecisive user, can't make up their mind... this is allowed as long as you have not written ay bytes.
       res.setCompress(true);
+      res.setCompress(false);
+      res.setCompress(true);
+      res.setCompress(false);
+      res.setCompress(true);
+
       res.setHeader(Headers.ContentType, "text/plain");
       res.setStatus(200);
 
@@ -70,6 +84,14 @@ public class CompressionTest extends BaseTest {
       try (InputStream is = Files.newInputStream(file)) {
         OutputStream outputStream = res.getOutputStream();
         is.transferTo(outputStream);
+
+        // Try to call setCompress, expect an exception - we cannot change modes once we've written to the OutputStream.
+        try {
+          res.setCompress(false);
+          fail("Expected setCompress(false) to fail hard!");
+        } catch (IllegalStateException expected) {
+        }
+
         outputStream.close();
       } catch (IOException e) {
         throw new RuntimeException(e);
@@ -81,21 +103,25 @@ public class CompressionTest extends BaseTest {
       URI uri = makeURI(scheme, "");
       var client = makeClient(scheme, null);
       var response = client.send(
-          HttpRequest.newBuilder().header(Headers.AcceptEncoding, "deflate, gzip").uri(uri).GET().build(),
+          HttpRequest.newBuilder().header(Headers.AcceptEncoding, encoding).uri(uri).GET().build(),
           r -> BodySubscribers.ofInputStream()
       );
 
-      var result = new String(new InflaterInputStream(response.body()).readAllBytes(), StandardCharsets.UTF_8);
-      assertEquals(response.headers().firstValue(Headers.ContentEncoding).orElse(null), ContentEncodings.Deflate);
+      var result = new String(
+          encoding.equals(ContentEncodings.Deflate)
+              ? new InflaterInputStream(response.body()).readAllBytes()
+              : new GZIPInputStream(response.body()).readAllBytes(), StandardCharsets.UTF_8);
+
+      assertEquals(response.headers().firstValue(Headers.ContentEncoding).orElse(null), encoding);
       assertEquals(response.statusCode(), 200);
       assertEquals(result, Files.readString(file));
     }
   }
 
-  @Test(dataProvider = "chunkedSchemes")
-  public void compressGzip(boolean chunked, String scheme) throws Exception {
+  @Test(dataProvider = "compressedChunkedSchemes")
+  public void compress_onByDefault(String encoding, boolean chunked, String scheme) throws Exception {
     HTTPHandler handler = (req, res) -> {
-      res.setCompress(true);
+      // Use case, do not call response.setCompress(true)
       res.setHeader(Headers.ContentType, "text/plain");
       res.setStatus(200);
 
@@ -117,19 +143,48 @@ public class CompressionTest extends BaseTest {
       URI uri = makeURI(scheme, "");
       var client = makeClient(scheme, null);
       var response = client.send(
-          HttpRequest.newBuilder().header(Headers.AcceptEncoding, "gzip, deflate").uri(uri).GET().build(),
+          HttpRequest.newBuilder().header(Headers.AcceptEncoding, encoding).uri(uri).GET().build(),
           r -> BodySubscribers.ofInputStream()
       );
 
-      var result = new String(new GZIPInputStream(response.body()).readAllBytes(), StandardCharsets.UTF_8);
-      assertEquals(response.headers().firstValue(Headers.ContentEncoding).orElse(null), ContentEncodings.Gzip);
+      var result = new String(
+          encoding.equals(ContentEncodings.Deflate)
+              ? new InflaterInputStream(response.body()).readAllBytes()
+              : new GZIPInputStream(response.body()).readAllBytes(), StandardCharsets.UTF_8);
+
+      assertEquals(response.headers().firstValue(Headers.ContentEncoding).orElse(null), encoding);
       assertEquals(response.statusCode(), 200);
       assertEquals(result, Files.readString(file));
     }
+  }
+
+  @DataProvider(name = "compressedChunkedSchemes")
+  public Object[][] compressedChunkedSchemes() {
+    return new Object[][]{
+        // encoding, chunked, schema
+
+        // Chunked http
+        {ContentEncodings.Deflate, true, "http"},
+        {ContentEncodings.Gzip, true, "http"},
+
+        // Chunked https
+        {ContentEncodings.Deflate, true, "https"},
+        {ContentEncodings.Gzip, true, "https"},
+
+        // Non chunked http
+        {ContentEncodings.Deflate, false, "http"},
+        {ContentEncodings.Gzip, false, "http"},
+
+        // Non chunked https
+        {ContentEncodings.Deflate, false, "https"},
+        {ContentEncodings.Gzip, false, "https"}
+    };
   }
 
   @Test(dataProvider = "chunkedSchemes")
   public void requestedButNotAccepted(boolean chunked, String scheme) throws Exception {
+    // Use case: setCompress(true), but the request does not contain the 'Accept-Encoding' header.
+    //     Result: no compression
     HTTPHandler handler = (req, res) -> {
       res.setCompress(true);
       res.setHeader(Headers.ContentType, "text/plain");
@@ -161,5 +216,77 @@ public class CompressionTest extends BaseTest {
       assertEquals(response.statusCode(), 200);
       assertEquals(response.body(), Files.readString(file));
     }
+  }
+
+  @Test(dataProvider = "chunkedSchemes")
+  public void requestedButNotAccepted_unSupportedEncoding(boolean chunked, String scheme) throws Exception {
+    // Use case: setCompress(true), and 'Accept-Encoding: br' which is valid, but not yet supported
+    //     Result: no compression
+    HTTPHandler handler = (req, res) -> {
+      res.setCompress(true);
+      res.setHeader(Headers.ContentType, "text/plain");
+      res.setStatus(200);
+
+      if (!chunked) {
+        res.setContentLength(Files.size(file));
+      }
+
+      try (InputStream is = Files.newInputStream(file)) {
+        OutputStream outputStream = res.getOutputStream();
+        is.transferTo(outputStream);
+        outputStream.close();
+      } catch (IOException e) {
+        throw new RuntimeException(e);
+      }
+    };
+
+    CountingInstrumenter instrumenter = new CountingInstrumenter();
+    try (HTTPServer ignore = makeServer(scheme, handler, instrumenter).start()) {
+      URI uri = makeURI(scheme, "");
+      var client = makeClient(scheme, null);
+      var response = client.send(
+          HttpRequest.newBuilder().header(Headers.AcceptEncoding, "br").uri(uri).GET().build(),
+          r -> BodySubscribers.ofString(StandardCharsets.UTF_8)
+      );
+
+      assertNull(response.headers().firstValue(Headers.ContentEncoding).orElse(null));
+      assertEquals(response.statusCode(), 200);
+      assertEquals(response.body(), Files.readString(file));
+    }
+  }
+
+  @Test(enabled = false)
+  public void volatileCheckPerformance() {
+    long start = System.currentTimeMillis();
+    int count = 250_000_000;
+
+    System.out.println(new DecimalFormat("#,###").format(count) + " iterations");
+    System.out.println("------------------------");
+
+    for (int i = 0; i < count; i++) {
+      test1 = true;
+    }
+
+    long end = System.currentTimeMillis();
+    System.out.println("Write:       " + (end - start) + "ms");
+
+    start = System.currentTimeMillis();
+    for (int i = 0; i < count; i++) {
+      if (!test2) {
+        test2 = true;
+      }
+    }
+
+    end = System.currentTimeMillis();
+    System.out.println("Read gate:   " + (end - start) + "ms");
+
+    // Notes on results:
+    // With a very high iteration counts, it becomes noticeable that the read gate improves performance. This gain
+    // is not likely measurable during normal runtime.
+    //
+    // 250,000,000 iterations
+    // ------------------------
+    // Write:       92ms
+    // Read gate:   142ms
   }
 }
