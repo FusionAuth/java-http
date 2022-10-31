@@ -267,6 +267,15 @@ public class HTTPResponse {
     cookies.values().forEach(map -> map.remove(name));
   }
 
+  /**
+   * Remove a header by name.
+   *
+   * @param name the header name to remove
+   */
+  public void removeHeader(String name) {
+    headers.remove(name);
+  }
+
   public void sendRedirect(String uri) {
     setHeader(Headers.Location, uri);
     status = Status.MovedTemporarily;
@@ -291,6 +300,13 @@ public class HTTPResponse {
     }
 
     headers.put(name.toLowerCase(), new ArrayList<>(List.of(value)));
+  }
+
+  /**
+   * @return true if compression has been requested and as far as we know, we will.
+   */
+  public boolean willCompress() {
+    return outputStream.willCompress();
   }
 }
 

@@ -74,6 +74,25 @@ public class DelegatingOutputStream extends OutputStream {
     this.compress = compress;
   }
 
+  /**
+   * @return true if compression has been requested and thn will compress because we support the requested content encoding.
+   */
+  public boolean willCompress() {
+    if (compress) {
+      for (String encoding : request.getAcceptEncodings()) {
+        if (encoding.equalsIgnoreCase(ContentEncodings.Gzip)) {
+          return true;
+        } else if (encoding.equalsIgnoreCase(ContentEncodings.Deflate)) {
+          return true;
+        }
+      }
+
+      return false;
+    }
+
+    return false;
+  }
+
   @Override
   public void write(byte[] b, int off, int len) throws IOException {
     if (!used) {

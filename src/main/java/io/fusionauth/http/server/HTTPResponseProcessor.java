@@ -187,6 +187,11 @@ public class HTTPResponseProcessor {
       response.setHeader(Headers.TransferEncoding, TransferEncodings.Chunked);
     }
 
+    // Remove a Content-Length header when we know we will be compressing the response.
+    if (response.getContentLength() != null && response.willCompress()) {
+      response.removeHeader(Headers.ContentLength);
+    }
+
     for (Cookie cookie : response.getCookies()) {
       String value = cookie.toResponseHeader();
       response.addHeader(Headers.SetCookie, value);

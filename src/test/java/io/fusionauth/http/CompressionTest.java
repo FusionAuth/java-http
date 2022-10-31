@@ -18,6 +18,7 @@ package io.fusionauth.http;
 import java.io.IOException;
 import java.io.InputStream;
 import java.io.OutputStream;
+import java.math.BigDecimal;
 import java.net.URI;
 import java.net.http.HttpRequest;
 import java.net.http.HttpResponse.BodySubscribers;
@@ -25,6 +26,8 @@ import java.nio.charset.StandardCharsets;
 import java.nio.file.Files;
 import java.nio.file.Path;
 import java.nio.file.Paths;
+import java.text.DecimalFormat;
+import java.util.List;
 import java.util.zip.GZIPInputStream;
 import java.util.zip.InflaterInputStream;
 
@@ -149,6 +152,62 @@ public class CompressionTest extends BaseTest {
       assertEquals(response.statusCode(), 200);
       assertEquals(result, Files.readString(file));
     }
+  }
+
+  @Test(enabled = false, groups = "performance")
+  public void compress_performance() throws Exception {
+    HTTPHandler handler = (req, res) -> {
+      // Use case, do not call response.setCompress(true)
+      res.setHeader(Headers.ContentType, "text/plain");
+      res.setStatus(200);
+
+      try (InputStream is = Files.newInputStream(file)) {
+        OutputStream outputStream = res.getOutputStream();
+        is.transferTo(outputStream);
+        outputStream.close();
+      } catch (IOException e) {
+        throw new RuntimeException(e);
+      }
+    };
+
+    for (boolean compress : List.of(true, false)) {
+      CountingInstrumenter instrumenter = new CountingInstrumenter();
+      try (HTTPServer ignore = makeServer("http", handler, instrumenter).withCompressByDefault(compress).start()) {
+        URI uri = makeURI("http", "");
+        var client = makeClient("http", null);
+
+        int counter = 25_000;
+        long start = System.currentTimeMillis();
+        for (int i = 0; i < counter; i++) {
+          var response = compress
+              ? client.send(HttpRequest.newBuilder().header(Headers.AcceptEncoding, ContentEncodings.Gzip).uri(uri).GET().build(), r -> BodySubscribers.ofInputStream())
+              : client.send(HttpRequest.newBuilder().header(Headers.AcceptEncoding, ContentEncodings.Gzip).uri(uri).GET().build(), r -> BodySubscribers.ofString(StandardCharsets.UTF_8));
+
+          var result = compress
+              ? new String(new GZIPInputStream((InputStream) response.body()).readAllBytes(), StandardCharsets.UTF_8)
+              : response.body();
+
+          assertEquals(response.headers().firstValue(Headers.ContentEncoding).orElse(null), compress ? ContentEncodings.Gzip : null);
+          assertEquals(response.statusCode(), 200);
+          assertEquals(result, Files.readString(file));
+        }
+
+        // With small requests like this, we expect compression to be a bit slower.
+        //
+        // [compression: true ][25,000] requests. Total time [7,677] ms, Avg [0.30708] ms
+        // [compression: false][25,000] requests. Total time [3,298] ms, Avg [0.13192] ms
+
+        long end = System.currentTimeMillis();
+        long total = end - start;
+        @SuppressWarnings("BigDecimalMethodWithoutRoundingCalled")
+        BigDecimal avg = new BigDecimal(total).divide(new BigDecimal(counter));
+        DecimalFormat formatter = new DecimalFormat("#,###");
+        @SuppressWarnings("ConstantConditions")
+        String mode = compress ? compress + " " : compress + "";
+        System.out.println("[compression: " + mode + "][" + formatter.format(counter) + "] requests. Total time [" + (formatter.format(total)) + "] ms, Avg [" + avg + "] ms");
+      }
+    }
+
   }
 
   @DataProvider(name = "compressedChunkedSchemes")
