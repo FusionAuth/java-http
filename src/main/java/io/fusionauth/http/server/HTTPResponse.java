@@ -273,7 +273,9 @@ public class HTTPResponse {
    * @param name the header name to remove
    */
   public void removeHeader(String name) {
-    headers.remove(name);
+    if (name != null) {
+      headers.remove(name.toLowerCase());
+    }
   }
 
   public void sendRedirect(String uri) {

@@ -180,16 +180,16 @@ public class HTTPResponseProcessor {
       response.setHeader(Headers.Connection, Connections.KeepAlive);
     }
 
+    // Remove a Content-Length header when we know we will be compressing the response.
+    if (response.getContentLength() != null && response.willCompress()) {
+      response.removeHeader(Headers.ContentLength);
+    }
+
     Long contentLength = response.getContentLength();
     if (contentLength == null && outputStream.isEmpty()) {
       response.setContentLength(0L);
     } else if (contentLength == null) {
       response.setHeader(Headers.TransferEncoding, TransferEncodings.Chunked);
-    }
-
-    // Remove a Content-Length header when we know we will be compressing the response.
-    if (response.getContentLength() != null && response.willCompress()) {
-      response.removeHeader(Headers.ContentLength);
     }
 
     for (Cookie cookie : response.getCookies()) {
