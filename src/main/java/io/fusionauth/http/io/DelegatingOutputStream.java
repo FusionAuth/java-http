@@ -75,7 +75,8 @@ public class DelegatingOutputStream extends OutputStream {
   }
 
   /**
-   * @return true if compression has been requested and thn will compress because we support the requested content encoding.
+   * @return true if compression has been requested, and it appears as though we will compress because the requested content encoding is
+   *     supported.
    */
   public boolean willCompress() {
     if (compress) {
