@@ -43,6 +43,7 @@ import io.fusionauth.http.server.HTTPServer;
 import org.testng.annotations.Test;
 import static org.testng.Assert.assertEquals;
 import static org.testng.Assert.assertNull;
+import static org.testng.Assert.assertTrue;
 import static org.testng.Assert.fail;
 
 /**
@@ -60,6 +61,28 @@ public class CoreTest extends BaseTest {
   static {
     System.setProperty("sun.net.http.retryPost", "false");
     System.setProperty("jdk.httpclient.allowRestrictedHeaders", "connection");
+  }
+
+  @Test(dataProvider = "schemes")
+  public void badLanguage(String scheme) throws Exception {
+    HTTPHandler handler = (req, res) -> {
+      assertTrue(req.getLocales().isEmpty());
+      res.setStatus(200);
+      res.getOutputStream().close();
+    };
+
+    try (HTTPServer ignore = makeServer(scheme, handler).start()) {
+      var client = makeClient(scheme, null);
+      URI uri = makeURI(scheme, "");
+      HttpRequest request = HttpRequest.newBuilder()
+                                       .uri(uri)
+                                       .header(Headers.AcceptLanguage, "en, fr_bad;q=0.7")
+                                       .GET()
+                                       .build();
+
+      var response = client.send(request, r -> BodySubscribers.ofInputStream());
+      assertEquals(response.statusCode(), 200);
+    }
   }
 
   @Test

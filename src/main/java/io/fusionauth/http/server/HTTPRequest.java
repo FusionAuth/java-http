@@ -693,12 +693,16 @@ public class HTTPRequest implements Buildable<HTTPRequest> {
         );
         break;
       case Headers.AcceptLanguageLower:
-        addLocales(LanguageRange.parse(value) // Default to English
-                                .stream()
-                                .sorted(Comparator.comparing(LanguageRange::getWeight).reversed())
-                                .map(LanguageRange::getRange)
-                                .map(Locale::forLanguageTag)
-                                .collect(Collectors.toList()));
+        try {
+          addLocales(LanguageRange.parse(value) // Default to English
+                                  .stream()
+                                  .sorted(Comparator.comparing(LanguageRange::getWeight).reversed())
+                                  .map(LanguageRange::getRange)
+                                  .map(Locale::forLanguageTag)
+                                  .collect(Collectors.toList()));
+        } catch (Exception e) {
+          // Ignore the exception and keep the value null
+        }
         break;
       case Headers.ContentTypeLower:
         this.encoding = null;
