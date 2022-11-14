@@ -387,7 +387,16 @@ public class HTTPRequest implements Buildable<HTTPRequest> {
 
   public String getHost() {
     String xHost = getHeader(Headers.XForwardedHost);
-    return xHost == null ? host : xHost;
+    if (xHost == null) {
+      return host;
+    }
+
+    int colon = xHost.indexOf(':');
+    if (colon > 0) {
+      return xHost.substring(0, colon);
+    }
+
+    return xHost;
   }
 
   public void setHost(String host) {
