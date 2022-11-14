@@ -81,7 +81,7 @@ target(name: "int", description: "Releases a local integration build of the proj
   dependency.integrate()
 }
 
-target(name: "release", description: "Releases a full version of the project", dependsOn: ["int"]) {
+target(name: "release", description: "Releases a full version of the project", dependsOn: ["clean", "int"]) {
   release.release()
 }
 
