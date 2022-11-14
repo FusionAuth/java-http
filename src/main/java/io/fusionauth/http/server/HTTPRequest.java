@@ -17,6 +17,7 @@ package io.fusionauth.http.server;
 
 import java.io.IOException;
 import java.io.InputStream;
+import java.net.URLDecoder;
 import java.nio.charset.Charset;
 import java.nio.charset.StandardCharsets;
 import java.time.Instant;
@@ -512,8 +513,9 @@ public class HTTPRequest implements Buildable<HTTPRequest> {
       HTTPTools.parseEncodedData(chars, questionMark + 1, chars.length, urlParameters);
     }
 
-    // Only save the path portion
+    // Only save the path portion and ensure we decode it properly
     this.path = questionMark > 0 ? new String(chars, 0, questionMark) : path;
+    this.path = URLDecoder.decode(this.path, StandardCharsets.UTF_8);
   }
 
   public int getPort() {

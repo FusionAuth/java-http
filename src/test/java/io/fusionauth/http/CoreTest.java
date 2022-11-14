@@ -541,6 +541,32 @@ public class CoreTest extends BaseTest {
   }
 
   @Test(dataProvider = "schemes")
+  public void unicode(String scheme) throws Exception {
+    HTTPHandler handler = (req, res) -> {
+      assertEquals(req.getPath(), "/위키백과:대문");
+
+      res.setHeader(Headers.ContentType, "text/plain");
+      res.setStatus(200);
+      res.getOutputStream().close();
+    };
+
+    try (HTTPServer ignore = makeServer(scheme, handler).start()) {
+      var client = makeClient(scheme, null);
+      URI uri = URI.create("http://localhost:4242/위키백과:대문");
+      if (scheme.equals("https")) {
+        uri = URI.create("https://local.fusionauth.io:4242/위키백과:대문");
+      }
+      HttpRequest request = HttpRequest.newBuilder()
+                                       .uri(uri)
+                                       .GET()
+                                       .build();
+
+      var response = client.send(request, r -> BodySubscribers.discarding());
+      assertEquals(response.statusCode(), 200);
+    }
+  }
+
+  @Test(dataProvider = "schemes")
   public void writer(String scheme) throws Exception {
     HTTPHandler handler = (req, res) -> {
       try {
