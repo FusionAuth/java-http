@@ -398,48 +398,6 @@ public class CoreTest extends BaseTest {
   }
 
   @Test(dataProvider = "schemes")
-  public void invalidLocale(String scheme) throws Exception {
-    HTTPHandler handler = (req, res) -> {
-      // All locales are ignored if the header contains an invalid value
-      assertEquals(req.getLocales().size(), 0);
-
-      res.setHeader(Headers.ContentType, "text/plain");
-      // Compression is on by default, don't write a Content-Length header it will be wrong.
-      res.setStatus(200);
-
-      try {
-        OutputStream outputStream = res.getOutputStream();
-        outputStream.write(ExpectedResponse.getBytes());
-        outputStream.close();
-      } catch (IOException e) {
-        throw new RuntimeException(e);
-      }
-    };
-
-    try (HTTPServer ignore = makeServer(scheme, handler).start()) {
-      var client = makeClient(scheme, null);
-      URI uri = makeURI(scheme, "?foo%20=bar%20");
-      HttpRequest request = HttpRequest.newBuilder()
-                                       .uri(uri)
-                                       .header(Headers.AcceptEncoding, "deflate, compress, br;q=0.5, gzip;q=0.8, identity;q=1.0")
-                                       // 3 valid locales, the last is invalid
-                                       .header(Headers.AcceptLanguage, "en, fr;q=0.7, de;q=0.8, en_AE")
-                                       .header(Headers.ContentType, "text/plain; charset=ISO8859-1")
-                                       .header(Headers.Origin, "https://example.com")
-                                       .header(Headers.Referer, "foobar.com")
-                                       .header(Headers.UserAgent, "java-http test")
-                                       .GET()
-                                       .build();
-
-      var response = client.send(request, r -> BodySubscribers.ofInputStream());
-
-      assertEquals(response.statusCode(), 200);
-      var result = new String(new InflaterInputStream(response.body()).readAllBytes(), StandardCharsets.UTF_8);
-      assertEquals(result, ExpectedResponse);
-    }
-  }
-
-  @Test(dataProvider = "schemes")
   public void simpleGet(String scheme) throws Exception {
     HTTPHandler handler = (req, res) -> {
       assertEquals(req.getAcceptEncodings(), List.of("deflate", "compress", "identity", "gzip", "br"));
