@@ -1,3 +1,5 @@
+import java.nio.file.Paths
+
 /*
  * Copyright (c) 2018-2022, FusionAuth, All Rights Reserved
  *
@@ -16,7 +18,7 @@
 restifyVersion = "4.1.2"
 testngVersion = "7.6.1"
 
-project(group: "io.fusionauth", name: "java-http", version: "0.1.10", licenses: ["ApacheV2_0"]) {
+project(group: "io.fusionauth", name: "tomcat", version: "0.1.10", licenses: ["ApacheV2_0"]) {
   workflow {
     fetch {
       cache()
@@ -32,9 +34,11 @@ project(group: "io.fusionauth", name: "java-http", version: "0.1.10", licenses: 
   }
 
   dependencies {
-    group(name: "test-compile", export: false) {
-      dependency(id: "com.inversoft:restify:${restifyVersion}")
-      dependency(id: "org.testng:testng:${testngVersion}")
+    group(name: "provided") {
+      dependency(id: "javax.servlet:servlet-api:3.1.0", skipCompatibilityCheck: true)
+    }
+    group(name: "tomcat") {
+      dependency(id: "org.apache.tomcat:apache-tomcat:8.5.72:tar.gz")
     }
   }
 
@@ -44,18 +48,17 @@ project(group: "io.fusionauth", name: "java-http", version: "0.1.10", licenses: 
 }
 
 // Plugins
-dependency = loadPlugin(id: "org.savantbuild.plugin:dependency:2.0.0-RC.2")
-java = loadPlugin(id: "org.savantbuild.plugin:java:2.0.0-RC.2")
-javaTestNG = loadPlugin(id: "org.savantbuild.plugin:java-testng:2.0.0-RC.3")
-idea = loadPlugin(id: "org.savantbuild.plugin:idea:2.0.0-RC.2")
-release = loadPlugin(id: "org.savantbuild.plugin:release-git:2.0.0-RC.2")
-pom = loadPlugin(id: "org.savantbuild.plugin:pom:2.0.0-RC.5.{integration}")
+dependency = loadPlugin(id: "org.savantbuild.plugin:dependency:2.0.0-RC.4")
+java = loadPlugin(id: "org.savantbuild.plugin:java:2.0.0-RC.4")
+idea = loadPlugin(id: "org.savantbuild.plugin:idea:2.0.0-RC.4")
+tomcat = loadPlugin(id: "org.savantbuild.plugin:tomcat:2.0.0-RC.4")
+webapp = loadPlugin(id: "org.savantbuild.plugin:webapp:2.0.0-RC.5.{integration}")
 
 java.settings.javaVersion = "17"
 java.settings.compilerArguments = "--add-exports java.base/sun.security.x509=ALL-UNNAMED --add-exports java.base/sun.security.util=ALL-UNNAMED -XDignore.symbol.file"
-javaTestNG.settings.javaVersion = "17"
-javaTestNG.settings.jvmArguments = "--add-exports java.base/sun.security.x509=ALL-UNNAMED --add-exports java.base/sun.security.util=ALL-UNNAMED"
-javaTestNG.settings.testngArguments = "-listener io.fusionauth.http.BaseTest\$TestListener"
+tomcat.settings.buildDirectory = Paths.get("build/dist/tomcat")
+tomcat.settings.buildWebDirectory = Paths.get("build/dist/tomcat/web")
+webapp.settings.dependencies = []
 
 target(name: "clean", description: "Cleans the build directory") {
   java.clean()
@@ -69,29 +72,16 @@ target(name: "jar", description: "Builds the project JARs", dependsOn: ["compile
   java.jar()
 }
 
-target(name: "test", description: "Runs the project's tests", dependsOn: ["jar"]) {
-  var exclude = ["performance"]
-  if (switches.has("includePerformance")) {
-    exclude = []
-  }
-
-  javaTestNG.test(exclude: exclude)
+target(name: "war", description: "Builds the project WAR (exploded and JAR)", dependsOn: ["jar"]) {
+  webapp.build()
 }
 
-target(name: "int", description: "Releases a local integration build of the project", dependsOn: ["test"]) {
-  dependency.integrate()
-}
-
-target(name: "release", description: "Releases a full version of the project", dependsOn: ["clean", "int"]) {
-  release.release()
+target(name: "tomcat", description: "Builds the Tomcat runtime", dependsOn: ["war"]) {
+  tomcat.build()
 }
 
 target(name: "idea", description: "Updates the IntelliJ IDEA module file") {
   idea.iml()
-}
-
-target(name: "pom", description: "Updates the pom.xml file") {
-  pom.update()
 }
 
 target(name: "print-dependency-tree", description: "Prints the dependency tree") {

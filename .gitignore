@@ -1,2 +1,3 @@
 *.iws
 build
+load-tests/tomcat/web/WEB-INF/lib

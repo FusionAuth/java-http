@@ -1,0 +1,26 @@
+<?xml version="1.0" encoding="UTF-8"?>
+
+<Server port="8081" shutdown="SHUTDOWN">
+  <Listener className="org.apache.catalina.core.AprLifecycleListener" SSLEngine="on"/>
+  <Service name="Catalina">
+    <!--
+       The following are defaulted using Unicode Character references.
+       Default Relaxed Path Characters:  []|
+       Default Relaxed Query Characters: []|{}^`\"<>
+
+       https://tomcat.apache.org/tomcat-8.5-doc/config/ajp.html
+       https://tomcat.apache.org/tomcat-8.5-doc/config/http.html
+        - maxParameterCount: A value of less than 0 means no limit.
+        - maxPostSize: The limit can be disabled by setting this attribute to a value less than zero.
+     -->
+    <Connector port="8080" protocol="HTTP/1.1" connectionTimeout="20000" compression="on" maxHttpHeaderSize="${cleanspeak-management-interface.http.max-header-size:-10240}" maxParameterCount="-1" maxPostSize="-1" relaxedPathChars="${cleanspeak-management-interface.http.relaxed-path-chars:-&#x5B;&#x5D;&#x7C;}" relaxedQueryChars="${cleanspeak-management-interface.http.relaxed-query-chars:-&#x5B;&#x5D;&#x7C;&#x7B;&#x7D;&#x5E;&#x5C;&#x60;&#x22;&#x3C;&#x3E;}" redirectPort="8443" URIEncoding="UTF-8"/>
+    <Engine name="Catalina" defaultHost="localhost">
+      <Host name="localhost" autoDeploy="false" unpackWARs="false">
+        <Context path="" docBase="${catalina.base}/../web">
+          <Manager pathname=""/>
+          <Resources allowLinking="true" />
+        </Context>
+      </Host>
+    </Engine>
+  </Service>
+</Server>

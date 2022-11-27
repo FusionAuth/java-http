@@ -1413,6 +1413,7 @@
   <component name="ProjectModuleManager">
     <modules>
       <module fileurl="file://$PROJECT_DIR$/java-http.iml" filepath="$PROJECT_DIR$/java-http.iml" />
+      <module fileurl="file://$PROJECT_DIR$/load-tests/tomcat/tomcat.iml" filepath="$PROJECT_DIR$/load-tests/tomcat/tomcat.iml" />
     </modules>
   </component>
   <component name="ProjectRootManager" version="2" languageLevel="JDK_17" default="true" project-jdk-name="Java 17" project-jdk-type="JavaSDK">
