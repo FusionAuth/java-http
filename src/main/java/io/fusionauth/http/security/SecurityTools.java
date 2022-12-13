@@ -19,6 +19,7 @@ import javax.net.ssl.KeyManagerFactory;
 import javax.net.ssl.SSLContext;
 import javax.net.ssl.TrustManagerFactory;
 import java.io.ByteArrayInputStream;
+import java.io.ByteArrayOutputStream;
 import java.io.IOException;
 import java.security.GeneralSecurityException;
 import java.security.KeyFactory;
@@ -75,25 +76,45 @@ public final class SecurityTools {
   }
 
   public static Certificate parseCertificate(String certificate) throws CertificateException {
-    CertificateFactory factory = CertificateFactory.getInstance("X.509");
-    byte[] certBytes = parseDERFromPEM(certificate, CERT_START, CERT_END);
-    return factory.generateCertificate(new ByteArrayInputStream(certBytes));
+    return parseCertificates(certificate)[0];
   }
 
+  public static Certificate[] parseCertificates(String certificates) throws CertificateException {
+    CertificateFactory factory = CertificateFactory.getInstance("X.509");
+    byte[] certBytes = parseDERFromPEM(certificates, CERT_START, CERT_END);
+    return factory.generateCertificates(new ByteArrayInputStream(certBytes)).toArray(new Certificate[]{});
+  }
+
+  /**
+   * Parses all objects in a PEM-formatted string into a byte[].
+   */
   public static byte[] parseDERFromPEM(String pem, String beginDelimiter, String endDelimiter) {
-    int startIndex = pem.indexOf(beginDelimiter);
-    if (startIndex < 0) {
+    // Allocate an initial buffer to hold 2 certificates.
+    ByteArrayOutputStream outBytes = new ByteArrayOutputStream(4000);
+
+    try {
+      while (!pem.trim().isEmpty()) {
+        int startIndex = pem.indexOf(beginDelimiter);
+        if (startIndex < 0) {
+          throw new IllegalArgumentException("Invalid PEM format");
+        }
+
+        int endIndex = pem.indexOf(endDelimiter);
+        if (endIndex < 0) {
+          throw new IllegalArgumentException("Invalid PEM format");
+        }
+
+        String base64 = pem.substring(startIndex + beginDelimiter.length(), endIndex);
+
+        // Decode current chunk using the MIME decoder to strip whitespace, then skip past chunk.
+        outBytes.write(Base64.getMimeDecoder().decode(base64));
+        pem = pem.substring(endIndex + endDelimiter.length() + 5);
+      }
+
+    } catch (Exception e) {
       throw new IllegalArgumentException("Invalid PEM format");
     }
-
-    int endIndex = pem.indexOf(endDelimiter);
-    if (endIndex < 0) {
-      throw new IllegalArgumentException("Invalid PEM format");
-    }
-
-    // Strip all the whitespace since the PEM and DER allow them but they aren't valid in Base 64 encoding
-    String base64 = pem.substring(startIndex + beginDelimiter.length(), endIndex).replaceAll("\\s", "");
-    return Base64.getDecoder().decode(base64);
+    return outBytes.toByteArray();
   }
 
   public static RSAPrivateKey parsePrivateKey(String privateKey) throws InvalidKeySpecException, NoSuchAlgorithmException {
@@ -116,6 +137,20 @@ public final class SecurityTools {
     keystore.load(null);
     keystore.setCertificateEntry("cert-alias", certificate);
     keystore.setKeyEntry("key-alias", privateKey, "changeit".toCharArray(), new Certificate[]{certificate});
+
+    KeyManagerFactory kmf = KeyManagerFactory.getInstance("SunX509");
+    kmf.init(keystore, "changeit".toCharArray());
+
+    SSLContext context = SSLContext.getInstance("TLS");
+    context.init(kmf.getKeyManagers(), null, null);
+    return context;
+  }
+
+  public static SSLContext serverContext(Certificate[] certificateChain, PrivateKey privateKey)
+      throws GeneralSecurityException, IOException {
+    KeyStore keystore = KeyStore.getInstance("JKS");
+    keystore.load(null);
+    keystore.setKeyEntry("key-alias", privateKey, "changeit".toCharArray(), certificateChain);
 
     KeyManagerFactory kmf = KeyManagerFactory.getInstance("SunX509");
     kmf.init(keystore, "changeit".toCharArray());
