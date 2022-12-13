@@ -19,7 +19,6 @@ import java.nio.file.Files;
 import java.nio.file.Path;
 
 import io.fusionauth.http.BaseTest;
-import org.testng.annotations.AfterMethod;
 import org.testng.annotations.BeforeClass;
 import org.testng.annotations.Test;
 import static org.testng.Assert.assertEquals;
@@ -31,10 +30,6 @@ public class SecurityToolsTest extends BaseTest {
   @BeforeClass
   public static void setUp() {
     projectDir = Path.of("");
-  }
-
-  @AfterMethod
-  public void tearDown() {
   }
 
   @Test

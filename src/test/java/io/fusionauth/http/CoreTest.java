@@ -473,7 +473,7 @@ public class CoreTest extends BaseTest {
 
     setupCertificates();
     var certChain = new Certificate[]{certificate, intermediateCertificate};
-    
+
     try (HTTPServer ignore = new HTTPServer().withHandler(handler)
                                              .withListener(new HTTPListenerConfiguration(4242))
                                              .withListener(new HTTPListenerConfiguration(4243))

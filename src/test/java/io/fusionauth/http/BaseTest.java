@@ -258,7 +258,7 @@ public abstract class BaseTest {
     certificate = signCertificate((X509Certificate) intermediateCertificate, intermediateKeyPair.getPrivate(), serverCertInfo, false);
   }
 
-  protected X509Certificate signCertificate(X509Certificate issuer, PrivateKey key, X509CertInfo signingRequest, boolean isCa)
+  protected X509Certificate signCertificate(X509Certificate issuer, PrivateKey issuerPrivateKey, X509CertInfo signingRequest, boolean isCa)
       throws IllegalArgumentException {
 
     try {
@@ -280,7 +280,7 @@ public abstract class BaseTest {
 
       // Sign it
       X509CertImpl signed = new X509CertImpl(signingRequest);
-      signed.sign(key, "SHA256withRSA");
+      signed.sign(issuerPrivateKey, "SHA256withRSA");
       return signed;
     } catch (Exception e) {
       throw new IllegalArgumentException(e);
