@@ -1,12 +1,14 @@
-<project xmlns="http://maven.apache.org/POM/4.0.0" xsi:schemaLocation="http://maven.apache.org/POM/4.0.0 http://maven.apache.org/maven-v4_0_0.xsd" xmlns:xsi="http://www.w3.org/2001/XMLSchema-instance">
+<project xmlns="http://maven.apache.org/POM/4.0.0" xmlns:xsi="http://www.w3.org/2001/XMLSchema-instance" xsi:schemaLocation="http://maven.apache.org/POM/4.0.0 http://maven.apache.org/maven-v4_0_0.xsd">
   <modelVersion>4.0.0</modelVersion>
   <groupId>io.fusionauth</groupId>
   <artifactId>java-http</artifactId>
   <version>0.1.10</version>
   <packaging>jar</packaging>
+
   <name>Java HTTP library (client and server)</name>
   <description>An HTTP library for Java that provides a lightweight server (currently) and client (eventually) both with a goal of high-performance and simplicity</description>
   <url>https://github.com/FusionAuth/java-http</url>
+
   <distributionManagement>
     <snapshotRepository>
       <id>ossrh</id>
@@ -17,6 +19,7 @@
       <url>https://oss.sonatype.org/service/local/staging/deploy/maven2/</url>
     </repository>
   </distributionManagement>
+
   <developers>
     <developer>
       <name>Brian Pontarelli</name>
@@ -31,6 +34,7 @@
       <organizationUrl>https://fusionauth.io</organizationUrl>
     </developer>
   </developers>
+
   <licenses>
     <license>
       <name>Apache-2.0</name>
@@ -38,14 +42,18 @@
       <distribution>repo</distribution>
     </license>
   </licenses>
+
   <scm>
     <connection>scm:git:ssh://github.com:fusionauth/java-http</connection>
     <url>https://github.com/fusionauth/java-http</url>
   </scm>
+
   <properties>
     <maven.compiler.source>17</maven.compiler.source>
     <maven.compiler.target>17</maven.compiler.target>
   </properties>
+
+  <!--  Testing Dependencies  -->
   <dependencies>
     <dependency>
       <groupId>com.inversoft</groupId>
@@ -64,6 +72,7 @@
       <optional>false</optional>
     </dependency>
   </dependencies>
+
   <build>
     <directory>build</directory>
     <plugins>
@@ -122,6 +131,7 @@
       </plugin>
     </plugins>
   </build>
+
   <profiles>
     <profile>
       <id>release</id>

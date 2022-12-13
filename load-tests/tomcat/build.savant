@@ -1,0 +1,84 @@
+import java.nio.file.Paths
+
+/*
+ * Copyright (c) 2018-2022, FusionAuth, All Rights Reserved
+ *
+ * Licensed under the Apache License, Version 2.0 (the "License");
+ * you may not use this file except in compliance with the License.
+ * You may obtain a copy of the License at
+ *
+ *   http://www.apache.org/licenses/LICENSE-2.0
+ *
+ * Unless required by applicable law or agreed to in writing,
+ * software distributed under the License is distributed on an
+ * "AS IS" BASIS, WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND,
+ * either express or implied. See the License for the specific
+ * language governing permissions and limitations under the License.
+ */
+restifyVersion = "4.1.2"
+testngVersion = "7.6.1"
+
+project(group: "io.fusionauth", name: "tomcat", version: "0.1.10", licenses: ["ApacheV2_0"]) {
+  workflow {
+    fetch {
+      cache()
+      url(url: "https://repository.savantbuild.org")
+    }
+    publish {
+      cache()
+    }
+  }
+
+  publishWorkflow {
+    subversion(repository: "https://svn.savantbuild.org")
+  }
+
+  dependencies {
+    group(name: "provided") {
+      dependency(id: "javax.servlet:servlet-api:3.1.0", skipCompatibilityCheck: true)
+    }
+    group(name: "tomcat") {
+      dependency(id: "org.apache.tomcat:apache-tomcat:8.5.72:tar.gz")
+    }
+  }
+
+  publications {
+    standard()
+  }
+}
+
+// Plugins
+java = loadPlugin(id: "org.savantbuild.plugin:java:2.0.0-RC.4")
+idea = loadPlugin(id: "org.savantbuild.plugin:idea:2.0.0-RC.4")
+tomcat = loadPlugin(id: "org.savantbuild.plugin:tomcat:2.0.0-RC.4")
+webapp = loadPlugin(id: "org.savantbuild.plugin:webapp:2.0.0-RC.5.{integration}")
+
+java.settings.javaVersion = "17"
+java.settings.compilerArguments = "--add-exports java.base/sun.security.x509=ALL-UNNAMED --add-exports java.base/sun.security.util=ALL-UNNAMED -XDignore.symbol.file"
+tomcat.settings.buildDirectory = Paths.get("build/dist/tomcat")
+tomcat.settings.buildWebDirectory = Paths.get("build/dist/tomcat/web")
+webapp.settings.dependencies = []
+
+target(name: "clean", description: "Cleans the build directory") {
+  java.clean()
+}
+
+target(name: "compile", description: "Compiles the Java source files") {
+  java.compile()
+}
+
+target(name: "jar", description: "Builds the project JARs", dependsOn: ["compile"]) {
+  java.jar()
+}
+
+target(name: "war", description: "Builds the project WAR (exploded and JAR)", dependsOn: ["jar"]) {
+  webapp.build()
+}
+
+target(name: "tomcat", description: "Builds the Tomcat runtime", dependsOn: ["war"]) {
+  tomcat.build()
+}
+
+target(name: "idea", description: "Updates the IntelliJ IDEA module file") {
+  idea.iml()
+}
