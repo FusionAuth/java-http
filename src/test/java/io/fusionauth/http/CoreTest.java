@@ -470,8 +470,7 @@ public class CoreTest extends BaseTest {
       }
     };
 
-    keyPair = generateNewRSAKeyPair();
-    certificate = generateSelfSignedCertificate(keyPair.getPublic(), keyPair.getPrivate());
+    setupCertificates();
     try (HTTPServer ignore = new HTTPServer().withHandler(handler)
                                              .withListener(new HTTPListenerConfiguration(4242))
                                              .withListener(new HTTPListenerConfiguration(4243))

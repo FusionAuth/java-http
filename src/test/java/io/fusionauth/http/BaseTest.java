@@ -30,6 +30,7 @@ import java.security.NoSuchAlgorithmException;
 import java.security.PrivateKey;
 import java.security.PublicKey;
 import java.security.cert.Certificate;
+import java.security.cert.X509Certificate;
 import java.time.Duration;
 import java.time.Instant;
 import java.util.Date;
@@ -51,11 +52,17 @@ import org.testng.annotations.DataProvider;
 import sun.security.util.KnownOIDs;
 import sun.security.util.ObjectIdentifier;
 import sun.security.x509.AlgorithmId;
+import sun.security.x509.BasicConstraintsExtension;
 import sun.security.x509.CertificateAlgorithmId;
+import sun.security.x509.CertificateExtensions;
 import sun.security.x509.CertificateSerialNumber;
 import sun.security.x509.CertificateValidity;
 import sun.security.x509.CertificateVersion;
 import sun.security.x509.CertificateX509Key;
+import sun.security.x509.DNSName;
+import sun.security.x509.GeneralName;
+import sun.security.x509.GeneralNames;
+import sun.security.x509.SubjectAlternativeNameExtension;
 import sun.security.x509.X500Name;
 import sun.security.x509.X509CertImpl;
 import sun.security.x509.X509CertInfo;
@@ -82,7 +89,18 @@ public abstract class BaseTest {
 
   public static AccumulatingLogger logger = (AccumulatingLogger) AccumulatingLoggerFactory.FACTORY.getLogger(BaseTest.class);
 
+  /**
+   * Keypairs and certificates for a 3-level CA chain (root->intermediate->server).
+   */
+  public Certificate rootCertificate;
+
+  public Certificate intermediateCertificate;
+
   public Certificate certificate;
+
+  public KeyPair rootKeyPair;
+
+  public KeyPair intermediateKeyPair;
 
   public KeyPair keyPair;
 
@@ -116,8 +134,7 @@ public abstract class BaseTest {
     boolean tls = scheme.equals("https");
     HTTPListenerConfiguration listenerConfiguration;
     if (tls) {
-      keyPair = generateNewRSAKeyPair();
-      certificate = generateSelfSignedCertificate(keyPair.getPublic(), keyPair.getPrivate());
+      setupCertificates();
       listenerConfiguration = new HTTPListenerConfiguration(4242, certificate, keyPair.getPrivate());
     } else {
       listenerConfiguration = new HTTPListenerConfiguration(4242);
@@ -130,6 +147,24 @@ public abstract class BaseTest {
                            .withLoggerFactory(AccumulatingLoggerFactory.FACTORY)
                            .withNumberOfWorkerThreads(1)
                            .withListener(listenerConfiguration);
+  }
+
+  /**
+   * Generates keypairs and certificates for Root CA -> Intermediate -> Server Certificate.
+   */
+  protected void setupCertificates() {
+    rootKeyPair = generateNewRSAKeyPair();
+    intermediateKeyPair = generateNewRSAKeyPair();
+    keyPair = generateNewRSAKeyPair();
+
+    // Build root and intermediate CAs
+    rootCertificate = generateRootCA(rootKeyPair.getPublic(), rootKeyPair.getPrivate());
+    X509CertInfo intermediateCertInfo = generateCertInfo(intermediateKeyPair.getPublic(), "intermediate.fusionauth.io");
+    intermediateCertificate = signCertificate((X509Certificate) rootCertificate, rootKeyPair.getPrivate(), intermediateCertInfo, true);
+
+    // Build server cert
+    X509CertInfo serverCertInfo = generateCertInfo(keyPair.getPublic(), "local.fusionauth.io");
+    certificate = signCertificate((X509Certificate) intermediateCertificate, intermediateKeyPair.getPrivate(), serverCertInfo, false);
   }
 
   public URI makeURI(String scheme, String params) {
@@ -180,24 +215,63 @@ public abstract class BaseTest {
     }
   }
 
-  protected Certificate generateSelfSignedCertificate(PublicKey publicKey, PrivateKey privateKey)
+  protected X509Certificate generateRootCA(PublicKey publicKey, PrivateKey privateKey)
       throws IllegalArgumentException {
+    try {
+      // Generate the standard CertInfo, but set Issuer and Subject to the same value.
+      X509CertInfo certInfo = generateCertInfo(publicKey, "root-ca.fusionauth.io");
+      certInfo.set(X509CertInfo.ISSUER, new X500Name("CN=root-ca.fusionauth.io"));
+
+      // Self-sign certificate
+      return signCertificate(new X509CertImpl(certInfo), privateKey, certInfo, true);
+
+    } catch (Exception e) {
+      throw new IllegalArgumentException(e);
+    }
+  }
+
+  protected X509CertInfo generateCertInfo(PublicKey publicKey, String commonName) {
     try {
       X509CertInfo certInfo = new X509CertInfo();
       CertificateX509Key certKey = new CertificateX509Key(publicKey);
       certInfo.set(X509CertInfo.KEY, certKey);
-      // X.509 Certificate version 2 (0 based)
-      certInfo.set(X509CertInfo.VERSION, new CertificateVersion(1));
+      // X.509 Certificate version 3 (0 based)
+      certInfo.set(X509CertInfo.VERSION, new CertificateVersion(2));
       certInfo.set(X509CertInfo.ALGORITHM_ID, new CertificateAlgorithmId(new AlgorithmId(ObjectIdentifier.of(KnownOIDs.SHA256withRSA))));
-      certInfo.set(X509CertInfo.ISSUER, new X500Name("CN=local.fusionauth.io"));
-      certInfo.set(X509CertInfo.SUBJECT, new X500Name("CN=local.fusionauth.io"));
+      certInfo.set(X509CertInfo.SUBJECT, new X500Name("CN=" + commonName));
       certInfo.set(X509CertInfo.VALIDITY, new CertificateValidity(Date.from(Instant.now().minusSeconds(30)), Date.from(Instant.now().plusSeconds(10_000))));
       certInfo.set(X509CertInfo.SERIAL_NUMBER, new CertificateSerialNumber(new BigInteger(UUID.randomUUID().toString().replace("-", ""), 16)));
 
-      X509CertImpl impl = new X509CertImpl(certInfo);
-      impl.sign(privateKey, "SHA256withRSA");
-      return impl;
-    } catch (Exception e) {
+      return certInfo;
+    } catch(Exception e) {
+      throw new IllegalArgumentException(e);
+    }
+  }
+
+  protected X509Certificate signCertificate(X509Certificate issuer, PrivateKey key, X509CertInfo signingRequest, boolean isCa) throws IllegalArgumentException {
+
+    try {
+      X509CertInfo issuerInfo = new X509CertInfo(issuer.getTBSCertificate());
+      signingRequest.set(X509CertInfo.ISSUER, issuerInfo.get(X509CertInfo.SUBJECT));
+      CertificateExtensions certExtensions = new CertificateExtensions();
+
+      if (isCa) {
+        certExtensions.set(BasicConstraintsExtension.NAME, new BasicConstraintsExtension(true, true, 1));
+      }
+
+      // Set the Subject Alternate Names field to the DNS hostname.
+      X500Name subject = (X500Name) signingRequest.get(X509CertInfo.SUBJECT);
+      String hostname = subject.getCommonName();
+      GeneralNames altNames = new GeneralNames();
+      altNames.add(new GeneralName(new DNSName(hostname)));
+      certExtensions.set(SubjectAlternativeNameExtension.NAME, new SubjectAlternativeNameExtension(true, altNames));
+      signingRequest.set(X509CertInfo.EXTENSIONS, certExtensions);
+
+      // Sign it
+      X509CertImpl signed = new X509CertImpl(signingRequest);
+      signed.sign(key, "SHA256withRSA");
+      return signed;
+    } catch(Exception e) {
       throw new IllegalArgumentException(e);
     }
   }
