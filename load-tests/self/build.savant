@@ -18,7 +18,7 @@ import java.nio.file.Paths
 restifyVersion = "4.1.2"
 testngVersion = "7.6.1"
 
-project(group: "io.fusionauth", name: "tomcat", version: "0.1.10", licenses: ["ApacheV2_0"]) {
+project(group: "io.fusionauth", name: "self", version: "0.1.0", licenses: ["Apache-2.0"]) {
   workflow {
     fetch {
       cache()
@@ -34,11 +34,8 @@ project(group: "io.fusionauth", name: "tomcat", version: "0.1.10", licenses: ["A
   }
 
   dependencies {
-    group(name: "provided") {
-      dependency(id: "javax.servlet:servlet-api:3.1.0", skipCompatibilityCheck: true)
-    }
-    group(name: "tomcat") {
-      dependency(id: "org.apache.tomcat:apache-tomcat:8.5.72:tar.gz")
+    group(name: "compile") {
+      dependency(id: "io.fusionauth:java-http:0.1.8")
     }
   }
 
@@ -48,6 +45,8 @@ project(group: "io.fusionauth", name: "tomcat", version: "0.1.10", licenses: ["A
 }
 
 // Plugins
+dependency = loadPlugin(id: "org.savantbuild.plugin:dependency:2.0.0-RC.4")
+file = loadPlugin(id: "org.savantbuild.plugin:file:2.0.0-RC.4")
 java = loadPlugin(id: "org.savantbuild.plugin:java:2.0.0-RC.4")
 idea = loadPlugin(id: "org.savantbuild.plugin:idea:2.0.0-RC.4")
 tomcat = loadPlugin(id: "org.savantbuild.plugin:tomcat:2.0.0-RC.4")
@@ -71,12 +70,19 @@ target(name: "jar", description: "Builds the project JARs", dependsOn: ["compile
   java.jar()
 }
 
-target(name: "war", description: "Builds the project WAR (exploded and JAR)", dependsOn: ["jar"]) {
-  webapp.build()
-}
+target(name: "app", description: "Builds the app", dependsOn: ["jar"]) {
+  // Copy all compile dependencies to be able to run command line
+  dependency.copy(to: "build/lib") {
+    dependencies(group: "compile", transitive: true, fetchSource: false)
+  }
 
-target(name: "tomcat", description: "Builds the Tomcat runtime", dependsOn: ["war"]) {
-  tomcat.build()
+  file.copy(to: "build/lib") {
+    fileSet(dir: "build/jars")
+  }
+
+  file.copy(to: "build") {
+    fileSet(dir: "src/main/script")
+  }
 }
 
 target(name: "idea", description: "Updates the IntelliJ IDEA module file") {

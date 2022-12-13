@@ -15,30 +15,26 @@
  */
 package io.fusionauth.http.load;
 
-import javax.servlet.http.HttpServlet;
-import javax.servlet.http.HttpServletRequest;
-import javax.servlet.http.HttpServletResponse;
 import java.io.InputStream;
-import java.io.PrintWriter;
+import java.io.OutputStream;
 import java.util.Base64;
 
-public class LoadServlet extends HttpServlet {
-  @Override
-  protected void doGet(HttpServletRequest req, HttpServletResponse res) {
-    doPost(req, res);
-  }
+import io.fusionauth.http.server.HTTPHandler;
+import io.fusionauth.http.server.HTTPRequest;
+import io.fusionauth.http.server.HTTPResponse;
 
+public class LoadHandler implements HTTPHandler {
   @Override
-  protected void doPost(HttpServletRequest req, HttpServletResponse res) {
+  public void handle(HTTPRequest req, HTTPResponse res) {
     try (InputStream is = req.getInputStream()) {
       byte[] body = is.readAllBytes();
       String result = Base64.getEncoder().encodeToString(body);
       res.setStatus(200);
 
-      PrintWriter writer = res.getWriter();
-      writer.write(result);
-      writer.flush();
-      writer.close();
+      OutputStream os = res.getOutputStream();
+      os.write(result.getBytes());
+      os.flush();
+      os.close();
     } catch (Exception e) {
       res.setStatus(500);
     }
