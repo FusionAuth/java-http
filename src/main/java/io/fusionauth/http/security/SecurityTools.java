@@ -106,7 +106,7 @@ public final class SecurityTools {
 
         String base64 = pem.substring(startIndex + beginDelimiter.length(), endIndex);
 
-        // Decode current chunk using the MIME decoder to strip whitespace, then skip past chunk.
+        // Decode current chunk using the MIME decoder to strip whitespace, then skip past end delimiter and trailing "-----".
         outBytes.write(Base64.getMimeDecoder().decode(base64));
         pem = pem.substring(endIndex + endDelimiter.length() + 5);
       }
