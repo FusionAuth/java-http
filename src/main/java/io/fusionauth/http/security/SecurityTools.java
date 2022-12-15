@@ -18,6 +18,7 @@ package io.fusionauth.http.security;
 import javax.net.ssl.KeyManagerFactory;
 import javax.net.ssl.SSLContext;
 import javax.net.ssl.TrustManagerFactory;
+import javax.security.auth.x500.X500Principal;
 import java.io.ByteArrayInputStream;
 import java.io.ByteArrayOutputStream;
 import java.io.IOException;
@@ -29,10 +30,13 @@ import java.security.PrivateKey;
 import java.security.cert.Certificate;
 import java.security.cert.CertificateException;
 import java.security.cert.CertificateFactory;
+import java.security.cert.X509Certificate;
 import java.security.interfaces.RSAPrivateKey;
 import java.security.spec.InvalidKeySpecException;
 import java.security.spec.PKCS8EncodedKeySpec;
 import java.util.Base64;
+import java.util.Collection;
+import java.util.HashMap;
 
 /**
  * A toolkit for security helper methods.
@@ -79,11 +83,59 @@ public final class SecurityTools {
     return parseCertificates(certificate)[0];
   }
 
-  public static Certificate[] parseCertificates(String certificates) throws CertificateException {
+  public static Certificate[] parseCertificates(String certificateString) throws CertificateException {
     CertificateFactory factory = CertificateFactory.getInstance("X.509");
-    byte[] certBytes = parseDERFromPEM(certificates, CERT_START, CERT_END);
-    return factory.generateCertificates(new ByteArrayInputStream(certBytes)).toArray(new Certificate[]{});
+    var is = new ByteArrayInputStream(certificateString.getBytes());
+    var certs = (Collection<X509Certificate>) factory.generateCertificates(is);
+    return reorderCertificates(certs);
   }
+
+  /**
+   * Returns an array of Certificates ordered starting from the end-entity through each supplied issuer in the List.
+   */
+  private static Certificate[] reorderCertificates(Collection<X509Certificate> certs) {
+    if (certs.isEmpty()) {
+      throw new IllegalArgumentException("Empty certificate list");
+    }
+
+    var orderedCerts = new X509Certificate[certs.size()];
+
+    // Short circuit if only one cert is in collection
+    if (certs.size() == 1) {
+      orderedCerts[0] = certs.stream().findFirst().get();
+      return orderedCerts;
+    }
+
+    // Index certificates by Issuer and Subject
+    var certsByIssuer = new HashMap<X500Principal, X509Certificate>(certs.size());
+    var certsBySubject = new HashMap<X500Principal, X509Certificate>(certs.size());
+
+    // Load all certificates into maps
+    for (X509Certificate cert : certs) {
+      certsByIssuer.put(cert.getIssuerX500Principal(), cert);
+      certsBySubject.put(cert.getSubjectX500Principal(), cert);
+    }
+
+    // Find the server certificate. It's the one that no other certificate refers to as its issuer. Store it in the first array element.
+    for (var cert : certs) {
+      if (!certsByIssuer.containsKey(cert.getSubjectX500Principal())) {
+        orderedCerts[0] = cert;
+        break;
+      }
+    }
+
+    // Start at the server cert and add each issuer certificate in order.
+    for (int i = 0; i < orderedCerts.length - 1; i++) {
+      var issuer = certsBySubject.get(orderedCerts[i].getIssuerX500Principal());
+      if (issuer == null) {
+        throw new IllegalArgumentException("Missing issuer cert for " + orderedCerts[i].getIssuerX500Principal());
+      }
+      orderedCerts[i + 1] = issuer;
+    }
+
+    return orderedCerts;
+  }
+
 
   /**
    * Parses all objects in a PEM-formatted string into a byte[].

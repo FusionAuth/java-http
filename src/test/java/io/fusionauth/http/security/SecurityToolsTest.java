@@ -40,7 +40,7 @@ public class SecurityToolsTest extends BaseTest {
 
     var certs = SecurityTools.parseCertificates(combinedPem);
     var rootCert = SecurityTools.parseCertificate(rootPem);
-    assertEquals(certs.length, 2);
+    assertEquals(certs.length, 3);
 
     validateCertPath(rootCert, certs);
   }
