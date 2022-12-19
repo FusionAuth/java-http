@@ -92,7 +92,7 @@ public final class SecurityTools {
   }
 
   /**
-   * Parses and re-orders multiple Certificates from a PEM-formatted string into an
+   * Parses and re-orders multiple Certificates from a PEM-formatted string into an ordered certificate chain array.
    *
    * @param certificateString the PEM-formatted content of one or more certificates in a chain.
    * @return An array of {@link Certificate}s ordered from the end-entity through each supplied issuer.
