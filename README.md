@@ -100,9 +100,7 @@ public class Example {
 
 ### TLS
 
-The HTTP server implements TLS 1.0-1.3 using the Java SSLEngine. To enable TLS for your server, you need to create an
-`HTTPListenerConfiguration` that includes a certificate and private key. Most production use-cases will use a proxy such as Apache, Nginx,
-ALBs, etc. In development, it is recommended that you set up self-signed certificates and load those into the HTTP server.
+The HTTP server implements TLS 1.0-1.3 using the Java SSLEngine. To enable TLS for your server, you need to create an `HTTPListenerConfiguration` that includes a certificate and private key. Most production use-cases will use a proxy such as Apache, Nginx, ALBs, etc. In development, it is recommended that you set up self-signed certificates and load those into the HTTP server.
 
 To set up self-signed certificates on macOS, you can use the program `mkcert`. Here is an example:
 
@@ -113,8 +111,7 @@ mkdir -p ~/dev/certificates
 mkcert -cert-file ~/dev/certificates/example.org.pem -key-file ~/dev/certificates/example.org.key example.org
 ```
 
-In production environments, your certificate will likely be signed by one or more intermediate Certificate Authorities. In addition to
-the server certificate, ensure that all intermediate CA certificates in the chain are included in your pem file. 
+In production environments, your certificate will likely be signed by one or more intermediate Certificate Authorities. In addition to the server certificate, ensure that all intermediate CA certificates in the chain are included in your pem file.
 
 Now you can load these into the HTTP server like this:
 

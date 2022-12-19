@@ -32,6 +32,7 @@ import java.security.NoSuchAlgorithmException;
 import java.security.PrivateKey;
 import java.security.PublicKey;
 import java.security.cert.CertPath;
+import java.security.cert.CertPathParameters;
 import java.security.cert.CertPathValidator;
 import java.security.cert.CertPathValidatorException;
 import java.security.cert.Certificate;
@@ -288,7 +289,8 @@ public abstract class BaseTest {
   }
 
   /**
-   * Verifies that the chain certificates can be validated up to the supplied root certificate.
+   * Verifies that the chain certificates can be validated up to the supplied root certificate. See
+   * {@link CertPathValidator#validate(CertPath, CertPathParameters)} for details.
    */
   protected void validateCertPath(Certificate root, Certificate[] chain)
       throws CertPathValidatorException, InvalidAlgorithmParameterException {

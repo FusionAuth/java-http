@@ -20,7 +20,6 @@ import javax.net.ssl.SSLContext;
 import javax.net.ssl.TrustManagerFactory;
 import javax.security.auth.x500.X500Principal;
 import java.io.ByteArrayInputStream;
-import java.io.ByteArrayOutputStream;
 import java.io.IOException;
 import java.security.GeneralSecurityException;
 import java.security.KeyFactory;
@@ -79,10 +78,26 @@ public final class SecurityTools {
     return context;
   }
 
-  public static Certificate parseCertificate(String certificate) throws CertificateException {
-    return parseCertificates(certificate)[0];
+  /**
+   * Parses a single certificate from a PEM string.
+   *
+   * @param certificateString PEM-formatted certificate text.
+   * @return The first {@link Certificate} encoded in the file.
+   * @throws CertificateException If unable to parse PEM content.
+   */
+  public static Certificate parseCertificate(String certificateString) throws CertificateException {
+    CertificateFactory factory = CertificateFactory.getInstance("X.509");
+    var is = new ByteArrayInputStream(certificateString.getBytes());
+    return factory.generateCertificates(is).stream().findFirst().get();
   }
 
+  /**
+   * Parses and re-orders multiple Certificates from a PEM-formatted string into an
+   *
+   * @param certificateString the PEM-formatted content of one or more certificates in a chain.
+   * @return An array of {@link Certificate}s ordered from the end-entity through each supplied issuer.
+   * @throws CertificateException If unable to parse PEM content.
+   */
   public static Certificate[] parseCertificates(String certificateString) throws CertificateException {
     CertificateFactory factory = CertificateFactory.getInstance("X.509");
     var is = new ByteArrayInputStream(certificateString.getBytes());
@@ -92,6 +107,10 @@ public final class SecurityTools {
 
   /**
    * Returns an array of Certificates ordered starting from the end-entity through each supplied issuer in the List.
+   *
+   * @param certs The certificates to re-order.
+   * @return An array of {@link Certificate}s ordered from the end-entity through each supplied issuer.
+   * @throws IllegalArgumentException if certs is empty or missing an intermediate issuer cert.
    */
   private static Certificate[] reorderCertificates(Collection<X509Certificate> certs) {
     if (certs.isEmpty()) {
@@ -138,35 +157,22 @@ public final class SecurityTools {
 
 
   /**
-   * Parses all objects in a PEM-formatted string into a byte[].
+   * Parses a single object in a PEM-formatted string into a byte[].
    */
   public static byte[] parseDERFromPEM(String pem, String beginDelimiter, String endDelimiter) {
-    // Allocate an initial buffer to hold 2 certificates.
-    ByteArrayOutputStream outBytes = new ByteArrayOutputStream(4000);
-
-    try {
-      while (!pem.trim().isEmpty()) {
-        int startIndex = pem.indexOf(beginDelimiter);
-        if (startIndex < 0) {
-          throw new IllegalArgumentException("Invalid PEM format");
-        }
-
-        int endIndex = pem.indexOf(endDelimiter);
-        if (endIndex < 0) {
-          throw new IllegalArgumentException("Invalid PEM format");
-        }
-
-        String base64 = pem.substring(startIndex + beginDelimiter.length(), endIndex);
-
-        // Decode current chunk using the MIME decoder to strip whitespace, then skip past end delimiter and trailing "-----".
-        outBytes.write(Base64.getMimeDecoder().decode(base64));
-        pem = pem.substring(endIndex + endDelimiter.length() + 5);
-      }
-
-    } catch (Exception e) {
+    int startIndex = pem.indexOf(beginDelimiter);
+    if (startIndex < 0) {
       throw new IllegalArgumentException("Invalid PEM format");
     }
-    return outBytes.toByteArray();
+
+    int endIndex = pem.indexOf(endDelimiter);
+    if (endIndex < 0) {
+      throw new IllegalArgumentException("Invalid PEM format");
+    }
+
+    // Strip all the whitespace since the PEM and DER allow them but they aren't valid in Base 64 encoding
+    String base64 = pem.substring(startIndex + beginDelimiter.length(), endIndex).replaceAll("\\s", "");
+    return Base64.getDecoder().decode(base64);
   }
 
   public static RSAPrivateKey parsePrivateKey(String privateKey) throws InvalidKeySpecException, NoSuchAlgorithmException {

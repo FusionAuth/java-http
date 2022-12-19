@@ -23,6 +23,11 @@ import org.testng.annotations.BeforeClass;
 import org.testng.annotations.Test;
 import static org.testng.Assert.assertEquals;
 
+/**
+ * Tests parsing of certificate chains and keys.
+ *
+ * @author Mark Manes
+ */
 public class SecurityToolsTest extends BaseTest {
 
   static Path projectDir;
@@ -42,6 +47,7 @@ public class SecurityToolsTest extends BaseTest {
     var rootCert = SecurityTools.parseCertificate(rootPem);
     assertEquals(certs.length, 3);
 
+    // Ensure that the combined server certificate chain validate up to the root. This will throw an exception on validation failure.
     validateCertPath(rootCert, certs);
   }
 }
