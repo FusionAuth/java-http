@@ -204,6 +204,14 @@ public final class SecurityTools {
     return context;
   }
 
+  /**
+   * This creates an in-memory keystore containing the certificate chain and private key and initializes the SSLContext with the key
+   * material it contains.
+   *
+   * @param certificateChain The chain of certificates to include in the TLS negotiation. Should be ordered by end-entity first.
+   * @param privateKey       The PrivateKey corresponding to the end-entity certificate in the chain.
+   * @return A SSLContext configured with the Certificate and Private Key.
+   */
   public static SSLContext serverContext(Certificate[] certificateChain, PrivateKey privateKey)
       throws GeneralSecurityException, IOException {
     KeyStore keystore = KeyStore.getInstance("JKS");
