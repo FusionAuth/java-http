@@ -36,7 +36,7 @@ import io.fusionauth.http.security.SecurityTools;
 public class HTTPListenerConfiguration {
   private final InetAddress bindAddress;
 
-  private final Certificate certificate;
+  private final Certificate[] certificateChain;
 
   private final int port;
 
@@ -54,7 +54,7 @@ public class HTTPListenerConfiguration {
     this.bindAddress = allInterfaces();
     this.port = port;
     this.tls = false;
-    this.certificate = null;
+    this.certificateChain = null;
     this.privateKey = null;
   }
 
@@ -62,7 +62,7 @@ public class HTTPListenerConfiguration {
    * Stores the configuration for a single HTTP listener for the server. This constructor sets up a TLS based listener.
    *
    * @param port        The port of this listener.
-   * @param certificate The certificate as a PEM encoded X.509 certificate String.
+   * @param certificate The certificate as a PEM encoded X.509 certificate String. May include intermediate CA certificates.
    * @param privateKey  The private key as a PKCS8 encoded DER private key.
    * @throws GeneralSecurityException If the private key or certificate Strings were not valid and could not be parsed.
    */
@@ -73,7 +73,7 @@ public class HTTPListenerConfiguration {
     this.bindAddress = allInterfaces();
     this.port = port;
     this.tls = true;
-    this.certificate = SecurityTools.parseCertificate(certificate);
+    this.certificateChain = SecurityTools.parseCertificates(certificate);
     this.privateKey = SecurityTools.parsePrivateKey(privateKey);
   }
 
@@ -91,7 +91,26 @@ public class HTTPListenerConfiguration {
     this.bindAddress = allInterfaces();
     this.port = port;
     this.tls = true;
-    this.certificate = certificate;
+    this.certificateChain = new Certificate[]{certificate};
+    this.privateKey = privateKey;
+  }
+
+  /**
+   * Stores the configuration for a single HTTP listener for the server. This constructor sets up a TLS based listener using the supplied
+   * certificate chain.
+   *
+   * @param port             The port of this listener.
+   * @param certificateChain The certificate Object.
+   * @param privateKey       The private key Object.
+   */
+  public HTTPListenerConfiguration(int port, Certificate[] certificateChain, PrivateKey privateKey) {
+    Objects.requireNonNull(certificateChain);
+    Objects.requireNonNull(privateKey);
+
+    this.bindAddress = allInterfaces();
+    this.port = port;
+    this.tls = true;
+    this.certificateChain = certificateChain;
     this.privateKey = privateKey;
   }
 
@@ -107,7 +126,7 @@ public class HTTPListenerConfiguration {
     this.bindAddress = bindAddress;
     this.port = port;
     this.tls = false;
-    this.certificate = null;
+    this.certificateChain = null;
     this.privateKey = null;
   }
 
@@ -129,7 +148,7 @@ public class HTTPListenerConfiguration {
     this.bindAddress = bindAddress;
     this.port = port;
     this.tls = true;
-    this.certificate = SecurityTools.parseCertificate(certificate);
+    this.certificateChain = SecurityTools.parseCertificates(certificate);
     this.privateKey = SecurityTools.parsePrivateKey(privateKey);
   }
 
@@ -149,7 +168,7 @@ public class HTTPListenerConfiguration {
     this.bindAddress = bindAddress;
     this.port = port;
     this.tls = true;
-    this.certificate = certificate;
+    this.certificateChain = new Certificate[]{certificate};
     this.privateKey = privateKey;
   }
 
@@ -158,7 +177,15 @@ public class HTTPListenerConfiguration {
   }
 
   public Certificate getCertificate() {
-    return certificate;
+    if (certificateChain != null && certificateChain.length > 0) {
+      return certificateChain[0];
+    } else {
+      return null;
+    }
+  }
+
+  public Certificate[] getCertificateChain() {
+    return certificateChain;
   }
 
   public int getPort() {

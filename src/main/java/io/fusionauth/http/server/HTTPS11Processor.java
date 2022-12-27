@@ -58,7 +58,7 @@ public class HTTPS11Processor implements HTTPProcessor {
     this.logger = configuration.getLoggerFactory().getLogger(HTTPS11Processor.class);
 
     if (listenerConfiguration.isTLS()) {
-      SSLContext context = SecurityTools.serverContext(listenerConfiguration.getCertificate(), listenerConfiguration.getPrivateKey());
+      SSLContext context = SecurityTools.serverContext(listenerConfiguration.getCertificateChain(), listenerConfiguration.getPrivateKey());
       this.engine = context.createSSLEngine();
       this.engine.setUseClientMode(false);
 

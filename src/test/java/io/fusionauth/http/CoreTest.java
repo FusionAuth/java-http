@@ -25,6 +25,7 @@ import java.net.http.HttpRequest;
 import java.net.http.HttpRequest.BodyPublishers;
 import java.net.http.HttpResponse.BodySubscribers;
 import java.nio.charset.StandardCharsets;
+import java.security.cert.Certificate;
 import java.time.Duration;
 import java.util.List;
 import java.util.Locale;
@@ -470,12 +471,13 @@ public class CoreTest extends BaseTest {
       }
     };
 
-    keyPair = generateNewRSAKeyPair();
-    certificate = generateSelfSignedCertificate(keyPair.getPublic(), keyPair.getPrivate());
+    setupCertificates();
+    var certChain = new Certificate[]{certificate, intermediateCertificate};
+
     try (HTTPServer ignore = new HTTPServer().withHandler(handler)
                                              .withListener(new HTTPListenerConfiguration(4242))
                                              .withListener(new HTTPListenerConfiguration(4243))
-                                             .withListener(new HTTPListenerConfiguration(4244, certificate, keyPair.getPrivate()))
+                                             .withListener(new HTTPListenerConfiguration(4244, certChain, keyPair.getPrivate()))
                                              .withLoggerFactory(AccumulatingLoggerFactory.FACTORY)
                                              .withNumberOfWorkerThreads(1)
                                              .start()) {
@@ -625,6 +627,32 @@ public class CoreTest extends BaseTest {
       Thread.sleep(millis);
     } catch (InterruptedException e) {
       // Ignore
+    }
+  }
+
+  @Test
+  public void certificateChain() throws Exception {
+    HTTPHandler handler = (req, res) -> {
+      res.setStatus(200);
+      res.getOutputStream().close();
+    };
+
+    try (HTTPServer ignore = makeServer("https", handler).start()) {
+      var client = makeClient("https", null);
+      URI uri = makeURI("https", "");
+      HttpRequest request = HttpRequest.newBuilder()
+                                       .uri(uri)
+                                       .GET()
+                                       .build();
+
+      var response = client.send(request, r -> BodySubscribers.ofInputStream());
+      assertEquals(response.statusCode(), 200);
+
+      var sslSession = response.sslSession().get();
+      var peerCerts = sslSession.getPeerCertificates();
+
+      // Verify that we received all intermediates, and can verify the chain all the way up to rootCertificate.
+      validateCertPath(rootCertificate, peerCerts);
     }
   }
 }

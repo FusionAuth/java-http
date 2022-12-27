@@ -111,6 +111,8 @@ mkdir -p ~/dev/certificates
 mkcert -cert-file ~/dev/certificates/example.org.pem -key-file ~/dev/certificates/example.org.key example.org
 ```
 
+In production environments, your certificate will likely be signed by one or more intermediate Certificate Authorities. In addition to the server certificate, ensure that all intermediate CA certificates in the chain are included in your pem file.
+
 Now you can load these into the HTTP server like this:
 
 ```java
