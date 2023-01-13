@@ -127,7 +127,7 @@ public class HTTPRequestProcessor {
             }
           }
 
-          // Create the input stream and add any body data that is left over in the buffer
+          // Create the input stream and add remaining body data that is left over in the buffer
           inputStream = new ReaderBlockingByteBufferInputStream();
           if (buffer.hasRemaining()) {
             ByteBuffer bodyBuffer = bodyProcessor.currentBuffer();
