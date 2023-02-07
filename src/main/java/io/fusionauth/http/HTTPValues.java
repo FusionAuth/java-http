@@ -1,5 +1,5 @@
 /*
- * Copyright (c) 2021-2022, FusionAuth, All Rights Reserved
+ * Copyright (c) 2021-2023, FusionAuth, All Rights Reserved
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -22,6 +22,14 @@ package io.fusionauth.http;
  */
 public final class HTTPValues {
   private HTTPValues() {
+  }
+
+  public static final class CacheControl {
+    public static final String NoCache = "no-cache";
+
+    public static final String NoStore = "no-store";
+
+    public static final String OnlyIfCached = "only-if-cached";
   }
 
   public static final class Connections {
