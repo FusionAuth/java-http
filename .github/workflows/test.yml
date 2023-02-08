@@ -23,9 +23,9 @@ jobs:
           mkdir -p ~/dev/savant
           mkdir -p ~/.savant/plugins
           cd ~/dev/savant
-          curl -fSL https://github.com/savant-build/savant-core/releases/download/2.0.0-RC.2/savant-2.0.0-RC.2.tar.gz > savant.tar.gz
+          curl -fSL https://github.com/savant-build/savant-core/releases/download/2.0.0-RC.4/savant-2.0.0-RC.4.tar.gz > savant.tar.gz
           tar -xzf savant.tar.gz
-          ln -s savant-2.0.0-RC.2 current
+          ln -s savant-2.0.0-RC.4 current
           rm savant.tar.gz
           cat <<EOF > ~/.savant/plugins/org.savantbuild.plugin.java.properties
           17=${JAVA_HOME_17_X64}
