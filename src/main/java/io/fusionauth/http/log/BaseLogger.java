@@ -1,5 +1,5 @@
 /*
- * Copyright (c) 2022, FusionAuth, All Rights Reserved
+ * Copyright (c) 2022-2023, FusionAuth, All Rights Reserved
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -17,6 +17,7 @@ package io.fusionauth.http.log;
 
 import java.io.PrintWriter;
 import java.io.StringWriter;
+import java.util.regex.Matcher;
 
 /**
  * A base class for loggers.
@@ -112,13 +113,10 @@ public abstract class BaseLogger implements Logger {
   }
 
   protected String format(String message, Object... values) {
-    if (values.length == 0) {
-      return timestamp() + message;
-    }
-
     for (Object value : values) {
       String replacement = value != null ? value.toString() : "null";
-      message = message.replaceFirst("\\{}", replacement);
+      // Account for the replacement value containing a '$' or other regular expression reference.
+      message = message.replaceFirst("\\{}", Matcher.quoteReplacement(replacement));
     }
 
     return timestamp() + message;

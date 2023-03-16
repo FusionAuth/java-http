@@ -1,5 +1,5 @@
 /*
- * Copyright (c) 2022, FusionAuth, All Rights Reserved
+ * Copyright (c) 2022-2023, FusionAuth, All Rights Reserved
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -37,6 +37,7 @@ import com.inversoft.rest.TextResponseHandler;
 import io.fusionauth.http.HTTPValues.Connections;
 import io.fusionauth.http.HTTPValues.Headers;
 import io.fusionauth.http.log.AccumulatingLoggerFactory;
+import io.fusionauth.http.log.Level;
 import io.fusionauth.http.server.CountingInstrumenter;
 import io.fusionauth.http.server.HTTPHandler;
 import io.fusionauth.http.server.HTTPListenerConfiguration;
@@ -257,6 +258,17 @@ public class CoreTest extends BaseTest {
 
       assertEquals(response.statusCode(), 200);
     }
+  }
+
+  @Test
+  public void logger() {
+    // Test replacement values and ensure we are handling special regex characters.
+    logger.setLevel(Level.Debug);
+    logger.info("Class name: [{}]", "io.fusionauth.http.Test$InnerClass");
+
+    // Expect that we do not encounter an exception.
+    String output = logger.toString();
+    assertEquals(output, "Class name: io.fusionauth.http.Test$InnerClass");
   }
 
   @Test(dataProvider = "schemes", groups = "performance")
