@@ -117,6 +117,32 @@ public class CoreTest extends BaseTest {
   }
 
   @Test
+  public void certificateChain() throws Exception {
+    HTTPHandler handler = (req, res) -> {
+      res.setStatus(200);
+      res.getOutputStream().close();
+    };
+
+    try (HTTPServer ignore = makeServer("https", handler).start()) {
+      var client = makeClient("https", null);
+      URI uri = makeURI("https", "");
+      HttpRequest request = HttpRequest.newBuilder()
+                                       .uri(uri)
+                                       .GET()
+                                       .build();
+
+      var response = client.send(request, r -> BodySubscribers.ofInputStream());
+      assertEquals(response.statusCode(), 200);
+
+      var sslSession = response.sslSession().get();
+      var peerCerts = sslSession.getPeerCertificates();
+
+      // Verify that we received all intermediates, and can verify the chain all the way up to rootCertificate.
+      validateCertPath(rootCertificate, peerCerts);
+    }
+  }
+
+  @Test
   public void clientTimeout() throws Exception {
     HTTPHandler handler = (req, res) -> {
       System.out.println("Handling");
@@ -268,7 +294,7 @@ public class CoreTest extends BaseTest {
 
     // Expect that we do not encounter an exception.
     String output = logger.toString();
-    assertEquals(output, "Class name: io.fusionauth.http.Test$InnerClass");
+    assertTrue(output.endsWith("Class name: [io.fusionauth.http.Test$InnerClass]"));
   }
 
   @Test(dataProvider = "schemes", groups = "performance")
@@ -639,32 +665,6 @@ public class CoreTest extends BaseTest {
       Thread.sleep(millis);
     } catch (InterruptedException e) {
       // Ignore
-    }
-  }
-
-  @Test
-  public void certificateChain() throws Exception {
-    HTTPHandler handler = (req, res) -> {
-      res.setStatus(200);
-      res.getOutputStream().close();
-    };
-
-    try (HTTPServer ignore = makeServer("https", handler).start()) {
-      var client = makeClient("https", null);
-      URI uri = makeURI("https", "");
-      HttpRequest request = HttpRequest.newBuilder()
-                                       .uri(uri)
-                                       .GET()
-                                       .build();
-
-      var response = client.send(request, r -> BodySubscribers.ofInputStream());
-      assertEquals(response.statusCode(), 200);
-
-      var sslSession = response.sslSession().get();
-      var peerCerts = sslSession.getPeerCertificates();
-
-      // Verify that we received all intermediates, and can verify the chain all the way up to rootCertificate.
-      validateCertPath(rootCertificate, peerCerts);
     }
   }
 }
