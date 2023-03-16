@@ -266,7 +266,7 @@ public class CoreTest extends BaseTest {
     logger.setLevel(Level.Debug);
     logger.info("Class name: [{}]", "io.fusionauth.http.Test$InnerClass");
 
-    // Expect that we do not encounter an exceptions.
+    // Expect that we do not encounter an exception.
     String output = logger.toString();
     assertEquals(output, "Class name: io.fusionauth.http.Test$InnerClass");
   }
