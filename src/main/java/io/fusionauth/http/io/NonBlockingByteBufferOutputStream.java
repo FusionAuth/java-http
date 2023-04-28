@@ -50,6 +50,7 @@ public class NonBlockingByteBufferOutputStream extends OutputStream {
   static {
     String prop = System.getenv("JAVA_HTTP_IGNORE_FLUSH");
     IgnoreFlush = Boolean.parseBoolean(prop);
+    System.out.println("\n\nJAVA_HTTP_IGNORE_FLUSH=" + IgnoreFlush + "\n\n");
   }
 
   public NonBlockingByteBufferOutputStream(Notifier notifier, int bufferSize) {
