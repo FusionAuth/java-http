@@ -1,5 +1,5 @@
 /*
- * Copyright (c) 2022, FusionAuth, All Rights Reserved
+ * Copyright (c) 2022-2023, FusionAuth, All Rights Reserved
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -16,6 +16,7 @@
 package io.fusionauth.http.server;
 
 import java.nio.ByteBuffer;
+import java.util.concurrent.atomic.AtomicInteger;
 
 import io.fusionauth.http.Cookie;
 import io.fusionauth.http.HTTPValues.Connections;
@@ -35,6 +36,12 @@ import io.fusionauth.http.util.HTTPTools;
  * @author Brian Pontarelli
  */
 public class HTTPResponseProcessor {
+  private final static AtomicInteger LoopCount = new AtomicInteger();
+
+  private final static boolean ThreadYield;
+
+  private final static int YieldEveryNth = 10;
+
   private final HTTPServerConfiguration configuration;
 
   private final Logger logger;
@@ -50,6 +57,12 @@ public class HTTPResponseProcessor {
   private ByteBuffer[] preambleBuffers;
 
   private volatile ResponseState state = ResponseState.Preamble;
+
+  static {
+    String prop = System.getenv("JAVA_HTTP_THREAD_YIELD");
+    ThreadYield = Boolean.parseBoolean(prop);
+    System.out.println("\nJAVA_HTTP_THREAD_YIELD=" + ThreadYield + "\n");
+  }
 
   public HTTPResponseProcessor(HTTPServerConfiguration configuration, HTTPRequest request, HTTPResponse response,
                                NonBlockingByteBufferOutputStream outputStream) {
@@ -135,8 +148,15 @@ public class HTTPResponseProcessor {
         state = response.isKeepAlive() ? ResponseState.KeepAlive : ResponseState.Close;
         logger.debug("No more bytes from worker thread. Changing state to [{}]", state);
       } else {
+        if (ThreadYield) {
+          if (LoopCount.incrementAndGet() % YieldEveryNth == 0) {
+            Thread.yield();
+          }
+        }
+
         // Just some debugging
-        logger.debug("Nothing to write from the worker thread but the OutputStream isn't closed");
+        int count = LoopCount.get();
+        logger.debug("[" + count + "][" + (count / YieldEveryNth) + "] Nothing to write from the worker thread but the OutputStream isn't closed");
       }
     }
 
