@@ -36,11 +36,9 @@ import io.fusionauth.http.util.HTTPTools;
  * @author Brian Pontarelli
  */
 public class HTTPResponseProcessor {
-  private final static AtomicInteger LoopCount = new AtomicInteger();
+  private final AtomicInteger LoopCount = new AtomicInteger();
 
-  private final static boolean ThreadYield;
-
-  private final static int YieldEveryNth = 10;
+  private final int YieldEveryNth = 25;
 
   private final HTTPServerConfiguration configuration;
 
@@ -57,12 +55,6 @@ public class HTTPResponseProcessor {
   private ByteBuffer[] preambleBuffers;
 
   private volatile ResponseState state = ResponseState.Preamble;
-
-  static {
-    String prop = System.getenv("JAVA_HTTP_THREAD_YIELD");
-    ThreadYield = Boolean.parseBoolean(prop);
-    System.out.println("\nJAVA_HTTP_THREAD_YIELD=" + ThreadYield + "\n");
-  }
 
   public HTTPResponseProcessor(HTTPServerConfiguration configuration, HTTPRequest request, HTTPResponse response,
                                NonBlockingByteBufferOutputStream outputStream) {
@@ -148,15 +140,12 @@ public class HTTPResponseProcessor {
         state = response.isKeepAlive() ? ResponseState.KeepAlive : ResponseState.Close;
         logger.debug("No more bytes from worker thread. Changing state to [{}]", state);
       } else {
-        if (ThreadYield) {
-          if (LoopCount.incrementAndGet() % YieldEveryNth == 0) {
-            Thread.yield();
-          }
+        if (LoopCount.incrementAndGet() % YieldEveryNth == 0) {
+          Thread.yield();
         }
 
         // Just some debugging
-        int count = LoopCount.get();
-        logger.debug("[" + count + "][" + (count / YieldEveryNth) + "] Nothing to write from the worker thread but the OutputStream isn't closed");
+        logger.debug("Nothing to write from the worker thread but the OutputStream isn't closed");
       }
     }
 

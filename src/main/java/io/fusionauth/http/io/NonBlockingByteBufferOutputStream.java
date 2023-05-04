@@ -1,5 +1,5 @@
 /*
- * Copyright (c) 2022-2023, FusionAuth, All Rights Reserved
+ * Copyright (c) 2022, FusionAuth, All Rights Reserved
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -31,8 +31,6 @@ import io.fusionauth.http.server.Notifier;
  * @author Brian Pontarelli
  */
 public class NonBlockingByteBufferOutputStream extends OutputStream {
-  private static final boolean IgnoreFlush;
-
   private final int bufferSize;
 
   // Shared between writer and reader threads. No one blocks using this.
@@ -46,12 +44,6 @@ public class NonBlockingByteBufferOutputStream extends OutputStream {
   private ByteBuffer currentBuffer;
 
   private volatile boolean used;
-
-  static {
-    String prop = System.getenv("JAVA_HTTP_IGNORE_FLUSH");
-    IgnoreFlush = Boolean.parseBoolean(prop);
-    System.out.println("\nJAVA_HTTP_IGNORE_FLUSH=" + IgnoreFlush + "\n");
-  }
 
   public NonBlockingByteBufferOutputStream(Notifier notifier, int bufferSize) {
     this.notifier = notifier;
@@ -86,10 +78,6 @@ public class NonBlockingByteBufferOutputStream extends OutputStream {
    * created. And finally, this notifies the selector to wake up.
    */
   public void flush() {
-    if (IgnoreFlush) {
-      return;
-    }
-
     if (currentBuffer != null && currentBuffer.remaining() < (currentBuffer.capacity() / 10)) {
       addBuffer(true);
     }
