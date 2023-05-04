@@ -1,5 +1,5 @@
 /*
- * Copyright (c) 2022, FusionAuth, All Rights Reserved
+ * Copyright (c) 2022-2023, FusionAuth, All Rights Reserved
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -238,16 +238,21 @@ public class HTTPServerThread extends Thread implements Closeable, Notifier {
             .filter(key -> key.attachment() != null)
             .filter(key -> ((HTTPProcessor) key.attachment()).lastUsed() < now - clientTimeout.toMillis())
             .forEach(key -> {
-              if (logger.isDebuggable()) {
-                var client = (SocketChannel) key.channel();
-                try {
-                  logger.debug("Closing client connection [{}] due to inactivity", client.getRemoteAddress().toString());
-                } catch (IOException e) {
-                  // Ignore because we are just debugging
+              try {
+                if (logger.isDebuggable()) {
+                  var client = (SocketChannel) key.channel();
+                  try {
+                    logger.debug("Closing client connection [{}] due to inactivity", client.getRemoteAddress().toString());
+                  } catch (IOException e) {
+                    // Ignore because we are just debugging
+                  }
                 }
-              }
 
-              cancelAndCloseKey(key);
+                cancelAndCloseKey(key);
+              } catch (Throwable e) {
+                System.out.println("\n\nHoly crap! This blew chunks super hard. Exception [" + e.getClass().getSimpleName() + "] Message [" + e.getMessage() + "]");
+                logger.error("Holy crap! This blew chunks super hard.", e);
+              }
             });
   }
 

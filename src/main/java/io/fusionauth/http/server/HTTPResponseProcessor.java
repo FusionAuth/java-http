@@ -16,7 +16,6 @@
 package io.fusionauth.http.server;
 
 import java.nio.ByteBuffer;
-import java.util.concurrent.atomic.AtomicInteger;
 
 import io.fusionauth.http.Cookie;
 import io.fusionauth.http.HTTPValues.Connections;
@@ -36,10 +35,6 @@ import io.fusionauth.http.util.HTTPTools;
  * @author Brian Pontarelli
  */
 public class HTTPResponseProcessor {
-  private final AtomicInteger LoopCount = new AtomicInteger();
-
-  private final int YieldEveryNth = 25;
-
   private final HTTPServerConfiguration configuration;
 
   private final Logger logger;
@@ -140,10 +135,6 @@ public class HTTPResponseProcessor {
         state = response.isKeepAlive() ? ResponseState.KeepAlive : ResponseState.Close;
         logger.debug("No more bytes from worker thread. Changing state to [{}]", state);
       } else {
-        if (LoopCount.incrementAndGet() % YieldEveryNth == 0) {
-          Thread.yield();
-        }
-
         // Just some debugging
         logger.debug("Nothing to write from the worker thread but the OutputStream isn't closed");
       }
