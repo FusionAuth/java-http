@@ -1,5 +1,5 @@
 /*
- * Copyright (c) 2022, FusionAuth, All Rights Reserved
+ * Copyright (c) 2022-2023, FusionAuth, All Rights Reserved
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -159,6 +159,7 @@ public final class HTTPTools {
           continue; // Malformed
         }
 
+        //noinspection DuplicatedCode
         try {
           if (start < i) {
             value = URLDecoder.decode(new String(data, start, i - start), StandardCharsets.UTF_8);
@@ -167,7 +168,7 @@ public final class HTTPTools {
           }
 
           result.computeIfAbsent(name, key -> new LinkedList<>()).add(value);
-        } catch (Exception e) {
+        } catch (Exception ignore) {
           // Ignore
         }
 
@@ -177,13 +178,18 @@ public final class HTTPTools {
     }
 
     if (name != null && !inName) {
-      if (start < length) {
-        value = URLDecoder.decode(new String(data, start, length - start), StandardCharsets.UTF_8);
-      } else {
-        value = "";
-      }
+      //noinspection DuplicatedCode
+      try {
+        if (start < length) {
+          value = URLDecoder.decode(new String(data, start, length - start), StandardCharsets.UTF_8);
+        } else {
+          value = "";
+        }
 
-      result.computeIfAbsent(name, key -> new LinkedList<>()).add(value);
+        result.computeIfAbsent(name, key -> new LinkedList<>()).add(value);
+      } catch (Exception ignore) {
+        // Ignore
+      }
     }
   }
 

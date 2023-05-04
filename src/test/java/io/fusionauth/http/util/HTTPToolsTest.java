@@ -1,5 +1,5 @@
 /*
- * Copyright (c) 2022, FusionAuth, All Rights Reserved
+ * Copyright (c) 2022-2023, FusionAuth, All Rights Reserved
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -17,8 +17,11 @@ package io.fusionauth.http.util;
 
 import java.net.URLEncoder;
 import java.nio.charset.StandardCharsets;
+import java.util.HashMap;
+import java.util.List;
 import java.util.Map;
 
+import com.inversoft.json.ToString;
 import io.fusionauth.http.util.HTTPTools.HeaderValue;
 import org.testng.annotations.Test;
 import static org.testng.Assert.assertEquals;
@@ -30,6 +33,38 @@ import static org.testng.Assert.assertEquals;
  */
 @Test
 public class HTTPToolsTest {
+  @Test
+  public void parseEncodedData() {
+    // Test bad encoding
+
+    Map<String, List<String>> actual = new HashMap<>();
+
+    // Happy path
+    byte[] body = "foo=bar".getBytes(StandardCharsets.UTF_8);
+    HTTPTools.parseEncodedData(body, 0, body.length, actual);
+    assertEquals(actual, Map.of("foo", List.of("bar")), "Actual:\n" + ToString.toString(actual));
+
+    // Note, there are 3 try/catches in the parseEncodedDate. This tests them in order, each hitting a specific try/catch.
+
+    // Bad name encoding
+    actual.clear();
+    byte[] badName = "foo=bar&%%%=baz".getBytes(StandardCharsets.UTF_8);
+    HTTPTools.parseEncodedData(badName, 0, badName.length, actual);
+    assertEquals(actual, Map.of("foo", List.of("bar")), "Actual:\n" + ToString.toString(actual));
+
+    // Bad value encoding
+    actual.clear();
+    byte[] badValue1 = "foo=bar&bar=ba%å&=boom".getBytes(StandardCharsets.UTF_8);
+    HTTPTools.parseEncodedData(badValue1, 0, badValue1.length, actual);
+    assertEquals(actual, Map.of("foo", List.of("bar")), "Actual:\n" + ToString.toString(actual));
+
+    // Bad value encoding
+    actual.clear();
+    byte[] badValue2 = "foo=bar&bar=% % %".getBytes(StandardCharsets.UTF_8);
+    HTTPTools.parseEncodedData(badValue2, 0, badValue2.length, actual);
+    assertEquals(actual, Map.of("foo", List.of("bar")), "Actual:\n" + ToString.toString(actual));
+  }
+
   @Test
   public void parseHeaderValue() {
     String iso = "åpple";
