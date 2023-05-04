@@ -28,6 +28,7 @@ import java.nio.channels.SocketChannel;
 import java.security.GeneralSecurityException;
 import java.time.Duration;
 import java.util.List;
+import java.util.Map;
 
 import io.fusionauth.http.ParseException;
 import io.fusionauth.http.log.Logger;
@@ -238,21 +239,28 @@ public class HTTPServerThread extends Thread implements Closeable, Notifier {
             .filter(key -> key.attachment() != null)
             .filter(key -> ((HTTPProcessor) key.attachment()).lastUsed() < now - clientTimeout.toMillis())
             .forEach(key -> {
-              try {
-                if (logger.isDebuggable()) {
-                  var client = (SocketChannel) key.channel();
-                  try {
-                    logger.debug("Closing client connection [{}] due to inactivity", client.getRemoteAddress().toString());
-                  } catch (IOException e) {
-                    // Ignore because we are just debugging
-                  }
-                }
+              if (logger.isDebuggable()) {
+                var client = (SocketChannel) key.channel();
+                try {
+                  logger.debug("Closing client connection [{}] due to inactivity", client.getRemoteAddress().toString());
 
-                cancelAndCloseKey(key);
-              } catch (Throwable e) {
-                System.out.println("\n\nHoly crap! This blew chunks super hard. Exception [" + e.getClass().getSimpleName() + "] Message [" + e.getMessage() + "]");
-                logger.error("Holy crap! This blew chunks super hard.", e);
+                  StringBuilder threadDump = new StringBuilder();
+                  for (Map.Entry<Thread, StackTraceElement[]> entry : Thread.getAllStackTraces().entrySet()) {
+                    threadDump.append(entry.getKey() + " " + entry.getKey().getState()).append("\n");
+                    for (StackTraceElement ste : entry.getValue()) {
+                      threadDump.append("\tat " + ste).append("\n");
+                    }
+                    threadDump.append("\n");
+                  }
+
+                  logger.debug("Thread dump from server side.\n" + threadDump);
+
+                } catch (IOException e) {
+                  // Ignore because we are just debugging
+                }
               }
+
+              cancelAndCloseKey(key);
             });
   }
 
