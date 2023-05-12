@@ -40,12 +40,15 @@ public class ChunkedBodyProcessor implements BodyProcessor {
 
   @Override
   public ByteBuffer[] currentBuffers() {
-    ByteBuffer buffer = outputStream.readableBuffer();
-    if (buffer != null && currentBuffers[1] != buffer) {
-      buildChunk(buffer);
+    // If the current chunk still has data, write it
+    if (currentBuffers[1] != null && (currentBuffers[0].hasRemaining() || currentBuffers[1].hasRemaining() || currentBuffers[2].hasRemaining())) {
+      return currentBuffers;
     }
 
+    // Otherwise, get the next chunk if any is ready to go
+    ByteBuffer buffer = outputStream.readableBuffer();
     if (buffer != null) {
+      buildChunk(buffer);
       return currentBuffers;
     }
 
@@ -62,7 +65,7 @@ public class ChunkedBodyProcessor implements BodyProcessor {
 
   @Override
   public boolean isComplete() {
-    return outputStream.isClosed();
+    return outputStream.isClosed() && !Final[0].hasRemaining();
   }
 
   private void buildChunk(ByteBuffer buffer) {

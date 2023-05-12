@@ -64,7 +64,7 @@ public class HTTPResponseProcessor {
     if (state == ResponseState.Preamble || state == ResponseState.Expect) {
       // We can't write the preamble under normal conditions if the worker thread is still working. Expect handling is different and the
       // client is waiting for a pre-canned response
-      if (state != ResponseState.Expect && outputStream.readableBuffer() == null && !outputStream.isClosed()) {
+      if (state != ResponseState.Expect && !outputStream.hasReadableBuffer() && !outputStream.isClosed()) {
         return null;
       }
 

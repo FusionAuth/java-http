@@ -57,7 +57,7 @@ public class NonBlockingByteBufferOutputStream extends OutputStream {
 
   /**
    * Flushes and then marks the stream closed. The flush must occur first so that the readers have access to the buffers before they are
-   * aware of the streams closure.
+   * aware of the stream's closure.
    */
   @Override
   public void close() {
@@ -83,8 +83,12 @@ public class NonBlockingByteBufferOutputStream extends OutputStream {
     }
   }
 
+  public boolean hasReadableBuffer() {
+    return buffers.peek() != null;
+  }
+
   public boolean isClosed() {
-    return closed;
+    return buffers.isEmpty() && closed;
   }
 
   public boolean isEmpty() {
@@ -92,22 +96,13 @@ public class NonBlockingByteBufferOutputStream extends OutputStream {
   }
 
   /**
-   * Used by the reader side (the selector/processor) so that bytes can be read from the worker thread and written back to the client.
+   * Used by the reader side (the selector/processor) so that bytes can be read from the worker thread and written back to the client. This
+   * method should only be called once per buffer. It pops the buffer off the queue.
    *
    * @return A ByteBuffer that is used to read bytes that will be written back to the client or null if there aren't any buffers ready yet.
    */
   public ByteBuffer readableBuffer() {
-    while (buffers.peek() != null) {
-      ByteBuffer head = buffers.peek();
-      if (head.hasRemaining()) {
-        return head;
-      }
-
-      // Throw out the head node
-      buffers.poll();
-    }
-
-    return null;
+    return buffers.poll();
   }
 
   @Override
@@ -155,7 +150,7 @@ public class NonBlockingByteBufferOutputStream extends OutputStream {
   private void addBuffer(boolean notify) {
     currentBuffer.flip();
     if (!buffers.offer(currentBuffer)) {
-      throw new IllegalStateException("The LinkedBlockingQueue is borked. It should never reject an offer() operation.");
+      throw new IllegalStateException("The ConcurrentLinkedQueue is borked. It should never reject an offer() operation.");
     }
 
     currentBuffer = null;

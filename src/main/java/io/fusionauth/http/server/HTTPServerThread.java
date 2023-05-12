@@ -246,9 +246,9 @@ public class HTTPServerThread extends Thread implements Closeable, Notifier {
 
                   StringBuilder threadDump = new StringBuilder();
                   for (Map.Entry<Thread, StackTraceElement[]> entry : Thread.getAllStackTraces().entrySet()) {
-                    threadDump.append(entry.getKey() + " " + entry.getKey().getState()).append("\n");
+                    threadDump.append(entry.getKey()).append(" ").append(entry.getKey().getState()).append("\n");
                     for (StackTraceElement ste : entry.getValue()) {
-                      threadDump.append("\tat " + ste).append("\n");
+                      threadDump.append("\tat ").append(ste).append("\n");
                     }
                     threadDump.append("\n");
                   }
@@ -278,6 +278,7 @@ public class HTTPServerThread extends Thread implements Closeable, Notifier {
       if (buffer != null) {
         int num = client.read(buffer);
         if (num < 0) {
+          logger.debug("Client terminated the connection. Num bytes is [{}]. Closing connection", num);
           state = processor.close(true);
         } else {
           logger.debug("Read [{}] bytes from client", num);
@@ -312,6 +313,7 @@ public class HTTPServerThread extends Thread implements Closeable, Notifier {
       }
 
       if (num < 0) {
+        logger.debug("Client refused bytes or terminated the connection. Num bytes is [{}]. Closing connection", num);
         state = processor.close(true);
       } else {
         if (num > 0) {

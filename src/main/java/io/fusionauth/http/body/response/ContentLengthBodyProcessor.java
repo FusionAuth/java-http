@@ -35,6 +35,10 @@ public class ContentLengthBodyProcessor implements BodyProcessor {
 
   @Override
   public ByteBuffer[] currentBuffers() {
+    if (currentBuffers[0] != null && currentBuffers[0].hasRemaining()) {
+      return currentBuffers;
+    }
+
     currentBuffers[0] = outputStream.readableBuffer();
     return currentBuffers[0] != null ? currentBuffers : null;
   }
