@@ -1,5 +1,5 @@
 /*
- * Copyright (c) 2022, FusionAuth, All Rights Reserved
+ * Copyright (c) 2022-2023, FusionAuth, All Rights Reserved
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -28,6 +28,7 @@ import java.nio.channels.SocketChannel;
 import java.security.GeneralSecurityException;
 import java.time.Duration;
 import java.util.List;
+import java.util.Map;
 
 import io.fusionauth.http.ParseException;
 import io.fusionauth.http.log.Logger;
@@ -242,6 +243,17 @@ public class HTTPServerThread extends Thread implements Closeable, Notifier {
                 var client = (SocketChannel) key.channel();
                 try {
                   logger.debug("Closing client connection [{}] due to inactivity", client.getRemoteAddress().toString());
+
+                  StringBuilder threadDump = new StringBuilder();
+                  for (Map.Entry<Thread, StackTraceElement[]> entry : Thread.getAllStackTraces().entrySet()) {
+                    threadDump.append(entry.getKey()).append(" ").append(entry.getKey().getState()).append("\n");
+                    for (StackTraceElement ste : entry.getValue()) {
+                      threadDump.append("\tat ").append(ste).append("\n");
+                    }
+                    threadDump.append("\n");
+                  }
+
+                  logger.debug("Thread dump from server side.\n" + threadDump);
                 } catch (IOException e) {
                   // Ignore because we are just debugging
                 }
@@ -265,6 +277,7 @@ public class HTTPServerThread extends Thread implements Closeable, Notifier {
       if (buffer != null) {
         int num = client.read(buffer);
         if (num < 0) {
+          logger.debug("Client terminated the connection. Num bytes is [{}]. Closing connection", num);
           state = processor.close(true);
         } else {
           logger.debug("Read [{}] bytes from client", num);
@@ -299,6 +312,7 @@ public class HTTPServerThread extends Thread implements Closeable, Notifier {
       }
 
       if (num < 0) {
+        logger.debug("Client refused bytes or terminated the connection. Num bytes is [{}]. Closing connection", num);
         state = processor.close(true);
       } else {
         if (num > 0) {

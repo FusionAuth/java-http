@@ -1,5 +1,5 @@
 /*
- * Copyright (c) 2022, FusionAuth, All Rights Reserved
+ * Copyright (c) 2022-2023, FusionAuth, All Rights Reserved
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -64,7 +64,7 @@ public class HTTPResponseProcessor {
     if (state == ResponseState.Preamble || state == ResponseState.Expect) {
       // We can't write the preamble under normal conditions if the worker thread is still working. Expect handling is different and the
       // client is waiting for a pre-canned response
-      if (state != ResponseState.Expect && outputStream.readableBuffer() == null && !outputStream.isClosed()) {
+      if (state != ResponseState.Expect && !outputStream.hasReadableBuffer() && !outputStream.isClosed()) {
         return null;
       }
 
