@@ -13,6 +13,7 @@
  * either express or implied. See the License for the specific
  * language governing permissions and limitations under the License.
  */
+jackson5Version = "3.0.1"
 restifyVersion = "4.1.2"
 testngVersion = "7.7.1"
 
@@ -42,6 +43,7 @@ project(group: "io.fusionauth", name: "java-http", version: "0.1.14-RC.6", licen
 
   dependencies {
     group(name: "test-compile", export: false) {
+      dependency(id: "com.inversoft:jackson5:${jackson5Version}")
       dependency(id: "com.inversoft:restify:${restifyVersion}")
       dependency(id: "org.testng:testng:${testngVersion}")
     }
