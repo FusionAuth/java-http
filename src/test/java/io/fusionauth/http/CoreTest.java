@@ -20,6 +20,7 @@ import java.io.OutputStream;
 import java.io.Writer;
 import java.net.Socket;
 import java.net.URI;
+import java.net.URLDecoder;
 import java.net.http.HttpClient;
 import java.net.http.HttpRequest;
 import java.net.http.HttpRequest.BodyPublishers;
@@ -606,7 +607,7 @@ public class CoreTest extends BaseTest {
   @Test(dataProvider = "schemes")
   public void unicode(String scheme) throws Exception {
     HTTPHandler handler = (req, res) -> {
-      assertEquals(req.getPath(), "/위키백과:대문");
+      assertEquals(URLDecoder.decode(req.getPath(), StandardCharsets.UTF_8), "/위키백과:대문");
 
       res.setHeader(Headers.ContentType, "text/plain");
       res.setStatus(200);
