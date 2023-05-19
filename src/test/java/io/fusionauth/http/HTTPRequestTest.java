@@ -16,6 +16,7 @@
 package io.fusionauth.http;
 
 import java.nio.charset.StandardCharsets;
+import java.util.ArrayList;
 import java.util.List;
 import java.util.Map;
 
@@ -49,6 +50,30 @@ public class HTTPRequestTest {
 
     request.addHeader("coNTent-type", "text/html; charset=UTF-8");
     assertEquals(request.getCharacterEncoding(), StandardCharsets.UTF_8);
+  }
+
+  @Test
+  public void hostPortHandling() {
+    record caseRecord(String scheme, String source, String host, int port, String baseUrl) {
+    }
+    List<caseRecord> testCases = new ArrayList<>();
+    testCases.add(new caseRecord("http", "myhost", "myhost", -1, "http://myhost"));
+    testCases.add(new caseRecord("https", "myhost", "myhost", -1, "https://myhost"));
+    testCases.add(new caseRecord("http", "myhost:80", "myhost", 80, "http://myhost"));
+    testCases.add(new caseRecord("https", "myhost:80", "myhost", 80, "https://myhost:80"));
+    testCases.add(new caseRecord("http", "myhost:443", "myhost", 443, "http://myhost:443"));
+    testCases.add(new caseRecord("https", "myhost:443", "myhost", 443, "https://myhost"));
+    testCases.add(new caseRecord("http", "myhost:9011", "myhost", 9011, "http://myhost:9011"));
+    testCases.add(new caseRecord("https", "myhost:9011", "myhost", 9011, "https://myhost:9011"));
+
+    for (caseRecord aCase : testCases) {
+      HTTPRequest request = new HTTPRequest();
+      request.setScheme(aCase.scheme());
+      request.addHeader(Headers.HostLower, aCase.source());
+      assertEquals(request.getHost(), aCase.host());
+      assertEquals(request.getPort(), aCase.port());
+      assertEquals(request.getBaseURL(), aCase.baseUrl());
+    }
   }
 
   @Test
