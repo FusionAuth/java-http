@@ -157,7 +157,7 @@ Then you can open `https://example.org` in a browser or call it using an HTTP cl
 
 A key component for this project is to have awesome performance. Here are some basic metrics using the FusionAuth load test suite against a simple application using the Prime Framework MVC. The controller does nothing except return a simple 200. Here are some simple comparisons between `Tomcat`, `Netty`, and `java-http`.
 
-The load test configuration is set to 10 clients with 500,000 requests each. The client is Restify which is a FusionAuth library that uses URLConnection under the hoods. All the servers were HTTP so that TLS would not introduce any additional latency.
+The load test configuration is set to 10 clients with 500,000 requests each. The client is Restify which is a FusionAuth library that uses `HttpURLConnection` under the hoods. All the servers were HTTP so that TLS would not introduce any additional latency.
 
 Here are the current test results:
 
