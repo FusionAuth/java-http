@@ -57,6 +57,7 @@ public class HTTPRequestTest {
     record caseRecord(String scheme, String source, String host, int port, String baseUrl) {
     }
     List<caseRecord> testCases = new ArrayList<>();
+    // positive cases
     testCases.add(new caseRecord("http", "myhost", "myhost", -1, "http://myhost"));
     testCases.add(new caseRecord("https", "myhost", "myhost", -1, "https://myhost"));
     testCases.add(new caseRecord("http", "myhost:80", "myhost", 80, "http://myhost"));
@@ -65,6 +66,9 @@ public class HTTPRequestTest {
     testCases.add(new caseRecord("https", "myhost:443", "myhost", 443, "https://myhost"));
     testCases.add(new caseRecord("http", "myhost:9011", "myhost", 9011, "http://myhost:9011"));
     testCases.add(new caseRecord("https", "myhost:9011", "myhost", 9011, "https://myhost:9011"));
+    // negative cases
+    testCases.add(new caseRecord("http", "myhost:abc", "myhost", -1, "http://myhost"));
+    testCases.add(new caseRecord("https", "myhost:abc", "myhost", -1, "https://myhost"));
 
     for (caseRecord aCase : testCases) {
       HTTPRequest request = new HTTPRequest();
