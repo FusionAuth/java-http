@@ -738,6 +738,14 @@ public class HTTPRequest implements Buildable<HTTPRequest> {
         int colon = value.indexOf(':');
         if (colon > 0) {
           this.host = value.substring(0, colon);
+          String portString = value.substring(colon + 1);
+          if (portString.length() > 0) {
+            try {
+              this.port = Integer.parseInt(portString);
+            } catch (NumberFormatException e) {
+              // fallback, intentionally do nothing
+            }
+          }
         } else {
           this.host = value;
         }
