@@ -38,6 +38,35 @@ import static org.testng.Assert.assertTrue;
 
 public class CookieTest extends BaseTest {
   @Test
+  public void cookieInjection() throws Exception {
+    HTTPHandler handler = (req, res) -> {
+      assertNull(req.getCookie("injected"));
+
+      res.setHeader(Headers.ContentType, "text/plain");
+      res.setStatus(200);
+      res.getOutputStream().close();
+    };
+
+    try (HTTPServer ignore = makeServer("http", handler).start()) {
+      URI uri = URI.create("http://localhost:4242/%0d%0aSet-Cookie:injected=true%0d%0a?client_id=foo");
+      CookieManager cookieHandler = new CookieManager();
+      var client = makeClient("http", cookieHandler);
+      HttpRequest request = HttpRequest.newBuilder()
+                                       .uri(uri)
+                                       .GET()
+                                       .build();
+
+      var response = client.send(request, r -> BodySubscribers.discarding());
+      assertEquals(response.statusCode(), 200);
+
+      List<HttpCookie> cookies = cookieHandler.getCookieStore().get(uri);
+      assertEquals(response.statusCode(), 200);
+      assertNull(response.headers().firstValue("Set-Cookie").orElse(null));
+      assertEquals(cookies.size(), 0);
+    }
+  }
+
+  @Test
   public void fromRequestHeader() {
     List<Cookie> cookies = Cookie.fromRequestHeader("foo=bar; baz=fred");
     assertEquals(cookies.size(), 2);

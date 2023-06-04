@@ -16,7 +16,6 @@
 package io.fusionauth.http;
 
 import java.nio.charset.StandardCharsets;
-import java.util.ArrayList;
 import java.util.List;
 import java.util.Map;
 
@@ -53,31 +52,20 @@ public class HTTPRequestTest {
   }
 
   @Test
-  public void hostPortHandling() {
-    record caseRecord(String scheme, String source, String host, int port, String baseUrl) {
-    }
-    List<caseRecord> testCases = new ArrayList<>();
+  public void hostHeaderPortHandling() {
     // positive cases
-    testCases.add(new caseRecord("http", "myhost", "myhost", -1, "http://myhost"));
-    testCases.add(new caseRecord("https", "myhost", "myhost", -1, "https://myhost"));
-    testCases.add(new caseRecord("http", "myhost:80", "myhost", 80, "http://myhost"));
-    testCases.add(new caseRecord("https", "myhost:80", "myhost", 80, "https://myhost:80"));
-    testCases.add(new caseRecord("http", "myhost:443", "myhost", 443, "http://myhost:443"));
-    testCases.add(new caseRecord("https", "myhost:443", "myhost", 443, "https://myhost"));
-    testCases.add(new caseRecord("http", "myhost:9011", "myhost", 9011, "http://myhost:9011"));
-    testCases.add(new caseRecord("https", "myhost:9011", "myhost", 9011, "https://myhost:9011"));
+    assertURLs("http", "myhost", "myhost", -1, "http://myhost");
+    assertURLs("https", "myhost", "myhost", -1, "https://myhost");
+    assertURLs("http", "myhost:80", "myhost", 80, "http://myhost");
+    assertURLs("https", "myhost:80", "myhost", 80, "https://myhost:80");
+    assertURLs("http", "myhost:443", "myhost", 443, "http://myhost:443");
+    assertURLs("https", "myhost:443", "myhost", 443, "https://myhost");
+    assertURLs("http", "myhost:9011", "myhost", 9011, "http://myhost:9011");
+    assertURLs("https", "myhost:9011", "myhost", 9011, "https://myhost:9011");
     // negative cases
-    testCases.add(new caseRecord("http", "myhost:abc", "myhost", -1, "http://myhost"));
-    testCases.add(new caseRecord("https", "myhost:abc", "myhost", -1, "https://myhost"));
-
-    for (caseRecord aCase : testCases) {
-      HTTPRequest request = new HTTPRequest();
-      request.setScheme(aCase.scheme());
-      request.addHeader(Headers.HostLower, aCase.source());
-      assertEquals(request.getHost(), aCase.host());
-      assertEquals(request.getPort(), aCase.port());
-      assertEquals(request.getBaseURL(), aCase.baseUrl());
-    }
+    assertURLs("http", "myhost:abc", "myhost", -1, "http://myhost");
+    assertURLs("https", "myhost:abc", "myhost", -1, "https://myhost");
+    assertURLs("https", "otherhost:abc  ", "otherhost", -1, "https://otherhost");
   }
 
   @Test
@@ -134,5 +122,14 @@ public class HTTPRequestTest {
     request.setPath("/path?name=");
     assertEquals(request.getPath(), "/path");
     assertEquals(request.getURLParameters(), Map.of("name", List.of("")));
+  }
+
+  private void assertURLs(String scheme, String source, String host, int port, String baseURL) {
+    HTTPRequest request = new HTTPRequest();
+    request.setScheme(scheme);
+    request.addHeader(Headers.HostLower, source);
+    assertEquals(request.getHost(), host);
+    assertEquals(request.getPort(), port);
+    assertEquals(request.getBaseURL(), baseURL);
   }
 }

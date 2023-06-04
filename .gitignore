@@ -1,4 +1,5 @@
 *.iws
+.savant
 build
 load-tests/lib
 load-tests/tomcat/web/WEB-INF/lib
