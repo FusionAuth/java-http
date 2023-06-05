@@ -12,20 +12,20 @@ To add this library to your project, you can include this dependency in your Mav
 <dependency>
   <groupId>io.fusionauth</groupId>
   <artifactId>java-http</artifactId>
-  <version>0.1.12</version>
+  <version>0.1.15</version>
 </dependency>
 ```
 
 If you are using Gradle, you can add this to your build file:
 
 ```groovy
-implementation 'io.fusionauth:java-http:0.1.12'
+implementation 'io.fusionauth:java-http:0.1.15'
 ```
 
 If you are using Savant, you can add this to your build file:
 
 ```groovy
-dependency(id: "io.fusionauth:java-http:0.1.12")
+dependency(id: "io.fusionauth:java-http:0.1.15")
 ```
 
 ## Examples Usages:
@@ -225,8 +225,8 @@ We are looking for Java developers that are interested in helping us build the c
 ```bash
 $ mkdir ~/savant
 $ cd ~/savant
-$ wget http://savant.inversoft.org/org/savantbuild/savant-core/2.0.0-RC.3/savant-2.0.0-RC.3.tar.gz
-$ tar xvfz savant-2.0.0-RC.3.tar.gz
-$ ln -s ./savant-2.0.0-RC.3 current
+$ wget http://savant.inversoft.org/org/savantbuild/savant-core/2.0.0-RC.6/savant-2.0.0-RC.6.tar.gz
+$ tar xvfz savant-2.0.0-RC.6.tar.gz
+$ ln -s ./savant-2.0.0-RC.6 current
 $ export PATH=$PATH:~/savant/current/bin/
 ```
