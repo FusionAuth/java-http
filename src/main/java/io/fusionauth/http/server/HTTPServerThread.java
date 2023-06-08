@@ -123,8 +123,17 @@ public class HTTPServerThread extends Thread implements Closeable, Notifier {
     // Update the keys based on any changes to the processor state
     var keys = List.copyOf(selector.keys());
     for (SelectionKey key : keys) {
-      HTTPProcessor processor = (HTTPProcessor) key.attachment();
-      if (processor != null) {
+      try {
+        // If the key is toast, skip it
+        if (!key.isValid()) {
+          continue;
+        }
+
+        HTTPProcessor processor = (HTTPProcessor) key.attachment();
+        if (processor == null) { // No processor for you!
+          continue;
+        }
+
         ProcessorState state = processor.state();
         if (state == ProcessorState.Read && key.interestOps() != SelectionKey.OP_READ) {
           logger.debug("Flipping a SelectionKey to Read because it wasn't in the right state");
@@ -133,6 +142,9 @@ public class HTTPServerThread extends Thread implements Closeable, Notifier {
           logger.debug("Flipping a SelectionKey to Write because it wasn't in the right state");
           key.interestOps(SelectionKey.OP_WRITE);
         }
+      } catch (Throwable t) {
+        // Smother since the key is likely invalid
+        logger.debug("Exception occurred while trying to update a key", t);
       }
     }
 
