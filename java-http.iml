@@ -17,7 +17,7 @@
     <orderEntry type="module-library" scope="TEST">
       <library>
         <CLASSES>
-          <root url="jar://$USER_HOME$/.m2/repository/com/inversoft/restify/4.2.0/restify-4.2.0.jar!/" />
+          <root url="jar://$MODULE_DIR$/.savant/cache/com/inversoft/restify/4.2.0/restify-4.2.0.jar!/" />
         </CLASSES>
         <JAVADOC />
         <SOURCES>
@@ -28,7 +28,7 @@
     <orderEntry type="module-library" scope="TEST">
       <library>
         <CLASSES>
-          <root url="jar://$USER_HOME$/.m2/repository/com/inversoft/jackson5/3.0.1/jackson5-3.0.1.jar!/" />
+          <root url="jar://$MODULE_DIR$/.savant/cache/com/inversoft/jackson5/3.0.1/jackson5-3.0.1.jar!/" />
         </CLASSES>
         <JAVADOC />
         <SOURCES>
@@ -39,7 +39,7 @@
     <orderEntry type="module-library" scope="TEST">
       <library>
         <CLASSES>
-          <root url="jar://$USER_HOME$/.m2/repository/com/fasterxml/jackson/core/jackson-databind/2.13.3/jackson-databind-2.13.3.jar!/" />
+          <root url="jar://$MODULE_DIR$/.savant/cache/com/fasterxml/jackson/core/jackson-databind/2.13.3/jackson-databind-2.13.3.jar!/" />
         </CLASSES>
         <JAVADOC />
         <SOURCES>
@@ -50,7 +50,7 @@
     <orderEntry type="module-library" scope="TEST">
       <library>
         <CLASSES>
-          <root url="jar://$USER_HOME$/.m2/repository/com/fasterxml/jackson/core/jackson-annotations/2.13.3/jackson-annotations-2.13.3.jar!/" />
+          <root url="jar://$MODULE_DIR$/.savant/cache/com/fasterxml/jackson/core/jackson-annotations/2.13.3/jackson-annotations-2.13.3.jar!/" />
         </CLASSES>
         <JAVADOC />
         <SOURCES>
@@ -61,7 +61,7 @@
     <orderEntry type="module-library" scope="TEST">
       <library>
         <CLASSES>
-          <root url="jar://$USER_HOME$/.m2/repository/com/fasterxml/jackson/core/jackson-core/2.13.3/jackson-core-2.13.3.jar!/" />
+          <root url="jar://$MODULE_DIR$/.savant/cache/com/fasterxml/jackson/core/jackson-core/2.13.3/jackson-core-2.13.3.jar!/" />
         </CLASSES>
         <JAVADOC />
         <SOURCES>
@@ -72,7 +72,7 @@
     <orderEntry type="module-library" scope="TEST">
       <library>
         <CLASSES>
-          <root url="jar://$USER_HOME$/.m2/repository/org/testng/testng/7.7.1/testng-7.7.1.jar!/" />
+          <root url="jar://$MODULE_DIR$/.savant/cache/org/testng/testng/7.7.1/testng-7.7.1.jar!/" />
         </CLASSES>
         <JAVADOC />
         <SOURCES>
@@ -83,7 +83,7 @@
     <orderEntry type="module-library" scope="TEST">
       <library>
         <CLASSES>
-          <root url="jar://$USER_HOME$/.m2/repository/org/slf4j/slf4j-api/1.7.36/slf4j-api-1.7.36.jar!/" />
+          <root url="jar://$MODULE_DIR$/.savant/cache/org/slf4j/slf4j-api/1.7.36/slf4j-api-1.7.36.jar!/" />
         </CLASSES>
         <JAVADOC />
         <SOURCES>
@@ -105,7 +105,7 @@
     <orderEntry type="module-library" scope="TEST">
       <library>
         <CLASSES>
-          <root url="jar://$USER_HOME$/.m2/repository/org/webjars/jquery/3.6.1/jquery-3.6.1.jar!/" />
+          <root url="jar://$MODULE_DIR$/.savant/cache/org/webjars/jquery/3.6.1/jquery-3.6.1.jar!/" />
         </CLASSES>
         <JAVADOC />
         <SOURCES>
