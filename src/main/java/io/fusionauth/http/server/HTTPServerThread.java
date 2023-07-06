@@ -198,7 +198,7 @@ public class HTTPServerThread extends Thread implements Closeable, Notifier {
       } catch (Throwable t) {
         boolean logged = false;
         if (t instanceof HelpfulIOException hio && key != null) {
-          String message = t.getMessage();
+          String message = t.getCause().getMessage();
           if ("Connection reset by peer".equals(message)) {
             @SuppressWarnings("resource")
             var client = (SocketChannel) key.channel();
