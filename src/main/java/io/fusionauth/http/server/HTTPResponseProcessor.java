@@ -27,6 +27,7 @@ import io.fusionauth.http.body.response.ContentLengthBodyProcessor;
 import io.fusionauth.http.body.response.EmptyBodyProcessor;
 import io.fusionauth.http.io.NonBlockingByteBufferOutputStream;
 import io.fusionauth.http.log.Logger;
+import io.fusionauth.http.server.HTTPServerThread.DebugValue;
 import io.fusionauth.http.util.HTTPTools;
 
 /**
@@ -81,7 +82,9 @@ public class HTTPResponseProcessor {
 
         logger.debug("Preamble is [{}] bytes long", preambleBuffers[0].remaining());
         if (logger.isDebugEnabled()) {
-          logger.debug("Preamble is [\n{}\n]", new String(preambleBuffers[0].array(), 0, preambleBuffers[0].remaining()));
+          String preamble = new String(preambleBuffers[0].array(), 0, preambleBuffers[0].remaining());
+          HTTPServerThread.CurrentPreamble.set(new DebugValue(preambleBuffers[0].remaining(), preamble));
+          logger.debug("Preamble is [\n{}\n]", preamble);
         }
 
         // Figure out the body processor

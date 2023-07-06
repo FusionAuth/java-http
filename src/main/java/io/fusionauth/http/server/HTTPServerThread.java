@@ -41,6 +41,8 @@ import io.fusionauth.http.util.ThreadPool;
  * @author Brian Pontarelli
  */
 public class HTTPServerThread extends Thread implements Closeable, Notifier {
+  public static ThreadLocal<DebugValue> CurrentPreamble = new ThreadLocal<>();
+
   private final ServerSocketChannel channel;
 
   private final Duration clientTimeout;
@@ -206,6 +208,15 @@ public class HTTPServerThread extends Thread implements Closeable, Notifier {
                 try {
                   preamble = "\nPreamble is [" + preambleBuffer.remaining() + "] bytes long.";
                   preamble = "\n" + new String(preambleBuffer.array(), 0, preambleBuffer.remaining());
+
+                  DebugValue debugValue = CurrentPreamble.get();
+                  if (debugValue != null) {
+                    preamble = "\nPreamble is [" + debugValue.length + "] bytes long.";
+                    preamble = "\n" + debugValue.value;
+                  } else {
+                    preamble = "\n-";
+                  }
+
                 } catch (Exception ignore) {
                 }
 
@@ -375,6 +386,17 @@ public class HTTPServerThread extends Thread implements Closeable, Notifier {
       HTTP11Processor httpProcessor = new HTTP11Processor(configuration, listenerConfiguration, this, preambleBuffer, threadPool, ipAddress(client));
       processor.updateDelegate(httpProcessor);
       key.interestOps(SelectionKey.OP_READ);
+    }
+  }
+
+  public static class DebugValue {
+    public int length;
+
+    public String value;
+
+    public DebugValue(int length, String value) {
+      this.length = length;
+      this.value = value;
     }
   }
 }
