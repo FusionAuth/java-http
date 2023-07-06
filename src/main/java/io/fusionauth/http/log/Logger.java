@@ -78,7 +78,9 @@ public interface Logger {
   /**
    * @return True if this Logger is enabled for the Debug level, false otherwise.
    */
-  boolean isDebugEnabled();
+  default boolean isDebugEnabled() {
+    return false;
+  }
 
   /**
    * Deprecated. Prefer the use of {@link #isDebugEnabled()}.
@@ -106,17 +108,23 @@ public interface Logger {
   /**
    * @return True if this Logger is enabled for the Error level, false otherwise.
    */
-  boolean isErrorEnabled();
+  default boolean isErrorEnabled() {
+    return false;
+  }
 
   /**
    * @return True if this Logger is enabled for the Info level, false otherwise.
    */
-  boolean isInfoEnabled();
+  default boolean isInfoEnabled() {
+    return false;
+  }
 
   /**
    * @return True if this Logger is enabled for the Trace level, false otherwise.
    */
-  boolean isTraceEnabled();
+  default boolean isTraceEnabled() {
+    return false;
+  }
 
   /**
    * Sets the level of this logger (optional method).
