@@ -77,8 +77,28 @@ public abstract class BaseLogger implements Logger {
   }
 
   @Override
-  public boolean isDebuggable() {
+  public boolean isDebugEnabled() {
     return getLevelOrdinal() <= Level.Debug.ordinal();
+  }
+
+  @Override
+  public boolean isDebuggable() {
+    return isDebugEnabled();
+  }
+
+  @Override
+  public boolean isErrorEnabled() {
+    return getLevelOrdinal() <= Level.Error.ordinal();
+  }
+
+  @Override
+  public boolean isInfoEnabled() {
+    return getLevelOrdinal() <= Level.Info.ordinal();
+  }
+
+  @Override
+  public boolean isTraceEnabled() {
+    return getLevelOrdinal() <= Level.Trace.ordinal();
   }
 
   @Override

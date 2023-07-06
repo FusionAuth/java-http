@@ -80,7 +80,7 @@ public class HTTPResponseProcessor {
         }
 
         logger.debug("Preamble is [{}] bytes long", preambleBuffers[0].remaining());
-        if (logger.isDebuggable()) {
+        if (logger.isDebugEnabled()) {
           logger.debug("Preamble is [\n{}\n]", new String(preambleBuffers[0].array(), 0, preambleBuffers[0].remaining()));
         }
 

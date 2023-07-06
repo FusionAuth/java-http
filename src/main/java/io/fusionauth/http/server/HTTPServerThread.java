@@ -136,10 +136,10 @@ public class HTTPServerThread extends Thread implements Closeable, Notifier {
 
         ProcessorState state = processor.state();
         if (state == ProcessorState.Read && key.interestOps() != SelectionKey.OP_READ) {
-          logger.debug("Flipping a SelectionKey to Read because it wasn't in the right state");
+          logger.trace("Flipping a SelectionKey to Read because it wasn't in the right state");
           key.interestOps(SelectionKey.OP_READ);
         } else if (state == ProcessorState.Write && key.interestOps() != SelectionKey.OP_WRITE) {
-          logger.debug("Flipping a SelectionKey to Write because it wasn't in the right state");
+          logger.trace("Flipping a SelectionKey to Write because it wasn't in the right state");
           key.interestOps(SelectionKey.OP_WRITE);
         }
       } catch (Throwable t) {
@@ -200,7 +200,7 @@ public class HTTPServerThread extends Thread implements Closeable, Notifier {
             @SuppressWarnings("resource")
             var client = (SocketChannel) key.channel();
             logged = true;
-            if (logger.isDebuggable()) {
+            if (logger.isDebugEnabled()) {
               try {
                 String preamble = "";
                 try {
@@ -235,9 +235,9 @@ public class HTTPServerThread extends Thread implements Closeable, Notifier {
     client.configureBlocking(false);
     client.register(key.selector(), tlsProcessor.initialKeyOps(), tlsProcessor);
 
-    if (logger.isDebuggable()) {
+    if (logger.isTraceEnabled()) {
       try {
-        logger.debug("Accepted connection from client [{}]", client.getRemoteAddress().toString());
+        logger.trace("Accepted connection from client [{}]", client.getRemoteAddress().toString());
       } catch (IOException e) {
         /// Ignore because we are just debugging
       }
@@ -251,8 +251,8 @@ public class HTTPServerThread extends Thread implements Closeable, Notifier {
   private void cancelAndCloseKey(SelectionKey key) {
     if (key != null) {
       try (var client = key.channel()) {
-        if (logger.isDebuggable() && client instanceof SocketChannel socketChannel) {
-          logger.debug("Closing connection to client [{}]", socketChannel.getRemoteAddress().toString());
+        if (logger.isTraceEnabled() && client instanceof SocketChannel socketChannel) {
+          logger.trace("Closing connection to client [{}]", socketChannel.getRemoteAddress().toString());
         }
 
         key.cancel();
@@ -276,10 +276,10 @@ public class HTTPServerThread extends Thread implements Closeable, Notifier {
             .filter(key -> key.attachment() != null)
             .filter(key -> ((HTTPProcessor) key.attachment()).lastUsed() < now - clientTimeout.toMillis())
             .forEach(key -> {
-              if (logger.isDebuggable()) {
+              if (logger.isDebugEnabled()) {
                 var client = (SocketChannel) key.channel();
                 try {
-                  logger.debug("Closing client connection [{}] due to inactivity", client.getRemoteAddress().toString());
+                  logger.trace("Closing client connection [{}] due to inactivity", client.getRemoteAddress().toString());
 
                   StringBuilder threadDump = new StringBuilder();
                   for (Map.Entry<Thread, StackTraceElement[]> entry : Thread.getAllStackTraces().entrySet()) {
@@ -314,10 +314,10 @@ public class HTTPServerThread extends Thread implements Closeable, Notifier {
       if (buffer != null) {
         int num = client.read(buffer);
         if (num < 0) {
-          logger.debug("Client terminated the connection. Num bytes is [{}]. Closing connection", num);
+          logger.trace("Client terminated the connection. Num bytes is [{}]. Closing connection", num);
           state = processor.close(true);
         } else {
-          logger.debug("Read [{}] bytes from client", num);
+          logger.trace("Read [{}] bytes from client", num);
 
           buffer.flip();
           state = processor.read(buffer);
@@ -353,7 +353,7 @@ public class HTTPServerThread extends Thread implements Closeable, Notifier {
         state = processor.close(true);
       } else {
         if (num > 0) {
-          logger.debug("Wrote [{}] bytes to the client", num);
+          logger.trace("Wrote [{}] bytes to the client", num);
 
           if (instrumenter != null) {
             instrumenter.wroteToClient(num);
