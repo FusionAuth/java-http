@@ -27,10 +27,10 @@ import java.nio.channels.ServerSocketChannel;
 import java.nio.channels.SocketChannel;
 import java.security.GeneralSecurityException;
 import java.time.Duration;
-import java.util.Arrays;
 import java.util.List;
 import java.util.Map;
 
+import io.fusionauth.http.ClientAbortException;
 import io.fusionauth.http.ParseException;
 import io.fusionauth.http.log.Logger;
 import io.fusionauth.http.util.ThreadPool;
@@ -42,8 +42,6 @@ import io.fusionauth.http.util.ThreadPool;
  * @author Brian Pontarelli
  */
 public class HTTPServerThread extends Thread implements Closeable, Notifier {
-  public static ThreadLocal<DebugValue> CurrentPreamble = new ThreadLocal<>();
-
   private final ServerSocketChannel channel;
 
   private final Duration clientTimeout;
@@ -195,34 +193,12 @@ public class HTTPServerThread extends Thread implements Closeable, Notifier {
         }
 
         cancelAndCloseKey(key);
+      } catch (ClientAbortException e) {
+        // A client abort exception is common and should not be error logged.
+        logger.debug("A client related exception was thrown during processing", e);
+        cancelAndCloseKey(key);
       } catch (Throwable t) {
-        boolean logged = false;
-        if (t instanceof HelpfulIOException hio && key != null) {
-          String message = t.getCause().getMessage();
-          if ("Connection reset by peer".equals(message)) {
-            @SuppressWarnings("resource")
-            var client = (SocketChannel) key.channel();
-            logged = true;
-            if (logger.isDebugEnabled()) {
-              try {
-                String preamble = "";
-                try {
-                  preamble += "\nPreamble is [" + hio.preamble.length + "] bytes long.";
-                  preamble += "\n" + new String(hio.preamble);
-                } catch (Exception ignore) {
-                }
-
-                logger.debug("Connection reset by client [" + client.getRemoteAddress().toString() + "]" + preamble, t);
-              } catch (IOException ignore) {
-              }
-            }
-          }
-        }
-
-        if (!logged) {
-          logger.error("An exception was thrown during processing", t);
-        }
-
+        logger.error("An exception was thrown during processing", t);
         cancelAndCloseKey(key);
       } finally {
         // Always clear the preamble for good measure
@@ -283,7 +259,7 @@ public class HTTPServerThread extends Thread implements Closeable, Notifier {
               if (logger.isDebugEnabled()) {
                 var client = (SocketChannel) key.channel();
                 try {
-                  logger.trace("Closing client connection [{}] due to inactivity", client.getRemoteAddress().toString());
+                  logger.debug("Closing client connection [{}] due to inactivity", client.getRemoteAddress().toString());
 
                   StringBuilder threadDump = new StringBuilder();
                   for (Map.Entry<Thread, StackTraceElement[]> entry : Thread.getAllStackTraces().entrySet()) {
@@ -316,19 +292,27 @@ public class HTTPServerThread extends Thread implements Closeable, Notifier {
     if (state == ProcessorState.Read) {
       ByteBuffer buffer = processor.readBuffer();
       if (buffer != null) {
-        int num = client.read(buffer);
-        if (num < 0) {
-          logger.trace("Client terminated the connection. Num bytes is [{}]. Closing connection", num);
-          state = processor.close(true);
-        } else {
-          logger.trace("Read [{}] bytes from client", num);
+        try {
+          int num = client.read(buffer);
+          if (num < 0) {
+            logger.trace("Client terminated the connection. Num bytes is [{}]. Closing connection", num);
+            state = processor.close(true);
+          } else {
+            logger.trace("Read [{}] bytes from client", num);
 
-          buffer.flip();
-          state = processor.read(buffer);
+            buffer.flip();
+            state = processor.read(buffer);
 
-          if (instrumenter != null) {
-            instrumenter.readFromClient(num);
+            if (instrumenter != null) {
+              instrumenter.readFromClient(num);
+            }
           }
+        } catch (IOException e) {
+          // This is most likely an exception caused by the client.
+          // - We could optionally just make this assumption and not check the message.
+          throw "Connection reset by peer".equals(e.getMessage())
+              ? new ClientAbortException(e)
+              : e;
         }
       }
     }
@@ -346,23 +330,36 @@ public class HTTPServerThread extends Thread implements Closeable, Notifier {
     ProcessorState state = processor.state();
     SocketChannel client = (SocketChannel) key.channel();
     ByteBuffer[] buffers = processor.writeBuffers();
+    String before = "";
     if (state == ProcessorState.Write) {
       long num = 0;
       if (buffers != null) {
         try {
+
+          for (int i = 0; i < buffers.length; i++) {
+            before += "[" + i + "] position [" + buffers[i].position() + "] limit [" + buffers[i].limit() + "] remaining [" + buffers[i].remaining() + "]";
+          }
+
           num = client.write(buffers);
         } catch (IOException e) {
-          byte[] preamble = null;
-          try {
-            preamble = Arrays.copyOfRange(buffers[0].array(), 0, buffers[0].remaining());
-          } catch (Exception ignore) {
+
+          String after = "";
+          for (int i = 0; i < buffers.length; i++) {
+            after += "[" + i + "] position [" + buffers[i].position() + "] limit [" + buffers[i].limit() + "] remaining [" + buffers[i].remaining() + "]";
           }
-          throw new HelpfulIOException(preamble, e);
+
+          logger.debug("write failed.\nBefore:\n" + before + "\nAfter:\n" + after, e);
+
+          // This is most likely an exception caused by the client.
+          // - We could optionally just make this assumption and not check the message.
+          throw "Connection reset by peer".equals(e.getMessage())
+              ? new ClientAbortException(e)
+              : e;
         }
       }
 
       if (num < 0) {
-        logger.debug("Client refused bytes or terminated the connection. Num bytes is [{}]. Closing connection", num);
+        logger.trace("Client refused bytes or terminated the connection. Num bytes is [{}]. Closing connection", num);
         state = processor.close(true);
       } else {
         if (num > 0) {
@@ -387,26 +384,6 @@ public class HTTPServerThread extends Thread implements Closeable, Notifier {
       HTTP11Processor httpProcessor = new HTTP11Processor(configuration, listenerConfiguration, this, preambleBuffer, threadPool, ipAddress(client));
       processor.updateDelegate(httpProcessor);
       key.interestOps(SelectionKey.OP_READ);
-    }
-  }
-
-  public static class DebugValue {
-    public int length;
-
-    public String value;
-
-    public DebugValue(int length, String value) {
-      this.length = length;
-      this.value = value;
-    }
-  }
-
-  public static class HelpfulIOException extends IOException {
-    public byte[] preamble;
-
-    public HelpfulIOException(byte[] preamble, IOException e) {
-      super(e);
-      this.preamble = preamble;
     }
   }
 }
