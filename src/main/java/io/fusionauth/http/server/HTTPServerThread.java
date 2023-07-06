@@ -27,6 +27,7 @@ import java.nio.channels.ServerSocketChannel;
 import java.nio.channels.SocketChannel;
 import java.security.GeneralSecurityException;
 import java.time.Duration;
+import java.util.Arrays;
 import java.util.List;
 import java.util.Map;
 
@@ -196,7 +197,7 @@ public class HTTPServerThread extends Thread implements Closeable, Notifier {
         cancelAndCloseKey(key);
       } catch (Throwable t) {
         boolean logged = false;
-        if (t instanceof IOException && key != null) {
+        if (t instanceof HelpfulIOException hio && key != null) {
           String message = t.getMessage();
           if ("Connection reset by peer".equals(message)) {
             @SuppressWarnings("resource")
@@ -206,17 +207,8 @@ public class HTTPServerThread extends Thread implements Closeable, Notifier {
               try {
                 String preamble = "";
                 try {
-                  preamble += "\nPreamble is [" + preambleBuffer.position() + "] bytes long.";
-                  preamble += "\n" + new String(preambleBuffer.array(), 0, preambleBuffer.position());
-
-                  DebugValue debugValue = CurrentPreamble.get();
-                  if (debugValue != null) {
-                    preamble += "\nPreamble is [" + debugValue.length + "] bytes long.";
-                    preamble += "\n" + debugValue.value;
-                  } else {
-                    preamble += "\n-";
-                  }
-
+                  preamble += "\nPreamble is [" + hio.preamble.length + "] bytes long.";
+                  preamble += "\n" + new String(hio.preamble);
                 } catch (Exception ignore) {
                 }
 
@@ -357,7 +349,16 @@ public class HTTPServerThread extends Thread implements Closeable, Notifier {
     if (state == ProcessorState.Write) {
       long num = 0;
       if (buffers != null) {
-        num = client.write(buffers);
+        try {
+          num = client.write(buffers);
+        } catch (IOException e) {
+          byte[] preamble = null;
+          try {
+            preamble = Arrays.copyOfRange(buffers[0].array(), 0, buffers[0].remaining());
+          } catch (Exception ignore) {
+          }
+          throw new HelpfulIOException(preamble, e);
+        }
       }
 
       if (num < 0) {
@@ -397,6 +398,15 @@ public class HTTPServerThread extends Thread implements Closeable, Notifier {
     public DebugValue(int length, String value) {
       this.length = length;
       this.value = value;
+    }
+  }
+
+  public static class HelpfulIOException extends IOException {
+    public byte[] preamble;
+
+    public HelpfulIOException(byte[] preamble, IOException e) {
+      super(e);
+      this.preamble = preamble;
     }
   }
 }

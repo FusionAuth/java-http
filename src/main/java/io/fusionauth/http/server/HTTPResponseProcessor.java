@@ -27,7 +27,6 @@ import io.fusionauth.http.body.response.ContentLengthBodyProcessor;
 import io.fusionauth.http.body.response.EmptyBodyProcessor;
 import io.fusionauth.http.io.NonBlockingByteBufferOutputStream;
 import io.fusionauth.http.log.Logger;
-import io.fusionauth.http.server.HTTPServerThread.DebugValue;
 import io.fusionauth.http.util.HTTPTools;
 
 /**
@@ -80,12 +79,9 @@ public class HTTPResponseProcessor {
           preambleBuffers = new ByteBuffer[]{HTTPTools.buildExpectResponsePreamble(response, maxHeadLength)};
         }
 
-        logger.trace("Preamble is [{}] bytes long", preambleBuffers[0].position());
-        // TODO : Daniel : This should be isTraceEnabled, but using this for debug.
-        if (logger.isDebugEnabled()) {
-          String preamble = new String(preambleBuffers[0].array(), 0, preambleBuffers[0].position());
-          HTTPServerThread.CurrentPreamble.set(new DebugValue(preambleBuffers[0].remaining(), preamble));
-          logger.trace("Preamble is [\n{}\n]", preamble);
+        logger.trace("Preamble is [{}] bytes long", preambleBuffers[0].remaining());
+        if (logger.isTraceEnabled()) {
+          logger.trace("Preamble is [\n{}\n]", new String(preambleBuffers[0].array(), 0, preambleBuffers[0].remaining()));
         }
 
         // Figure out the body processor
