@@ -81,7 +81,8 @@ public class HTTPResponseProcessor {
         }
 
         logger.trace("Preamble is [{}] bytes long", preambleBuffers[0].remaining());
-        if (logger.isTraceEnabled()) {
+        // TODO : Daniel : This should be isTraceEnabled, but using this for debug.
+        if (logger.isDebugEnabled()) {
           String preamble = new String(preambleBuffers[0].array(), 0, preambleBuffers[0].remaining());
           HTTPServerThread.CurrentPreamble.set(new DebugValue(preambleBuffers[0].remaining(), preamble));
           logger.trace("Preamble is [\n{}\n]", preamble);
