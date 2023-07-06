@@ -206,15 +206,15 @@ public class HTTPServerThread extends Thread implements Closeable, Notifier {
               try {
                 String preamble = "";
                 try {
-                  preamble = "\nPreamble is [" + preambleBuffer.remaining() + "] bytes long.";
-                  preamble = "\n" + new String(preambleBuffer.array(), 0, preambleBuffer.remaining());
+                  preamble += "\nPreamble is [" + preambleBuffer.remaining() + "] bytes long.";
+                  preamble += "\n" + new String(preambleBuffer.array(), 0, preambleBuffer.remaining());
 
                   DebugValue debugValue = CurrentPreamble.get();
                   if (debugValue != null) {
-                    preamble = "\nPreamble is [" + debugValue.length + "] bytes long.";
-                    preamble = "\n" + debugValue.value;
+                    preamble += "\nPreamble is [" + debugValue.length + "] bytes long.";
+                    preamble += "\n" + debugValue.value;
                   } else {
-                    preamble = "\n-";
+                    preamble += "\n-";
                   }
 
                 } catch (Exception ignore) {
