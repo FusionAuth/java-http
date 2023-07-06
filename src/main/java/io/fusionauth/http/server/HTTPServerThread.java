@@ -193,7 +193,26 @@ public class HTTPServerThread extends Thread implements Closeable, Notifier {
 
         cancelAndCloseKey(key);
       } catch (Throwable t) {
-        logger.error("An exception was thrown during processing", t);
+        boolean logged = false;
+        if (t instanceof IOException && key != null) {
+          String message = t.getMessage();
+          if ("Connection reset by peer".equals(message)) {
+            @SuppressWarnings("resource")
+            var client = (SocketChannel) key.channel();
+            logged = true;
+            if (logger.isDebuggable()) {
+              try {
+                logger.debug("Connection reset by client [" + client.getRemoteAddress().toString() + "]", t);
+              } catch (IOException ignore) {
+              }
+            }
+          }
+        }
+
+        if (!logged) {
+          logger.error("An exception was thrown during processing", t);
+        }
+
         cancelAndCloseKey(key);
       } finally {
         // Always clear the preamble for good measure
