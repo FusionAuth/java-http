@@ -88,7 +88,9 @@ public interface Logger {
    * @return If this logger has debug enabled.
    */
   @Deprecated
-  boolean isDebuggable();
+  default boolean isDebuggable() {
+    return isDebugEnabled();
+  }
 
   /**
    * Returns whether this Logger is enabled for a given {@link Level}.
