@@ -102,7 +102,7 @@ public abstract class BaseTest {
 
   private static final ZonedDateTime TestStarted = ZonedDateTime.now();
 
-  private static final DateTimeFormatter hh_mm_ss = DateTimeFormatter.ofPattern("hh:mm:ss");
+  private static final DateTimeFormatter hh_mm_ss_SSS = DateTimeFormatter.ofPattern("hh:mm:ss.SSS");
 
   public static AccumulatingLogger logger = (AccumulatingLogger) AccumulatingLoggerFactory.FACTORY.getLogger(BaseTest.class);
 
@@ -208,8 +208,8 @@ public abstract class BaseTest {
 
   @AfterSuite(groups = "acceptance")
   public void tearDown() {
-    System.out.println("\nTests began : " + hh_mm_ss.format(TestStarted));
-    System.out.println("Tests ended : " + hh_mm_ss.format(ZonedDateTime.now()));
+    System.out.println("\nTests began : " + hh_mm_ss_SSS.format(TestStarted));
+    System.out.println("Tests ended : " + hh_mm_ss_SSS.format(ZonedDateTime.now()));
     System.out.println("Total test time in minutes : " + Duration.between(TestStarted, ZonedDateTime.now()).toMinutes());
   }
 
@@ -384,7 +384,7 @@ public abstract class BaseTest {
 
       lastTestMethod = testMethod;
       // Trying to replicate the name of the test in the IJ TestNG runner.
-      System.out.println("[" + ++counter + "] " + hh_mm_ss.format(ZonedDateTime.now()) + " " + testMethod + iteration);
+      System.out.println("[" + ++counter + "] " + hh_mm_ss_SSS.format(ZonedDateTime.now()) + " " + testMethod + iteration);
     }
 
     private String serializeDataProviderArgs(Object[] dataProvider) {
