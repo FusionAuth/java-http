@@ -17,11 +17,11 @@
     <orderEntry type="module-library" scope="TEST">
       <library>
         <CLASSES>
-          <root url="jar://$USER_HOME$/.m2/repository/com/inversoft/restify/4.1.2/restify-4.1.2.jar!/" />
+          <root url="jar://$USER_HOME$/.m2/repository/com/inversoft/restify/4.2.0/restify-4.2.0.jar!/" />
         </CLASSES>
         <JAVADOC />
         <SOURCES>
-          <root url="jar://$MODULE_DIR$/.savant/cache/com/inversoft/restify/4.1.2/restify-4.1.2-src.jar!/" />
+          <root url="jar://$MODULE_DIR$/.savant/cache/com/inversoft/restify/4.2.0/restify-4.2.0-src.jar!/" />
         </SOURCES>
       </library>
     </orderEntry>

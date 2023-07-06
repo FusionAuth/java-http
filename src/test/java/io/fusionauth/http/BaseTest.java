@@ -1,5 +1,5 @@
 /*
- * Copyright (c) 2022, FusionAuth, All Rights Reserved
+ * Copyright (c) 2022-2023, FusionAuth, All Rights Reserved
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -41,9 +41,12 @@ import java.security.cert.PKIXParameters;
 import java.security.cert.X509Certificate;
 import java.time.Duration;
 import java.time.Instant;
+import java.time.ZonedDateTime;
+import java.time.format.DateTimeFormatter;
 import java.util.Arrays;
 import java.util.Date;
 import java.util.UUID;
+import java.util.stream.Collectors;
 
 import io.fusionauth.http.log.AccumulatingLogger;
 import io.fusionauth.http.log.AccumulatingLoggerFactory;
@@ -56,6 +59,7 @@ import io.fusionauth.http.server.HTTPServer;
 import io.fusionauth.http.server.Instrumenter;
 import org.testng.ITestListener;
 import org.testng.ITestResult;
+import org.testng.annotations.AfterSuite;
 import org.testng.annotations.BeforeMethod;
 import org.testng.annotations.DataProvider;
 import sun.security.util.KnownOIDs;
@@ -95,6 +99,10 @@ public abstract class BaseTest {
    * larger, otherwise, the server will toss out the request.
    */
   public static final Duration ServerTimeout = Duration.ofSeconds(2);
+
+  private static final ZonedDateTime TestStarted = ZonedDateTime.now();
+
+  private static final DateTimeFormatter hh_mm_ss = DateTimeFormatter.ofPattern("hh:mm:ss");
 
   public static AccumulatingLogger logger = (AccumulatingLogger) AccumulatingLoggerFactory.FACTORY.getLogger(BaseTest.class);
 
@@ -196,6 +204,13 @@ public abstract class BaseTest {
     } catch (Exception e) {
       fail(e.getMessage());
     }
+  }
+
+  @AfterSuite(groups = "acceptance")
+  public void tearDown() {
+    System.out.println("\nTests began : " + hh_mm_ss.format(TestStarted));
+    System.out.println("Tests ended : " + hh_mm_ss.format(ZonedDateTime.now()));
+    System.out.println("Total test time in minutes : " + Duration.between(TestStarted, ZonedDateTime.now()).toMinutes());
   }
 
   protected X509CertInfo generateCertInfo(PublicKey publicKey, String commonName) {
@@ -320,27 +335,74 @@ public abstract class BaseTest {
 
   @SuppressWarnings("unused")
   public static class TestListener implements ITestListener {
+    private int counter = 0;
+
+    private String lastTestMethod;
+
+    private int lastTestMethodCounter = 0;
+
     @Override
     public void onTestFailure(ITestResult result) {
-      result.getThrowable().printStackTrace(System.out);
-      System.out.flush();
-      System.out.println("Trace");
-      System.out.flush();
-      System.out.println(logger.toString());
-      System.out.flush();
+      Throwable throwable = result.getThrowable();
+      String trace = logger.toString();
+
+      // Intentionally leaving empty lines here
+      System.out.println("""
+                                 
+                
+                                 
+          Test failure
+          -----------------
+          Exception: {{exception}}
+          Message: {{message}}
+                               
+          HTTP Trace:
+          {{trace}}
+          -----------------                       
+           """.replace("{{exception}}", throwable != null ? throwable.getClass().getSimpleName() : "-")
+              .replace("{{message}}", throwable != null ? (throwable.getMessage() != null ? throwable.getMessage() : "-") : "-")
+              .replace("{{trace}}", trace));
     }
 
     @Override
     public void onTestStart(ITestResult result) {
-      String message = "Running " + result.getTestClass().getName() + "#" + result.getName();
-      if (result.getParameters() != null && result.getParameters().length == 1) {
-        String parameter = result.getParameters()[0].toString();
-        if (parameter.length() < 10) {
-          message += "(" + parameter + ")";
-        }
+      Object[] dataProvider = result.getParameters();
+      String iteration = dataProvider != null && dataProvider.length > 0
+          ? " [" + serializeDataProviderArgs(dataProvider) + "]"
+          : "";
+
+      // Still missing the factory data provider, for example when we re-run tests as GraalJS or Nashorn, I don't yet have a way to show that in this output.
+      // - But TestNG can do it - so we can too! Just need to figure it out.
+      String testMethod = result.getTestClass().getName() + "." + result.getName();
+      if (lastTestMethod != null && !lastTestMethod.equals(testMethod)) {
+        lastTestMethodCounter = 0;
       }
 
-      System.out.println(message);
+      if (!iteration.equals("")) {
+        iteration += " (" + ++lastTestMethodCounter + ")";
+      }
+
+      lastTestMethod = testMethod;
+      // Trying to replicate the name of the test in the IJ TestNG runner.
+      System.out.println("[" + ++counter + "] " + hh_mm_ss.format(ZonedDateTime.now()) + " " + testMethod + iteration);
+    }
+
+    private String serializeDataProviderArgs(Object[] dataProvider) {
+      String result = Arrays.stream(dataProvider)
+                            .map(o -> (o == null ? "null" : o.toString()).replace("\n", " "))
+                            .collect(Collectors.joining(", "));
+
+      int maxLength = 128;
+      if (result.length() > maxLength) {
+        if (result.charAt(maxLength) == ',') {
+          maxLength -= 1;
+        }
+
+        //noinspection UnnecessaryUnicodeEscape
+        result = result.substring(0, maxLength) + "\u2026";
+      }
+
+      return result;
     }
   }
 }

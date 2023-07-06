@@ -202,7 +202,13 @@ public class HTTPServerThread extends Thread implements Closeable, Notifier {
             logged = true;
             if (logger.isDebuggable()) {
               try {
-                logger.debug("Connection reset by client [" + client.getRemoteAddress().toString() + "]", t);
+                String preamble = "";
+                try {
+                  preamble = "\n" + new String(preambleBuffer.array(), 0, preambleBuffer.remaining());
+                } catch (Exception ignore) {
+                }
+
+                logger.debug("Connection reset by client [" + client.getRemoteAddress().toString() + "]" + preamble, t);
               } catch (IOException ignore) {
               }
             }
