@@ -137,10 +137,10 @@ public class HTTPServerThread extends Thread implements Closeable, Notifier {
 
         ProcessorState state = processor.state();
         if (state == ProcessorState.Read && key.interestOps() != SelectionKey.OP_READ) {
-          logger.trace("Flipping a SelectionKey to Read because it wasn't in the right state");
+          logger.debug("Flipping a SelectionKey to Read because it wasn't in the right state");
           key.interestOps(SelectionKey.OP_READ);
         } else if (state == ProcessorState.Write && key.interestOps() != SelectionKey.OP_WRITE) {
-          logger.trace("Flipping a SelectionKey to Write because it wasn't in the right state");
+          logger.debug("Flipping a SelectionKey to Write because it wasn't in the right state");
           key.interestOps(SelectionKey.OP_WRITE);
         }
       } catch (Throwable t) {
@@ -215,9 +215,9 @@ public class HTTPServerThread extends Thread implements Closeable, Notifier {
     client.configureBlocking(false);
     client.register(key.selector(), tlsProcessor.initialKeyOps(), tlsProcessor);
 
-    if (logger.isTraceEnabled()) {
+    if (logger.isDebugEnabled()) {
       try {
-        logger.trace("Accepted connection from client [{}]", client.getRemoteAddress().toString());
+        logger.debug("Accepted connection from client [{}]", client.getRemoteAddress().toString());
       } catch (IOException e) {
         /// Ignore because we are just debugging
       }
@@ -231,8 +231,8 @@ public class HTTPServerThread extends Thread implements Closeable, Notifier {
   private void cancelAndCloseKey(SelectionKey key) {
     if (key != null) {
       try (var client = key.channel()) {
-        if (logger.isTraceEnabled() && client instanceof SocketChannel socketChannel) {
-          logger.trace("Closing connection to client [{}]", socketChannel.getRemoteAddress().toString());
+        if (logger.isDebugEnabled() && client instanceof SocketChannel socketChannel) {
+          logger.debug("Closing connection to client [{}]", socketChannel.getRemoteAddress().toString());
         }
 
         key.cancel();
@@ -292,27 +292,26 @@ public class HTTPServerThread extends Thread implements Closeable, Notifier {
     if (state == ProcessorState.Read) {
       ByteBuffer buffer = processor.readBuffer();
       if (buffer != null) {
+        int num;
         try {
-          int num = client.read(buffer);
-          if (num < 0) {
-            logger.trace("Client terminated the connection. Num bytes is [{}]. Closing connection", num);
-            state = processor.close(true);
-          } else {
-            logger.trace("Read [{}] bytes from client", num);
-
-            buffer.flip();
-            state = processor.read(buffer);
-
-            if (instrumenter != null) {
-              instrumenter.readFromClient(num);
-            }
-          }
+          num = client.read(buffer);
         } catch (IOException e) {
           // This is most likely an exception caused by the client.
-          // - We could optionally just make this assumption and not check the message.
-          throw "Connection reset by peer".equals(e.getMessage())
-              ? new ClientAbortException(e)
-              : e;
+          throw new ClientAbortException(e);
+        }
+
+        if (num < 0) {
+          logger.debug("Client terminated the connection. Num bytes is [{}]. Closing connection", num);
+          state = processor.close(true);
+        } else {
+          logger.debug("Read [{}] bytes from client", num);
+
+          buffer.flip();
+          state = processor.read(buffer);
+
+          if (instrumenter != null) {
+            instrumenter.readFromClient(num);
+          }
         }
       }
     }
@@ -330,40 +329,23 @@ public class HTTPServerThread extends Thread implements Closeable, Notifier {
     ProcessorState state = processor.state();
     SocketChannel client = (SocketChannel) key.channel();
     ByteBuffer[] buffers = processor.writeBuffers();
-    String before = "";
     if (state == ProcessorState.Write) {
       long num = 0;
       if (buffers != null) {
         try {
-
-          for (int i = 0; i < buffers.length; i++) {
-            before += "[" + i + "] position [" + buffers[i].position() + "] limit [" + buffers[i].limit() + "] remaining [" + buffers[i].remaining() + "]";
-          }
-
           num = client.write(buffers);
         } catch (IOException e) {
-
-          String after = "";
-          for (int i = 0; i < buffers.length; i++) {
-            after += "[" + i + "] position [" + buffers[i].position() + "] limit [" + buffers[i].limit() + "] remaining [" + buffers[i].remaining() + "]";
-          }
-
-          logger.debug("write failed.\nBefore:\n" + before + "\nAfter:\n" + after, e);
-
           // This is most likely an exception caused by the client.
-          // - We could optionally just make this assumption and not check the message.
-          throw "Connection reset by peer".equals(e.getMessage())
-              ? new ClientAbortException(e)
-              : e;
+          throw new ClientAbortException(e);
         }
       }
 
       if (num < 0) {
-        logger.trace("Client refused bytes or terminated the connection. Num bytes is [{}]. Closing connection", num);
+        logger.debug("Client refused bytes or terminated the connection. Num bytes is [{}]. Closing connection", num);
         state = processor.close(true);
       } else {
         if (num > 0) {
-          logger.trace("Wrote [{}] bytes to the client", num);
+          logger.debug("Wrote [{}] bytes to the client", num);
 
           if (instrumenter != null) {
             instrumenter.wroteToClient(num);

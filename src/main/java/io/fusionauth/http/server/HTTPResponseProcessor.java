@@ -70,7 +70,7 @@ public class HTTPResponseProcessor {
 
       // Construct the preamble if needed and return it if there is any bytes left
       if (preambleBuffers == null) {
-        logger.trace("The worker thread has bytes to write or has closed the stream, but the preamble hasn't been sent yet. Generating preamble");
+        logger.debug("The worker thread has bytes to write or has closed the stream, but the preamble hasn't been sent yet. Generating preamble");
         int maxHeadLength = configuration.getMaxHeadLength();
         if (state == ResponseState.Preamble) {
           fillInHeaders();
@@ -79,9 +79,9 @@ public class HTTPResponseProcessor {
           preambleBuffers = new ByteBuffer[]{HTTPTools.buildExpectResponsePreamble(response, maxHeadLength)};
         }
 
-        logger.trace("Preamble is [{}] bytes long", preambleBuffers[0].remaining());
-        if (logger.isTraceEnabled()) {
-          logger.trace("Preamble is [\n{}\n]", new String(preambleBuffers[0].array(), 0, preambleBuffers[0].remaining()));
+        logger.debug("Preamble is [{}] bytes long", preambleBuffers[0].remaining());
+        if (logger.isDebugEnabled()) {
+          logger.debug("Preamble is [\n{}\n]", new String(preambleBuffers[0].array(), 0, preambleBuffers[0].remaining()));
         }
 
         // Figure out the body processor
@@ -101,7 +101,7 @@ public class HTTPResponseProcessor {
       }
 
       if (preambleBuffers[0].hasRemaining()) {
-        logger.trace("Still writing preamble");
+        logger.debug("Still writing preamble");
         return preambleBuffers;
       }
 
@@ -110,12 +110,12 @@ public class HTTPResponseProcessor {
 
       // If expect and preamble done, figure out stage to be Continue or Close
       if (state == ResponseState.Expect) {
-        logger.trace("Expect response written");
+        logger.debug("Expect response written");
         if (response.getStatus() == 100) {
-          logger.trace("Continuing");
+          logger.debug("Continuing");
           state = ResponseState.Continue;
         } else {
-          logger.trace("Closing");
+          logger.debug("Closing");
           state = ResponseState.Close;
         }
       } else {
@@ -125,7 +125,7 @@ public class HTTPResponseProcessor {
     } else if (state == ResponseState.Body) {
       ByteBuffer[] buffer = bodyProcessor.currentBuffers();
       if (buffer != null) {
-        logger.trace("Writing back bytes");
+        logger.debug("Writing back bytes");
         return buffer;
       }
 
@@ -133,10 +133,10 @@ public class HTTPResponseProcessor {
       if (complete) {
         // No more bytes and the stream is closed, figure out if we should Keep-Alive or Close
         state = response.isKeepAlive() ? ResponseState.KeepAlive : ResponseState.Close;
-        logger.trace("No more bytes from worker thread. Changing state to [{}]", state);
+        logger.debug("No more bytes from worker thread. Changing state to [{}]", state);
       } else {
         // Just some debugging
-        logger.trace("Nothing to write from the worker thread but the OutputStream isn't closed");
+        logger.debug("Nothing to write from the worker thread but the OutputStream isn't closed");
       }
     }
 
