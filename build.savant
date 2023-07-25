@@ -15,16 +15,15 @@
  */
 jackson5Version = "3.0.1"
 restifyVersion = "4.1.2"
-testngVersion = "7.7.1"
+testngVersion = "7.8.0"
 
 project(group: "io.fusionauth", name: "java-http", version: "0.2.0", licenses: ["ApacheV2_0"]) {
   workflow {
     fetch {
       // Dependency resolution order:
       //
-      // 1. Hit the savant cache, and then maven cache
+      // 1. Hit the savant cache
       cache()
-      mavenCache()
       //
       // 2. Look in public savant repo
       url(url: "https://repository.savantbuild.org")
