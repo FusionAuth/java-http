@@ -210,7 +210,7 @@ public class HTTPServerThread extends Thread implements Closeable, Notifier {
     client.configureBlocking(false);
     client.register(key.selector(), tlsProcessor.initialKeyOps(), tlsProcessor);
 
-    if (logger.isDebuggable()) {
+    if (logger.isDebugEnabled()) {
       try {
         logger.debug("Accepted connection from client [{}]", client.getRemoteAddress().toString());
       } catch (IOException e) {
@@ -226,7 +226,7 @@ public class HTTPServerThread extends Thread implements Closeable, Notifier {
   private void cancelAndCloseKey(SelectionKey key) {
     if (key != null) {
       try (var client = key.channel()) {
-        if (logger.isDebuggable() && client instanceof SocketChannel socketChannel) {
+        if (logger.isDebugEnabled() && client instanceof SocketChannel socketChannel) {
           logger.debug("Closing connection to client [{}]", socketChannel.getRemoteAddress().toString());
         }
 
@@ -251,7 +251,7 @@ public class HTTPServerThread extends Thread implements Closeable, Notifier {
             .filter(key -> key.attachment() != null)
             .filter(key -> ((HTTPProcessor) key.attachment()).lastUsed() < now - clientTimeout.toMillis())
             .forEach(key -> {
-              if (logger.isDebuggable()) {
+              if (logger.isDebugEnabled()) {
                 var client = (SocketChannel) key.channel();
                 try {
                   logger.debug("Closing client connection [{}] due to inactivity", client.getRemoteAddress().toString());
