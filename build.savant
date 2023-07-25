@@ -22,9 +22,8 @@ project(group: "io.fusionauth", name: "java-http", version: "0.1.16", licenses: 
     fetch {
       // Dependency resolution order:
       //
-      // 1. Hit the savant cache, and then maven cache
+      // 1. Hit the savant cache
       cache()
-      mavenCache()
       //
       // 2. Look in public savant repo
       url(url: "https://repository.savantbuild.org")
