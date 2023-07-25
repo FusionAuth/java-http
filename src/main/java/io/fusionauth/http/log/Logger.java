@@ -1,5 +1,5 @@
 /*
- * Copyright (c) 2022, FusionAuth, All Rights Reserved
+ * Copyright (c) 2022-2023, FusionAuth, All Rights Reserved
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -76,9 +76,46 @@ public interface Logger {
   void info(String message, Object... values);
 
   /**
-   * @return If this logger has debug enabled.
+   * @return True if this Logger is enabled for the Debug level, false otherwise.
    */
-  boolean isDebuggable();
+  boolean isDebugEnabled();
+
+  /**
+   * Returns whether this Logger is enabled for a given {@link Level}.
+   *
+   * @param level the level to check
+   * @return true if enabled, false otherwise.
+   */
+  default boolean isEnabledForLevel(Level level) {
+    return switch (level) {
+      case Trace -> isTraceEnabled();
+      case Debug -> isDebugEnabled();
+      case Info -> isInfoEnabled();
+      case Error -> isErrorEnabled();
+    };
+  }
+
+  /**
+   * @return True if this Logger is enabled for the Error level, false otherwise.
+   */
+  boolean isErrorEnabled();
+
+  /**
+   * @return True if this Logger is enabled for the Info level, false otherwise.
+   */
+  boolean isInfoEnabled();
+
+  /**
+   * @return True if this Logger is enabled for the Trace level, false otherwise.
+   */
+  boolean isTraceEnabled();
+
+  /**
+   * Sets the level of this logger (optional method).
+   *
+   * @param level The level.
+   */
+  void setLevel(Level level);
 
   /**
    * Logs a trace message with values.
@@ -94,11 +131,4 @@ public interface Logger {
    * @param message The message.
    */
   void trace(String message);
-
-  /**
-   * Sets the level of this logger (optional method).
-   *
-   * @param level The level.
-   */
-  void setLevel(Level level);
 }
