@@ -30,6 +30,7 @@ import java.time.Duration;
 import java.util.List;
 import java.util.Map;
 
+import io.fusionauth.http.ClientAbortException;
 import io.fusionauth.http.ParseException;
 import io.fusionauth.http.log.Logger;
 import io.fusionauth.http.util.ThreadPool;
@@ -192,6 +193,10 @@ public class HTTPServerThread extends Thread implements Closeable, Notifier {
         }
 
         cancelAndCloseKey(key);
+      } catch (ClientAbortException e) {
+        // A client abort exception is common and should not be error logged.
+        logger.debug("A client related exception was thrown during processing", e);
+        cancelAndCloseKey(key);
       } catch (Throwable t) {
         logger.error("An exception was thrown during processing", t);
         cancelAndCloseKey(key);
@@ -287,7 +292,14 @@ public class HTTPServerThread extends Thread implements Closeable, Notifier {
     if (state == ProcessorState.Read) {
       ByteBuffer buffer = processor.readBuffer();
       if (buffer != null) {
-        int num = client.read(buffer);
+        int num;
+        try {
+          num = client.read(buffer);
+        } catch (IOException e) {
+          // This is most likely an exception caused by the client.
+          throw new ClientAbortException(e);
+        }
+
         if (num < 0) {
           logger.debug("Client terminated the connection. Num bytes is [{}]. Closing connection", num);
           state = processor.close(true);
@@ -320,7 +332,12 @@ public class HTTPServerThread extends Thread implements Closeable, Notifier {
     if (state == ProcessorState.Write) {
       long num = 0;
       if (buffers != null) {
-        num = client.write(buffers);
+        try {
+          num = client.write(buffers);
+        } catch (IOException e) {
+          // This is most likely an exception caused by the client.
+          throw new ClientAbortException(e);
+        }
       }
 
       if (num < 0) {

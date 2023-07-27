@@ -14,7 +14,7 @@
  * language governing permissions and limitations under the License.
  */
 jackson5Version = "3.0.1"
-restifyVersion = "4.1.2"
+restifyVersion = "4.2.0"
 testngVersion = "7.8.0"
 
 project(group: "io.fusionauth", name: "java-http", version: "0.2.0", licenses: ["ApacheV2_0"]) {
@@ -62,9 +62,12 @@ release = loadPlugin(id: "org.savantbuild.plugin:release-git:2.0.0-RC.6")
 pom = loadPlugin(id: "org.savantbuild.plugin:pom:2.0.0-RC.6")
 
 java.settings.javaVersion = "17"
-java.settings.compilerArguments = "--add-exports java.base/sun.security.x509=ALL-UNNAMED --add-exports java.base/sun.security.util=ALL-UNNAMED -XDignore.symbol.file"
+java
+    .settings
+    .compilerArguments = "--add-exports java.base/sun.security.x509=ALL-UNNAMED --add-exports java.base/sun.security.util=ALL-UNNAMED -XDignore.symbol.file"
 javaTestNG.settings.javaVersion = "17"
-javaTestNG.settings.jvmArguments = "--add-exports java.base/sun.security.x509=ALL-UNNAMED --add-exports java.base/sun.security.util=ALL-UNNAMED"
+javaTestNG
+    .settings.jvmArguments = "--add-exports java.base/sun.security.x509=ALL-UNNAMED --add-exports java.base/sun.security.util=ALL-UNNAMED"
 javaTestNG.settings.testngArguments = "-listener io.fusionauth.http.BaseTest\$TestListener"
 
 target(name: "clean", description: "Cleans the build directory") {
