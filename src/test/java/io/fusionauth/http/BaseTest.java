@@ -358,7 +358,7 @@ public abstract class BaseTest {
                                
           HTTP Trace:
           {{trace}}
-          -----------------                       
+          -----------------                      
            """.replace("{{exception}}", throwable != null ? throwable.getClass().getSimpleName() : "-")
               .replace("{{message}}", throwable != null ? (throwable.getMessage() != null ? throwable.getMessage() : "-") : "-")
               .replace("{{trace}}", trace));
