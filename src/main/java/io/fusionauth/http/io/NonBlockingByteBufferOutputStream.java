@@ -129,7 +129,7 @@ public class NonBlockingByteBufferOutputStream extends OutputStream {
     used = true;
 
     // Set up the buffer to handle the bytes
-    setupBuffer(Math.max(bufferSize, len));
+    setupBuffer(bufferSize);
 
     int length = Math.min(currentBuffer.remaining(), len);
     currentBuffer.put(b, off, length);
