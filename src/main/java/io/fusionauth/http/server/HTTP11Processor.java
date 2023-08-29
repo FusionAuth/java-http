@@ -1,5 +1,5 @@
 /*
- * Copyright (c) 2022, FusionAuth, All Rights Reserved
+ * Copyright (c) 2022-2023, FusionAuth, All Rights Reserved
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -18,8 +18,9 @@ package io.fusionauth.http.server;
 import java.io.IOException;
 import java.nio.ByteBuffer;
 import java.nio.channels.SelectionKey;
+import java.util.concurrent.Future;
 
-import io.fusionauth.http.io.NonBlockingByteBufferOutputStream;
+import io.fusionauth.http.io.BlockingByteBufferOutputStream;
 import io.fusionauth.http.log.Logger;
 import io.fusionauth.http.util.ThreadPool;
 
@@ -47,6 +48,18 @@ public class HTTP11Processor implements HTTPProcessor {
 
   private final ThreadPool threadPool;
 
+  private long bytesRead;
+
+  private long bytesWritten;
+
+  private long firstByteReadInstant = -1;
+
+  private long firstByteWroteInstant = -1;
+
+  private Future<?> future;
+
+  private long lastByteReadInstant = -1;
+
   private long lastUsed = System.currentTimeMillis();
 
   private volatile ProcessorState state;
@@ -63,7 +76,7 @@ public class HTTP11Processor implements HTTPProcessor {
     this.request = new HTTPRequest(configuration.getContextPath(), configuration.getMultipartBufferSize(), listener.isTLS() ? "https" : "http", listener.getPort(), ipAddress);
     this.requestProcessor = new HTTPRequestProcessor(configuration, request);
 
-    NonBlockingByteBufferOutputStream outputStream = new NonBlockingByteBufferOutputStream(notifier, configuration.getResponseBufferSize());
+    BlockingByteBufferOutputStream outputStream = new BlockingByteBufferOutputStream(notifier, configuration.getResponseBufferSize(), configuration.getMaxOutputBufferQueueLength());
     this.response = new HTTPResponse(outputStream, request, configuration.isCompressByDefault());
     this.responseProcessor = new HTTPResponseProcessor(configuration, request, response, outputStream);
   }
@@ -71,6 +84,9 @@ public class HTTP11Processor implements HTTPProcessor {
   @Override
   public ProcessorState close(boolean endOfStream) {
     logger.trace("(C)");
+
+    // Interrupt the thread if it is still running
+    future.cancel(true);
 
     // Set the state to Close and return it
     state = ProcessorState.Close;
@@ -119,6 +135,13 @@ public class HTTP11Processor implements HTTPProcessor {
   public ProcessorState read(ByteBuffer buffer) throws IOException {
     markUsed();
 
+    bytesRead += buffer.remaining();
+    if (firstByteReadInstant == -1) {
+      lastByteReadInstant = firstByteReadInstant = System.currentTimeMillis();
+    } else {
+      lastByteReadInstant = System.currentTimeMillis();
+    }
+
     logger.trace("(R)");
 
     RequestState requestState = requestProcessor.state();
@@ -130,7 +153,7 @@ public class HTTP11Processor implements HTTPProcessor {
       // If the next state is not preamble, that means we are done processing that and ready to handle the request in a separate thread
       if (requestState != RequestState.Preamble && requestState != RequestState.Expect) {
         logger.trace("(RWo)");
-        threadPool.submit(new HTTPWorker(configuration.getHandler(), configuration.getLoggerFactory(), this, request, response));
+        future = threadPool.submit(new HTTPWorker(configuration.getHandler(), configuration.getLoggerFactory(), this, request, response));
       }
     } else {
       logger.trace("(RB)");
@@ -175,6 +198,25 @@ public class HTTP11Processor implements HTTPProcessor {
   }
 
   @Override
+  public long readThroughput() {
+    // Haven't read anything yet, or we read everything in the first read (instants are equal)
+    if (firstByteReadInstant == -1 || bytesRead == 0 || lastByteReadInstant == firstByteReadInstant) {
+      return Long.MAX_VALUE;
+    }
+
+    if (firstByteWroteInstant == -1) {
+      long millis = System.currentTimeMillis() - firstByteReadInstant;
+      if (millis < 2_000) {
+        return Long.MAX_VALUE;
+      }
+
+      return (bytesRead / millis) * 1_000;
+    }
+
+    return (bytesRead / (lastByteReadInstant - firstByteReadInstant)) * 1_000;
+  }
+
+  @Override
   public ProcessorState state() {
     return state;
   }
@@ -190,8 +232,29 @@ public class HTTP11Processor implements HTTPProcessor {
   }
 
   @Override
+  public long writeThroughput() {
+    // Haven't written anything yet or not enough time has passed to calculated throughput (2s)
+    if (firstByteWroteInstant == -1 || bytesWritten == 0) {
+      return Long.MAX_VALUE;
+    }
+
+    long millis = System.currentTimeMillis() - firstByteWroteInstant;
+    if (millis < 2_000) {
+      return Long.MAX_VALUE;
+    }
+
+    // Always use `now` since this calculation is ongoing until the client reads all the bytes
+    return (bytesWritten / millis) * 1_000;
+  }
+
+  @Override
   public ProcessorState wrote(long num) {
     markUsed();
+
+    bytesWritten += num;
+    if (firstByteWroteInstant == -1) {
+      firstByteWroteInstant = System.currentTimeMillis();
+    }
 
     if (num > 0) {
       logger.trace("(W)");
@@ -206,7 +269,7 @@ public class HTTP11Processor implements HTTPProcessor {
       // Flip back to reading and back to the preamble state, so we write the real response headers. Then start the worker thread and flip the ops
       requestProcessor.resetState(RequestState.Body);
       responseProcessor.resetState(ResponseState.Preamble);
-      threadPool.submit(new HTTPWorker(configuration.getHandler(), configuration.getLoggerFactory(), this, request, response));
+      future = threadPool.submit(new HTTPWorker(configuration.getHandler(), configuration.getLoggerFactory(), this, request, response));
       state = ProcessorState.Read;
     } else if (responseState == ResponseState.KeepAlive) {
       logger.trace("(WKA)");

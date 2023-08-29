@@ -1,5 +1,5 @@
 /*
- * Copyright (c) 2022, FusionAuth, All Rights Reserved
+ * Copyright (c) 2022-2023, FusionAuth, All Rights Reserved
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -17,24 +17,25 @@ package io.fusionauth.http.io;
 
 import java.io.OutputStream;
 import java.nio.ByteBuffer;
-import java.util.Queue;
-import java.util.concurrent.ConcurrentLinkedQueue;
+import java.util.concurrent.BlockingQueue;
+import java.util.concurrent.LinkedBlockingQueue;
 
 import io.fusionauth.http.server.Notifier;
 
 /**
  * This InputStream uses ByteBuffers read by the Server processor and piped into this class. Those ByteBuffers are then fed to the reader of
- * the InputStream. The pushing of ByteBuffers never blocks but the reading will block if there are no more bytes to read.
+ * the InputStream. The pushing of ByteBuffers blocks based on the configuration and the reading will block if there are no more bytes to
+ * read.
  * <p>
  * In order to handle chunking and other considerations, this class can be sub-classed to preprocess bytes.
  *
  * @author Brian Pontarelli
  */
-public class NonBlockingByteBufferOutputStream extends OutputStream {
+public class BlockingByteBufferOutputStream extends OutputStream {
   private final int bufferSize;
 
-  // Shared between writer and reader threads. No one blocks using this.
-  private final Queue<ByteBuffer> buffers = new ConcurrentLinkedQueue<>();
+  // Shared between writer and reader threads.
+  private final BlockingQueue<ByteBuffer> buffers;
 
   private final Notifier notifier;
 
@@ -45,9 +46,10 @@ public class NonBlockingByteBufferOutputStream extends OutputStream {
 
   private volatile boolean used;
 
-  public NonBlockingByteBufferOutputStream(Notifier notifier, int bufferSize) {
-    this.notifier = notifier;
+  public BlockingByteBufferOutputStream(Notifier notifier, int bufferSize, int maximumQueueSize) {
+    this.buffers = new LinkedBlockingQueue<>(maximumQueueSize);
     this.bufferSize = bufferSize;
+    this.notifier = notifier;
   }
 
   public void clear() {
@@ -149,8 +151,13 @@ public class NonBlockingByteBufferOutputStream extends OutputStream {
 
   private void addBuffer(boolean notify) {
     currentBuffer.flip();
-    if (!buffers.offer(currentBuffer)) {
-      throw new IllegalStateException("The ConcurrentLinkedQueue is borked. It should never reject an offer() operation.");
+
+    try {
+      // This will block until we have capacity. We looked and it seems as though there aren't any ways that a Worker thread can be in a
+      // state where it was interrupted by the HTTPServerThread and this line of code doesn't throw an InterruptedException.
+      buffers.put(currentBuffer);
+    } catch (InterruptedException e) {
+      throw new IllegalStateException(e);
     }
 
     currentBuffer = null;

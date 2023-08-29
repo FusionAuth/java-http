@@ -25,7 +25,7 @@ import io.fusionauth.http.body.response.BodyProcessor;
 import io.fusionauth.http.body.response.ChunkedBodyProcessor;
 import io.fusionauth.http.body.response.ContentLengthBodyProcessor;
 import io.fusionauth.http.body.response.EmptyBodyProcessor;
-import io.fusionauth.http.io.NonBlockingByteBufferOutputStream;
+import io.fusionauth.http.io.BlockingByteBufferOutputStream;
 import io.fusionauth.http.log.Logger;
 import io.fusionauth.http.util.HTTPTools;
 
@@ -39,7 +39,7 @@ public class HTTPResponseProcessor {
 
   private final Logger logger;
 
-  private final NonBlockingByteBufferOutputStream outputStream;
+  private final BlockingByteBufferOutputStream outputStream;
 
   private final HTTPRequest request;
 
@@ -52,7 +52,7 @@ public class HTTPResponseProcessor {
   private volatile ResponseState state = ResponseState.Preamble;
 
   public HTTPResponseProcessor(HTTPServerConfiguration configuration, HTTPRequest request, HTTPResponse response,
-                               NonBlockingByteBufferOutputStream outputStream) {
+                               BlockingByteBufferOutputStream outputStream) {
     this.configuration = configuration;
     this.request = request;
     this.response = response;

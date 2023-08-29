@@ -164,6 +164,8 @@ public abstract class BaseTest {
                            .withExpectValidator(expectValidator)
                            .withInstrumenter(instrumenter)
                            .withLoggerFactory(AccumulatingLoggerFactory.FACTORY)
+                           .withMinimumReadThroughput(200 * 1024)
+                           .withMinimumWriteThroughput(200 * 1024)
                            .withNumberOfWorkerThreads(1)
                            .withListener(listenerConfiguration);
   }
@@ -358,7 +360,7 @@ public abstract class BaseTest {
                                
           HTTP Trace:
           {{trace}}
-          -----------------                      
+          -----------------
            """.replace("{{exception}}", throwable != null ? throwable.getClass().getSimpleName() : "-")
               .replace("{{message}}", throwable != null ? (throwable.getMessage() != null ? throwable.getMessage() : "-") : "-")
               .replace("{{trace}}", trace));

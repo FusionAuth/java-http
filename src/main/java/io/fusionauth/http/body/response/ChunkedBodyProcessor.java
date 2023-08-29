@@ -1,5 +1,5 @@
 /*
- * Copyright (c) 2022, FusionAuth, All Rights Reserved
+ * Copyright (c) 2022-2023, FusionAuth, All Rights Reserved
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -18,7 +18,7 @@ package io.fusionauth.http.body.response;
 import java.nio.ByteBuffer;
 
 import io.fusionauth.http.HTTPValues.ControlBytes;
-import io.fusionauth.http.io.NonBlockingByteBufferOutputStream;
+import io.fusionauth.http.io.BlockingByteBufferOutputStream;
 
 /**
  * A body processor that handles chunked requests/responses.
@@ -32,9 +32,9 @@ public class ChunkedBodyProcessor implements BodyProcessor {
 
   private final ByteBuffer[] currentBuffers = new ByteBuffer[3];
 
-  private final NonBlockingByteBufferOutputStream outputStream;
+  private final BlockingByteBufferOutputStream outputStream;
 
-  public ChunkedBodyProcessor(NonBlockingByteBufferOutputStream outputStream) {
+  public ChunkedBodyProcessor(BlockingByteBufferOutputStream outputStream) {
     this.outputStream = outputStream;
   }
 

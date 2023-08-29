@@ -26,10 +26,13 @@ import java.net.http.HttpRequest;
 import java.net.http.HttpRequest.BodyPublishers;
 import java.net.http.HttpResponse.BodySubscribers;
 import java.nio.charset.StandardCharsets;
+import java.security.SecureRandom;
 import java.security.cert.Certificate;
 import java.time.Duration;
+import java.util.Base64;
 import java.util.List;
 import java.util.Locale;
+import java.util.concurrent.atomic.AtomicBoolean;
 import java.util.zip.InflaterInputStream;
 
 import com.inversoft.net.ssl.SSLTools;
@@ -250,7 +253,7 @@ public class CoreTest extends BaseTest {
     // 260 characters for a total of 16,640 bytes per header value. 5 headers for a total of 83,200 bytes
     HTTPHandler handler = (req, res) -> {
       res.setHeader(Headers.ContentType, "text/plain");
-      res.setHeader("Content-Length", "16");
+      res.setHeader(Headers.ContentLength, "16");
       res.setHeader("X-Huge-Header-1", LongString);
       res.setHeader("X-Huge-Header-2", LongString);
       res.setHeader("X-Huge-Header-3", LongString);
@@ -302,7 +305,7 @@ public class CoreTest extends BaseTest {
   public void performance(String scheme) throws Exception {
     HTTPHandler handler = (req, res) -> {
       res.setHeader(Headers.ContentType, "text/plain");
-      res.setHeader("Content-Length", "16");
+      res.setHeader(Headers.ContentLength, "16");
       res.setStatus(200);
 
       try {
@@ -346,7 +349,7 @@ public class CoreTest extends BaseTest {
   public void performanceNoKeepAlive(String scheme) throws Exception {
     HTTPHandler handler = (req, res) -> {
       res.setHeader(Headers.ContentType, "text/plain");
-      res.setHeader("Content-Length", "16");
+      res.setHeader(Headers.ContentLength, "16");
       res.setStatus(200);
 
       try {
@@ -392,7 +395,7 @@ public class CoreTest extends BaseTest {
   public void serverClosesSockets(String scheme) {
     HTTPHandler handler = (req, res) -> {
       res.setHeader(Headers.ContentType, "text/plain");
-      res.setHeader("Content-Length", "16");
+      res.setHeader(Headers.ContentLength, "16");
       res.setStatus(200);
 
       try {
@@ -498,7 +501,7 @@ public class CoreTest extends BaseTest {
   public void simpleGetMultiplePorts() throws Exception {
     HTTPHandler handler = (req, res) -> {
       res.setHeader(Headers.ContentType, "text/plain");
-      res.setHeader("Content-Length", "16");
+      res.setHeader(Headers.ContentLength, "16");
       res.setStatus(200);
 
       try {
@@ -562,7 +565,7 @@ public class CoreTest extends BaseTest {
 
       System.out.println("Done");
       res.setHeader(Headers.ContentType, "text/plain");
-      res.setHeader("Content-Length", "16");
+      res.setHeader(Headers.ContentLength, "16");
       res.setStatus(200);
 
       try {
@@ -585,6 +588,61 @@ public class CoreTest extends BaseTest {
 
       assertEquals(response.statusCode(), 200);
       assertEquals(response.body(), ExpectedResponse);
+    }
+  }
+
+  @Test(dataProvider = "schemes")
+  public void slowWrites(String scheme) throws Exception {
+    // Test a slow connection where the HTTP server is blocked because we cannot write to the output stream as fast as we'd like
+
+    // The default test config will use a 16k buffer and a queue size of 16.
+    // - Trying to write 8 MB slowly should cause an error.
+
+    // 8 MB bytes
+    byte[] bytes = new byte[1024 * 1024 * 8];
+    new SecureRandom().nextBytes(bytes);
+
+    // Base64 encoded large string
+    String largeRequest = Base64.getEncoder().encodeToString(bytes);
+
+    HTTPHandler handler = (req, res) -> {
+      res.setHeader(Headers.ContentType, "text/plain; charset=UTF-8");
+      int contentLength = largeRequest.getBytes(StandardCharsets.UTF_8).length;
+      System.out.println("set Content-Length: " + contentLength);
+      res.setHeader(Headers.ContentLength, String.valueOf(contentLength));
+      res.setStatus(200);
+
+      Writer writer = res.getWriter();
+      writer.write(largeRequest);
+      writer.close();
+    };
+
+    AtomicBoolean slept = new AtomicBoolean(false);
+    try (HTTPServer ignore = makeServer(scheme, handler).start()) {
+      URI uri = makeURI(scheme, "");
+      var client = makeClient(scheme, null);
+      client.send(
+          HttpRequest.newBuilder().uri(uri).GET().build(),
+          r -> BodySubscribers.ofByteArrayConsumer(optional -> {
+            byte[] actual = optional.orElse(null);
+            if (actual != null) {
+              // Sleep once only since the server should fail after the first batch, but since Java or the OS might cache a lot of bytes it
+              // read from the socket, we can't sleep for too long, otherwise, this test will never complete
+              if (!slept.get()) {
+                int sleep = 5 * 1_000;
+                System.out.println("received [" + actual.length + "] bytes. Sleep [" + sleep + "]");
+                sleep(sleep); // We expect to only wait for 2,000 ms
+                slept.set(true);
+              }
+            } else {
+              System.out.println("no bytes");
+            }
+          })
+      );
+
+      fail("Should have thrown");
+    } catch (IOException e) {
+      // Expected
     }
   }
 
@@ -637,7 +695,7 @@ public class CoreTest extends BaseTest {
         req.getInputStream().readAllBytes();
 
         res.setHeader(Headers.ContentType, "text/plain; charset=UTF-16");
-        res.setHeader("Content-Length", "" + ExpectedResponse.getBytes(StandardCharsets.UTF_16).length); // Recalculate the byte length using UTF-16
+        res.setHeader(Headers.ContentLength, String.valueOf(ExpectedResponse.getBytes(StandardCharsets.UTF_16).length)); // Recalculate the byte length using UTF-16
         res.setStatus(200);
 
         Writer writer = res.getWriter();

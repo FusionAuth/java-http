@@ -224,9 +224,12 @@ public class HTTPS11Processor implements HTTPProcessor {
   }
 
   @Override
-  public ProcessorState state() {
-    delegate.markUsed();
+  public long readThroughput() {
+    return delegate.readThroughput();
+  }
 
+  @Override
+  public ProcessorState state() {
     if (engine == null) {
       return delegate.state();
     }
@@ -289,6 +292,11 @@ public class HTTPS11Processor implements HTTPProcessor {
     }
 
     return myNetData;
+  }
+
+  @Override
+  public long writeThroughput() {
+    return delegate.writeThroughput();
   }
 
   @Override

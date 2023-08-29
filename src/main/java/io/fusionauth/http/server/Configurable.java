@@ -1,5 +1,5 @@
 /*
- * Copyright (c) 2022, FusionAuth, All Rights Reserved
+ * Copyright (c) 2022-2023, FusionAuth, All Rights Reserved
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -141,6 +141,20 @@ public interface Configurable<T extends Configurable<T>> {
   }
 
   /**
+   * Sets the maximum length of the output buffer queue. Defaults to 128.
+   * <p>
+   * This parameter will affect the runtime memory requirement of the server. This can be calculated by multiplying this value by values
+   * returned from {@link HTTPServerConfiguration#getResponseBufferSize()} and {@link HTTPServerConfiguration#getNumberOfWorkerThreads()}.
+   *
+   * @param outputBufferQueueLength The length of the output buffer queue.
+   * @return This.
+   */
+  default T withMaxOutputBufferQueueLength(int outputBufferQueueLength) {
+    configuration().withMaxOutputBufferQueueLength(outputBufferQueueLength);
+    return (T) this;
+  }
+
+  /**
    * Sets the max preamble length (the start-line and headers constitute the head). Defaults to 64k
    *
    * @param maxLength The max preamble length.
@@ -148,6 +162,30 @@ public interface Configurable<T extends Configurable<T>> {
    */
   default T withMaxPreambleLength(int maxLength) {
     configuration().withMaxPreambleLength(maxLength);
+    return (T) this;
+  }
+
+  /**
+   * This configures the minimum number of bytes per second that a client must send a request to the server before the server closes the
+   * connection.
+   *
+   * @param bytesPerSecond The bytes per second throughput.
+   * @return This.
+   */
+  default T withMinimumReadThroughput(long bytesPerSecond) {
+    configuration().withMinimumReadThroughput(bytesPerSecond);
+    return (T) this;
+  }
+
+  /**
+   * This configures the minimum number of bytes per second that a client must read the response from the server before the server closes
+   * the connection.
+   *
+   * @param bytesPerSecond The bytes per second throughput.
+   * @return This.
+   */
+  default T withMinimumWriteThroughput(long bytesPerSecond) {
+    configuration().withMinimumWriteThroughput(bytesPerSecond);
     return (T) this;
   }
 
@@ -164,6 +202,10 @@ public interface Configurable<T extends Configurable<T>> {
 
   /**
    * Sets the number of worker threads that will handle requests coming into the HTTP server. Defaults to 40.
+   * <p>
+   * This parameter will affect the runtime memory requirement of the server. This can be calculated by multiplying this value by the
+   * returned from {@link HTTPServerConfiguration#getResponseBufferSize()} and
+   * {@link HTTPServerConfiguration#getMaxOutputBufferQueueLength()}.
    *
    * @param numberOfWorkerThreads The number of worker threads.
    * @return This.
@@ -197,6 +239,10 @@ public interface Configurable<T extends Configurable<T>> {
 
   /**
    * Sets the size of the buffer that is used to process the HTTP response. This defaults to 16k.
+   * <p>
+   * This parameter will affect the runtime memory requirement of the server. This can be calculated by multiplying this value by the
+   * returned from {@link HTTPServerConfiguration#getNumberOfWorkerThreads()} and
+   * {@link HTTPServerConfiguration#getMaxOutputBufferQueueLength()}.
    *
    * @param responseBufferSize The size of the buffer.
    * @return This.

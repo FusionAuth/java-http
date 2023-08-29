@@ -1,5 +1,5 @@
 /*
- * Copyright (c) 2022, FusionAuth, All Rights Reserved
+ * Copyright (c) 2022-2023, FusionAuth, All Rights Reserved
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -24,6 +24,11 @@ import java.util.Objects;
 import io.fusionauth.http.log.LoggerFactory;
 import io.fusionauth.http.log.SystemOutLoggerFactory;
 
+/**
+ * The HTTP Server configuration.
+ *
+ * @author Brian Pontarelli
+ */
 public class HTTPServerConfiguration implements Configurable<HTTPServerConfiguration> {
   private final List<HTTPListenerConfiguration> listeners = new ArrayList<>();
 
@@ -44,6 +49,12 @@ public class HTTPServerConfiguration implements Configurable<HTTPServerConfigura
   private LoggerFactory loggerFactory = SystemOutLoggerFactory.FACTORY;
 
   private int maxHeadLength = 128 * 1024;
+
+  private int maxOutputBufferQueueLength = 128;
+
+  private long minimumReadThroughput = 16 * 1024; // Per second
+
+  private long minimumWriteThroughput = 16 * 1024; // Per second
 
   private int multipartBufferSize = 16 * 1024;
 
@@ -101,10 +112,50 @@ public class HTTPServerConfiguration implements Configurable<HTTPServerConfigura
     return maxHeadLength;
   }
 
+  /**
+   * This configuration will affect the runtime memory requirement.
+   * <p>
+   * The maximum memory requirement for the output buffer can be calculated multiplying this value by the values returned from
+   * {@link HTTPServerConfiguration#getResponseBufferSize()} and * {@link HTTPServerConfiguration#getNumberOfWorkerThreads()}.
+   *
+   * @return the maximum output buffer queue length.
+   */
+  public int getMaxOutputBufferQueueLength() {
+    return maxOutputBufferQueueLength;
+  }
+
+  /**
+   * This configuration is the minimum number of bytes per second that a client must send a request to the server before the server closes
+   * the connection.
+   *
+   * @return The minimum throughput for any connection with the server in bytes per second.
+   */
+  public long getMinimumReadThroughput() {
+    return minimumReadThroughput;
+  }
+
+  /**
+   * This configuration is the minimum number of bytes per second that a client must read the response from the server before the server
+   * closes the connection.
+   *
+   * @return The minimum throughput for any connection with the server in bytes per second.
+   */
+  public long getMinimumWriteThroughput() {
+    return minimumWriteThroughput;
+  }
+
   public int getMultipartBufferSize() {
     return multipartBufferSize;
   }
 
+  /**
+   * The number of worker threads. This configuration will affect the runtime memory requirement.
+   * <p>
+   * The maximum memory requirement for the output buffer can be calculated multiplying this value by the values returned from
+   * {@link HTTPServerConfiguration#getMaxOutputBufferQueueLength()} and * {@link HTTPServerConfiguration#getResponseBufferSize()}.
+   *
+   * @return the number of worker threads.
+   */
   public int getNumberOfWorkerThreads() {
     return numberOfWorkerThreads;
   }
@@ -117,6 +168,14 @@ public class HTTPServerConfiguration implements Configurable<HTTPServerConfigura
     return requestBufferSize;
   }
 
+  /**
+   * The size of the response buffer in bytes. This configuration will affect the runtime memory requirement.
+   * <p>
+   * The maximum memory requirement for the output buffer can be calculated multiplying this value by the values returned from
+   * {@link HTTPServerConfiguration#getMaxOutputBufferQueueLength()} and * {@link HTTPServerConfiguration#getNumberOfWorkerThreads()}.
+   *
+   * @return the response buffer size in bytes.
+   */
   public int getResponseBufferSize() {
     return responseBufferSize;
   }
@@ -145,7 +204,7 @@ public class HTTPServerConfiguration implements Configurable<HTTPServerConfigura
   public HTTPServerConfiguration withClientTimeout(Duration duration) {
     Objects.requireNonNull(duration, "You cannot set the client timeout to null");
     if (duration.isZero() || duration.isNegative()) {
-      throw new IllegalArgumentException("You cannot set the client timeout less than 0");
+      throw new IllegalArgumentException("The client timeout duration must be greater than 0");
     }
 
 
@@ -223,12 +282,58 @@ public class HTTPServerConfiguration implements Configurable<HTTPServerConfigura
    * {@inheritDoc}
    */
   @Override
+  public HTTPServerConfiguration withMaxOutputBufferQueueLength(int outputBufferQueueLength) {
+    if (outputBufferQueueLength < 16) {
+      throw new IllegalArgumentException("The maximum output buffer queue length must be greater than or equal to 16");
+    }
+
+    this.maxOutputBufferQueueLength = outputBufferQueueLength;
+    return this;
+  }
+
+  /**
+   * {@inheritDoc}
+   */
+  @Override
   public HTTPServerConfiguration withMaxPreambleLength(int maxLength) {
     if (maxLength <= 0) {
-      throw new IllegalArgumentException("You cannot set the max preamble length than 0");
+      throw new IllegalArgumentException("The maximum preamble length must be greater than 0");
     }
 
     this.maxHeadLength = maxLength;
+    return this;
+  }
+
+  /**
+   * This configures the minimum number of bytes per second that a client must send a request to the server before the server closes the
+   * connection.
+   *
+   * @param bytesPerSecond The bytes per second throughput.
+   * @return This.
+   */
+  @Override
+  public HTTPServerConfiguration withMinimumReadThroughput(long bytesPerSecond) {
+    if (bytesPerSecond < 1024) {
+      throw new IllegalArgumentException("This should probably be faster than a 28.8 baud modem!");
+    }
+
+    this.minimumReadThroughput = bytesPerSecond;
+    return this;
+  }
+
+  /**
+   * This configures the minimum number of bytes per second that a client must read the response from the server before the server closes
+   * the connection.
+   *
+   * @param bytesPerSecond The bytes per second throughput.
+   * @return This.
+   */
+  public HTTPServerConfiguration withMinimumWriteThroughput(long bytesPerSecond) {
+    if (bytesPerSecond < 1024) {
+      throw new IllegalArgumentException("This should probably be faster than a 28.8 baud modem!");
+    }
+
+    this.minimumWriteThroughput = bytesPerSecond;
     return this;
   }
 
@@ -238,7 +343,7 @@ public class HTTPServerConfiguration implements Configurable<HTTPServerConfigura
   @Override
   public HTTPServerConfiguration withMultipartBufferSize(int multipartBufferSize) {
     if (multipartBufferSize <= 0) {
-      throw new IllegalArgumentException("You cannot set the multipart buffer size less than 0");
+      throw new IllegalArgumentException("The multi-part buffer size must be greater than 0");
     }
 
     this.multipartBufferSize = multipartBufferSize;
@@ -251,7 +356,7 @@ public class HTTPServerConfiguration implements Configurable<HTTPServerConfigura
   @Override
   public HTTPServerConfiguration withNumberOfWorkerThreads(int numberOfWorkerThreads) {
     if (numberOfWorkerThreads <= 0) {
-      throw new IllegalArgumentException("You cannot set the number of worker threads less than 0");
+      throw new IllegalArgumentException("The number of worker threads must be greater than 0");
     }
 
     this.numberOfWorkerThreads = numberOfWorkerThreads;
@@ -264,7 +369,7 @@ public class HTTPServerConfiguration implements Configurable<HTTPServerConfigura
   @Override
   public HTTPServerConfiguration withPreambleBufferSize(int size) {
     if (size <= 0) {
-      throw new IllegalArgumentException("You cannot set the preamble buffer size less than 0");
+      throw new IllegalArgumentException("The preamble buffer size must be greater than 0");
     }
 
     this.preambleBufferSize = size;
@@ -277,7 +382,7 @@ public class HTTPServerConfiguration implements Configurable<HTTPServerConfigura
   @Override
   public HTTPServerConfiguration withRequestBufferSize(int requestBufferSize) {
     if (requestBufferSize <= 0) {
-      throw new IllegalArgumentException("You cannot set the request buffer size less than 0");
+      throw new IllegalArgumentException("The request buffer size must be greater than 0");
     }
 
     this.requestBufferSize = requestBufferSize;
@@ -290,7 +395,7 @@ public class HTTPServerConfiguration implements Configurable<HTTPServerConfigura
   @Override
   public HTTPServerConfiguration withResponseBufferSize(int responseBufferSize) {
     if (responseBufferSize <= 0) {
-      throw new IllegalArgumentException("You cannot set the response buffer size less than 0");
+      throw new IllegalArgumentException("The response buffer size must be greater than 0");
     }
 
     this.responseBufferSize = responseBufferSize;
@@ -305,7 +410,7 @@ public class HTTPServerConfiguration implements Configurable<HTTPServerConfigura
     Objects.requireNonNull(duration, "You cannot set the shutdown duration to null");
 
     if (duration.isZero() || duration.isNegative()) {
-      throw new IllegalArgumentException("You cannot set the shutdown duration less than 0");
+      throw new IllegalArgumentException("The shutdown duration must be grater than 0");
     }
 
     this.shutdownDuration = duration;

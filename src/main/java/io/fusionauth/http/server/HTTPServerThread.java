@@ -54,6 +54,10 @@ public class HTTPServerThread extends Thread implements Closeable, Notifier {
 
   private final Logger logger;
 
+  private final long minimumReadThroughput;
+
+  private final long minimumWriteThroughput;
+
   private final ByteBuffer preambleBuffer;
 
   private final Selector selector;
@@ -70,6 +74,8 @@ public class HTTPServerThread extends Thread implements Closeable, Notifier {
     this.listenerConfiguration = listenerConfiguration;
     this.instrumenter = configuration.getInstrumenter();
     this.logger = configuration.getLoggerFactory().getLogger(HTTPServerThread.class);
+    this.minimumReadThroughput = configuration.getMinimumReadThroughput();
+    this.minimumWriteThroughput = configuration.getMinimumWriteThroughput();
     this.preambleBuffer = ByteBuffer.allocate(configuration.getPreambleBufferSize());
     this.selector = Selector.open();
     this.threadPool = threadPool;
@@ -235,6 +241,11 @@ public class HTTPServerThread extends Thread implements Closeable, Notifier {
           logger.debug("Closing connection to client [{}]", socketChannel.getRemoteAddress().toString());
         }
 
+        // Close the processor, which should kill the thread
+        if (key.attachment() != null) {
+          ((HTTPProcessor) key.attachment()).close(false);
+        }
+
         key.cancel();
 
         if (client.validOps() != SelectionKey.OP_ACCEPT && instrumenter != null) {
@@ -251,33 +262,43 @@ public class HTTPServerThread extends Thread implements Closeable, Notifier {
   @SuppressWarnings("resource")
   private void cleanup() {
     long now = System.currentTimeMillis();
-    selector.keys()
-            .stream()
-            .filter(key -> key.attachment() != null)
-            .filter(key -> ((HTTPProcessor) key.attachment()).lastUsed() < now - clientTimeout.toMillis())
-            .forEach(key -> {
-              if (logger.isDebugEnabled()) {
-                var client = (SocketChannel) key.channel();
-                try {
-                  logger.debug("Closing client connection [{}] due to inactivity", client.getRemoteAddress().toString());
+    for (SelectionKey key : selector.keys()) {
+      if (key.attachment() == null) {
+        continue;
+      }
 
-                  StringBuilder threadDump = new StringBuilder();
-                  for (Map.Entry<Thread, StackTraceElement[]> entry : Thread.getAllStackTraces().entrySet()) {
-                    threadDump.append(entry.getKey()).append(" ").append(entry.getKey().getState()).append("\n");
-                    for (StackTraceElement ste : entry.getValue()) {
-                      threadDump.append("\tat ").append(ste).append("\n");
-                    }
-                    threadDump.append("\n");
-                  }
+      var processor = (HTTPProcessor) key.attachment();
+      boolean badChannel =
+          (processor.state() == ProcessorState.Read && processor.readThroughput() < minimumReadThroughput) || // Not reading fast enough
+          (processor.state() == ProcessorState.Write && processor.writeThroughput() < minimumWriteThroughput) || // Not writing fast enough
+          (processor.lastUsed() < now - clientTimeout.toMillis()); // Timed out
 
-                  logger.debug("Thread dump from server side.\n" + threadDump);
-                } catch (IOException e) {
-                  // Ignore because we are just debugging
-                }
-              }
+      if (!badChannel) {
+        continue;
+      }
 
-              cancelAndCloseKey(key);
-            });
+      if (logger.isDebugEnabled()) {
+        var client = (SocketChannel) key.channel();
+        try {
+          logger.debug("Closing client connection [{}] due to inactivity", client.getRemoteAddress().toString());
+
+          StringBuilder threadDump = new StringBuilder();
+          for (Map.Entry<Thread, StackTraceElement[]> entry : Thread.getAllStackTraces().entrySet()) {
+            threadDump.append(entry.getKey()).append(" ").append(entry.getKey().getState()).append("\n");
+            for (StackTraceElement ste : entry.getValue()) {
+              threadDump.append("\tat ").append(ste).append("\n");
+            }
+            threadDump.append("\n");
+          }
+
+          logger.debug("Thread dump from server side.\n" + threadDump);
+        } catch (IOException e) {
+          // Ignore because we are just debugging
+        }
+      }
+
+      cancelAndCloseKey(key);
+    }
   }
 
   private String ipAddress(SocketChannel client) throws IOException {

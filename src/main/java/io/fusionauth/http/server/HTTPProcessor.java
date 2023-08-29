@@ -74,6 +74,11 @@ public interface HTTPProcessor {
   ByteBuffer readBuffer() throws IOException;
 
   /**
+   * @return The bytes per second throughput read by this processor.
+   */
+  long readThroughput();
+
+  /**
    * @return The current state of the HTTPProcessor.
    */
   ProcessorState state();
@@ -83,6 +88,11 @@ public interface HTTPProcessor {
    * @throws IOException If any I/O operations failed.
    */
   ByteBuffer[] writeBuffers() throws IOException;
+
+  /**
+   * @return The bytes per second throughput wrote by this processor.
+   */
+  long writeThroughput();
 
   /**
    * Called by the selector to tell the HTTPProcessor that bytes were written back to the client.
