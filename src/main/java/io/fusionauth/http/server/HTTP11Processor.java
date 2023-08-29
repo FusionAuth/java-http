@@ -86,7 +86,9 @@ public class HTTP11Processor implements HTTPProcessor {
     logger.trace("(C)");
 
     // Interrupt the thread if it is still running
-    future.cancel(true);
+    if (future != null) {
+      future.cancel(true);
+    }
 
     // Set the state to Close and return it
     state = ProcessorState.Close;
