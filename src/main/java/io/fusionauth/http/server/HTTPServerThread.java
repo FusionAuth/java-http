@@ -268,14 +268,16 @@ public class HTTPServerThread extends Thread implements Closeable, Notifier {
       }
 
       var processor = (HTTPProcessor) key.attachment();
-      boolean badChannel =
-          (processor.state() == ProcessorState.Read && processor.readThroughput() < minimumReadThroughput) || // Not reading fast enough
-          (processor.state() == ProcessorState.Write && processor.writeThroughput() < minimumWriteThroughput) || // Not writing fast enough
-          (processor.lastUsed() < now - clientTimeout.toMillis()); // Timed out
+      boolean readingSlow = processor.state() == ProcessorState.Read && processor.readThroughput() < minimumReadThroughput;
+      boolean writingSlow = processor.state() == ProcessorState.Write && processor.writeThroughput() < minimumWriteThroughput;
+      boolean timedOut = processor.lastUsed() < now - clientTimeout.toMillis();
+      boolean badChannel = readingSlow || writingSlow || timedOut;
 
       if (!badChannel) {
         continue;
       }
+
+      logger.info("Closing connection readingslow=[{}] writingslow=[{}] timedout=[{}]", readingSlow, writingSlow, timedOut);
 
       if (logger.isDebugEnabled()) {
         var client = (SocketChannel) key.channel();
