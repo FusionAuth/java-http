@@ -278,9 +278,10 @@ public class HTTPServerThread extends Thread implements Closeable, Notifier {
         continue;
       }
 
-      logger.info("Closing connection readingslow=[{}] writingslow=[{}] timedout=[{}]", readingSlow, writingSlow, timedOut);
 
       if (logger.isDebugEnabled()) {
+        logger.debug("Closing connection readingSlow=[{}] writingSlow=[{}] timedOut=[{}]", readingSlow, writingSlow, timedOut);
+
         var client = (SocketChannel) key.channel();
         try {
           logger.debug("Closing client connection [{}] due to inactivity", client.getRemoteAddress().toString());
