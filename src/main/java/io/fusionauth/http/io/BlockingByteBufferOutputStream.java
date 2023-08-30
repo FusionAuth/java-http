@@ -157,6 +157,8 @@ public class BlockingByteBufferOutputStream extends OutputStream {
       // state where it was interrupted by the HTTPServerThread and this line of code doesn't throw an InterruptedException.
       buffers.put(currentBuffer);
     } catch (InterruptedException e) {
+      currentBuffer = null;
+      buffers.clear();
       throw new IllegalStateException(e);
     }
 
