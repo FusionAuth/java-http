@@ -608,7 +608,6 @@ public class CoreTest extends BaseTest {
     HTTPHandler handler = (req, res) -> {
       res.setHeader(Headers.ContentType, "text/plain; charset=UTF-8");
       int contentLength = largeRequest.getBytes(StandardCharsets.UTF_8).length;
-      System.out.println("set Content-Length: " + contentLength);
       res.setHeader(Headers.ContentLength, String.valueOf(contentLength));
       res.setStatus(200);
 
