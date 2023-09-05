@@ -208,14 +208,16 @@ public class HTTP11Processor implements HTTPProcessor {
 
     if (firstByteWroteInstant == -1) {
       long millis = System.currentTimeMillis() - firstByteReadInstant;
-      if (millis < 2_000) {
+      if (millis < 5_000) {
         return Long.MAX_VALUE;
       }
 
-      return (bytesRead / millis) * 1_000;
+      double result = ((double) bytesRead / (double) millis) * 1_000;
+      return Math.round(result);
     }
 
-    return (bytesRead / (lastByteReadInstant - firstByteReadInstant)) * 1_000;
+    double result = ((double) bytesRead / (double) (lastByteReadInstant - firstByteReadInstant)) * 1_000;
+    return Math.round(result);
   }
 
   @Override
@@ -240,13 +242,14 @@ public class HTTP11Processor implements HTTPProcessor {
       return Long.MAX_VALUE;
     }
 
+    // Always use currentTime since this calculation is ongoing until the client reads all the bytes
     long millis = System.currentTimeMillis() - firstByteWroteInstant;
-    if (millis < 2_000) {
+    if (millis < 5_000) {
       return Long.MAX_VALUE;
     }
 
-    // Always use `now` since this calculation is ongoing until the client reads all the bytes
-    return (bytesWritten / millis) * 1_000;
+    double result = ((double) bytesWritten / (double) millis) * 1_000;
+    return Math.round(result);
   }
 
   @Override
