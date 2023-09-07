@@ -278,9 +278,22 @@ public class HTTPServerThread extends Thread implements Closeable, Notifier {
         continue;
       }
 
-
       if (logger.isDebugEnabled()) {
-        logger.debug("Closing connection readingSlow=[{}] writingSlow=[{}] timedOut=[{}]", readingSlow, writingSlow, timedOut);
+        String message = "";
+
+        if (readingSlow) {
+          message += String.format(" Min read throughput [%s], actual throughput [%s].", minimumReadThroughput, processor.readThroughput());
+        }
+
+        if (writingSlow) {
+          message += String.format(" Min write throughput [%s], actual throughput [%s].", minimumWriteThroughput, processor.writeThroughput());
+        }
+
+        if (timedOut) {
+          message += String.format(" Connection timed out. Configured client timeout [%s] ms.", clientTimeout.toMillis());
+        }
+
+        logger.debug("Closing connection readingSlow=[{}] writingSlow=[{}] timedOut=[{}]{}", readingSlow, writingSlow, timedOut, message);
 
         var client = (SocketChannel) key.channel();
         try {
