@@ -208,7 +208,7 @@ public class HTTP11Processor implements HTTPProcessor {
 
     if (firstByteWroteInstant == -1) {
       long millis = System.currentTimeMillis() - firstByteReadInstant;
-      if (millis < 5_000) {
+      if (millis < configuration.getReadThroughputCalculationDelay().toMillis()) {
         return Long.MAX_VALUE;
       }
 
@@ -244,7 +244,7 @@ public class HTTP11Processor implements HTTPProcessor {
 
     // Always use currentTime since this calculation is ongoing until the client reads all the bytes
     long millis = System.currentTimeMillis() - firstByteWroteInstant;
-    if (millis < 5_000) {
+    if (millis < configuration.getWriteThroughputCalculationDelay().toMillis()) {
       return Long.MAX_VALUE;
     }
 

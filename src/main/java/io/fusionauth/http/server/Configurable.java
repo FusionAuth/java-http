@@ -227,6 +227,20 @@ public interface Configurable<T extends Configurable<T>> {
   }
 
   /**
+   * This configures the duration of the initial delay before calculating and enforcing the minimum read throughput. Defaults to 5 seconds.
+   * <p>
+   * This accounts for some warm up period, and exempts short-lived connections that may have smaller payloads that are more difficult to
+   * calculate a reasonable minimum read throughput.
+   *
+   * @param duration The duration to delay the enforcement of the minimum read throughput.
+   * @return This.
+   */
+  default T withReadThroughputCalculationDelayDuration(Duration duration) {
+    configuration().withReadThroughputCalculationDelayDuration(duration);
+    return (T) this;
+  }
+
+  /**
    * Sets the size of the buffer that is used to process the HTTP request. This defaults to 16k.
    *
    * @param requestBufferSize The size of the buffer.
@@ -260,6 +274,21 @@ public interface Configurable<T extends Configurable<T>> {
    */
   default T withShutdownDuration(Duration duration) {
     configuration().withShutdownDuration(duration);
+    return (T) this;
+  }
+
+  /**
+   * This configures the duration of the initial delay before calculating and enforcing the minimum write throughput. Defaults to 5
+   * seconds.
+   * <p>
+   * This accounts for some warm up period, and exempts short-lived connections that may have smaller payloads that are more difficult to
+   * calculate a reasonable minimum write throughput.
+   *
+   * @param duration The duration to delay the enforcement of the minimum write throughput.
+   * @return This.
+   */
+  default T withWriteThroughputCalculationDelayDuration(Duration duration) {
+    configuration().withWriteThroughputCalculationDelayDuration(duration);
     return (T) this;
   }
 }

@@ -62,11 +62,15 @@ public class HTTPServerConfiguration implements Configurable<HTTPServerConfigura
 
   private int preambleBufferSize = 16 * 1024;
 
+  private Duration readThroughputCalculationDelayDuration = Duration.ofSeconds(5);
+
   private int requestBufferSize = 16 * 1024;
 
   private int responseBufferSize = 16 * 1024;
 
   private Duration shutdownDuration = Duration.ofSeconds(10);
+
+  private Duration writeThroughputCalculationDelayDuration = Duration.ofSeconds(5);
 
   /**
    * @return This.
@@ -164,6 +168,13 @@ public class HTTPServerConfiguration implements Configurable<HTTPServerConfigura
     return preambleBufferSize;
   }
 
+  /**
+   * @return the duration that will be used to delay the calculation and enforcement of the minimum read throughput.
+   */
+  public Duration getReadThroughputCalculationDelay() {
+    return readThroughputCalculationDelayDuration;
+  }
+
   public int getRequestBufferSize() {
     return requestBufferSize;
   }
@@ -182,6 +193,13 @@ public class HTTPServerConfiguration implements Configurable<HTTPServerConfigura
 
   public Duration getShutdownDuration() {
     return shutdownDuration;
+  }
+
+  /**
+   * @return the duration that will be used to delay the calculation and enforcement of the minimum write throughput.
+   */
+  public Duration getWriteThroughputCalculationDelay() {
+    return writeThroughputCalculationDelayDuration;
   }
 
   public boolean isCompressByDefault() {
@@ -314,7 +332,7 @@ public class HTTPServerConfiguration implements Configurable<HTTPServerConfigura
   @Override
   public HTTPServerConfiguration withMinimumReadThroughput(long bytesPerSecond) {
     if (bytesPerSecond < 1024) {
-      throw new IllegalArgumentException("This should probably be faster than a 28.8 baud modem!");
+      throw new IllegalArgumentException("The minimum bytes per second must be greater than 1024. This should probably be faster than a 28.8 baud modem!");
     }
 
     this.minimumReadThroughput = bytesPerSecond;
@@ -330,7 +348,7 @@ public class HTTPServerConfiguration implements Configurable<HTTPServerConfigura
    */
   public HTTPServerConfiguration withMinimumWriteThroughput(long bytesPerSecond) {
     if (bytesPerSecond < 1024) {
-      throw new IllegalArgumentException("This should probably be faster than a 28.8 baud modem!");
+      throw new IllegalArgumentException("The minimum bytes per second must be greater than 1024. This should probably be faster than a 28.8 baud modem!");
     }
 
     this.minimumWriteThroughput = bytesPerSecond;
@@ -380,6 +398,21 @@ public class HTTPServerConfiguration implements Configurable<HTTPServerConfigura
    * {@inheritDoc}
    */
   @Override
+  public HTTPServerConfiguration withReadThroughputCalculationDelayDuration(Duration duration) {
+    Objects.requireNonNull(duration, "You cannot set the read throughput delay duration to null");
+
+    if (duration.isZero() || duration.isNegative()) {
+      throw new IllegalArgumentException("The read throughput delay duration must be grater than 0");
+    }
+
+    this.readThroughputCalculationDelayDuration = duration;
+    return this;
+  }
+
+  /**
+   * {@inheritDoc}
+   */
+  @Override
   public HTTPServerConfiguration withRequestBufferSize(int requestBufferSize) {
     if (requestBufferSize <= 0) {
       throw new IllegalArgumentException("The request buffer size must be greater than 0");
@@ -414,6 +447,21 @@ public class HTTPServerConfiguration implements Configurable<HTTPServerConfigura
     }
 
     this.shutdownDuration = duration;
+    return this;
+  }
+
+  /**
+   * {@inheritDoc}
+   */
+  @Override
+  public HTTPServerConfiguration withWriteThroughputCalculationDelayDuration(Duration duration) {
+    Objects.requireNonNull(duration, "You cannot set the write throughput delay duration to null");
+
+    if (duration.isZero() || duration.isNegative()) {
+      throw new IllegalArgumentException("The write throughput delay duration must be grater than 0");
+    }
+
+    this.writeThroughputCalculationDelayDuration = duration;
     return this;
   }
 }
