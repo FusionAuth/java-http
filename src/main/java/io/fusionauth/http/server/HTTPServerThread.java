@@ -282,7 +282,7 @@ public class HTTPServerThread extends Thread implements Closeable, Notifier {
         String message = readingSlow
             ? String.format(". Min read throughput [%s], actual throughput [%s]", minimumReadThroughput, processor.readThroughput())
             : writingSlow
-            ? String.format(". Max write throughput [%s], actual throughput [%s]", minimumWriteThroughput, processor.writeThroughput())
+            ? String.format(". Min write throughput [%s], actual throughput [%s]", minimumWriteThroughput, processor.writeThroughput())
             : "";
 
         logger.debug("Closing connection readingSlow=[{}] writingSlow=[{}] timedOut=[{}]{}", readingSlow, writingSlow, timedOut, message);
