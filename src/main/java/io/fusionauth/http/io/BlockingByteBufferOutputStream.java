@@ -20,6 +20,7 @@ import java.nio.ByteBuffer;
 import java.util.concurrent.BlockingQueue;
 import java.util.concurrent.LinkedBlockingQueue;
 
+import io.fusionauth.http.ConnectionClosedException;
 import io.fusionauth.http.server.Notifier;
 
 /**
@@ -159,7 +160,7 @@ public class BlockingByteBufferOutputStream extends OutputStream {
     } catch (InterruptedException e) {
       currentBuffer = null;
       buffers.clear();
-      throw new IllegalStateException(e);
+      throw new ConnectionClosedException(e);
     }
 
     currentBuffer = null;
