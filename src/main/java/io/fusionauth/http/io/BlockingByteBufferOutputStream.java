@@ -153,7 +153,7 @@ public class BlockingByteBufferOutputStream extends OutputStream {
     currentBuffer.flip();
 
     try {
-      // This will block until we have capacity. We looked and it seems as though there aren't any ways that a Worker thread can be in a
+      // This will block until we have capacity. We looked, and it seems as though there aren't any ways that a Worker thread can be in a
       // state where it was interrupted by the HTTPServerThread and this line of code doesn't throw an InterruptedException.
       buffers.put(currentBuffer);
     } catch (InterruptedException e) {
