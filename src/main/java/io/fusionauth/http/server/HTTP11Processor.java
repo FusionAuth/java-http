@@ -138,10 +138,12 @@ public class HTTP11Processor implements HTTPProcessor {
     markUsed();
 
     bytesRead += buffer.remaining();
-    if (firstByteReadInstant == -1) {
-      lastByteReadInstant = firstByteReadInstant = System.currentTimeMillis();
-    } else {
-      lastByteReadInstant = System.currentTimeMillis();
+    if (bytesRead > 0) {
+      if (firstByteReadInstant == -1) {
+        lastByteReadInstant = firstByteReadInstant = System.currentTimeMillis();
+      } else {
+        lastByteReadInstant = System.currentTimeMillis();
+      }
     }
 
     logger.trace("(R)");
@@ -257,7 +259,7 @@ public class HTTP11Processor implements HTTPProcessor {
     markUsed();
 
     bytesWritten += num;
-    if (firstByteWroteInstant == -1) {
+    if (bytesWritten > 0 && firstByteWroteInstant == -1) {
       firstByteWroteInstant = System.currentTimeMillis();
     }
 

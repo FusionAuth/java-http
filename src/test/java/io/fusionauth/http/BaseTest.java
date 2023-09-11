@@ -166,8 +166,10 @@ public abstract class BaseTest {
                            .withLoggerFactory(AccumulatingLoggerFactory.FACTORY)
                            .withMinimumReadThroughput(200 * 1024)
                            .withMinimumWriteThroughput(200 * 1024)
+                           .withListener(listenerConfiguration)
                            .withNumberOfWorkerThreads(1)
-                           .withListener(listenerConfiguration);
+                           .withReadThroughputCalculationDelayDuration(Duration.ofSeconds(1))
+                           .withWriteThroughputCalculationDelayDuration(Duration.ofSeconds(1));
   }
 
   public URI makeURI(String scheme, String params) {

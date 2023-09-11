@@ -36,6 +36,7 @@ import java.util.concurrent.atomic.AtomicBoolean;
 import java.util.zip.InflaterInputStream;
 
 import com.inversoft.net.ssl.SSLTools;
+import com.inversoft.rest.ClientResponse;
 import com.inversoft.rest.RESTClient;
 import com.inversoft.rest.TextResponseHandler;
 import io.fusionauth.http.HTTPValues.Connections;
@@ -57,6 +58,7 @@ import static org.testng.Assert.fail;
  *
  * @author Brian Pontarelli
  */
+@SuppressWarnings("UastIncorrectHttpHeaderInspection")
 public class CoreTest extends BaseTest {
   public static final String ExpectedResponse = "{\"version\":\"42\"}";
 
@@ -287,6 +289,48 @@ public class CoreTest extends BaseTest {
       );
 
       assertEquals(response.statusCode(), 200);
+    }
+  }
+
+  @Test
+  public void keepAliveTimeout() {
+    AtomicBoolean called = new AtomicBoolean(false);
+    HTTPHandler handler = (req, res) -> {
+      assertNull(req.getContentType());
+      if (!called.getAndSet(true)) {
+        System.out.println("Pausing");
+        sleep(5 * 60_000);
+      }
+
+      res.setStatus(200);
+    };
+
+    try (HTTPServer ignore = makeServer("http", handler).start()) {
+      URI uri = makeURI("http", "");
+      ClientResponse<Void, Void> response = new RESTClient<>(Void.TYPE, Void.TYPE)
+          .url(uri.toString())
+          .connectTimeout(0)
+          .readTimeout(0)
+          .post()
+          .go();
+
+      if (response.status != 200) {
+        System.out.println(response.exception);
+      }
+
+      assertEquals(response.status, 200);
+      response = new RESTClient<>(Void.TYPE, Void.TYPE)
+          .url(uri.toString())
+          .connectTimeout(0)
+          .readTimeout(0)
+          .post()
+          .go();
+
+      if (response.status != 200) {
+        System.out.println(response.exception);
+      }
+
+      assertEquals(response.status, 200);
     }
   }
 
