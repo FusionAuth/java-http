@@ -33,6 +33,7 @@ import java.util.Base64;
 import java.util.List;
 import java.util.Locale;
 import java.util.concurrent.atomic.AtomicBoolean;
+import java.util.concurrent.atomic.AtomicLong;
 import java.util.zip.InflaterInputStream;
 
 import com.inversoft.net.ssl.SSLTools;
@@ -295,17 +296,22 @@ public class CoreTest extends BaseTest {
   @Test
   public void keepAliveTimeout() {
     AtomicBoolean called = new AtomicBoolean(false);
+    final AtomicLong writeThroughputDelay = new AtomicLong(0);
+
     HTTPHandler handler = (req, res) -> {
       assertNull(req.getContentType());
       if (!called.getAndSet(true)) {
-        System.out.println("Pausing");
-        sleep(5 * 60_000);
+        // Take the configured write delay calculation and add 1 seconds
+        long seconds = writeThroughputDelay.get() + 1;
+        System.out.println("Pausing [" + seconds + "] seconds");
+        sleep(seconds * 1000);
       }
 
       res.setStatus(200);
     };
 
     try (HTTPServer ignore = makeServer("http", handler).start()) {
+      writeThroughputDelay.set(ignore.configuration().getWriteThroughputCalculationDelay().toSeconds());
       URI uri = makeURI("http", "");
       ClientResponse<Void, Void> response = new RESTClient<>(Void.TYPE, Void.TYPE)
           .url(uri.toString())

@@ -15,6 +15,8 @@
  */
 package io.fusionauth.http;
 
+import java.io.IOException;
+
 /**
  * An IOException that is most likely caused by the client closing a socket.
  * <p>
@@ -22,8 +24,8 @@ package io.fusionauth.http;
  * <p>
  * <code>java.io.IOException: Connection reset by peer</code>
  */
-public class ClientAbortException extends RuntimeException {
-  public ClientAbortException(Exception e) {
+public class ClientAbortException extends IOException {
+  public ClientAbortException(IOException e) {
     super(e);
   }
 }
