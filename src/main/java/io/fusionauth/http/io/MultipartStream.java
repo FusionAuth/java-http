@@ -311,7 +311,8 @@ public class MultipartStream {
             processor.process(current, partialBoundary);
           }
 
-          if (!reload(boundary.length + 2)) { // Minimum is at least a full boundary
+          // Minimum is at least a full boundary
+          if (!reload(boundary.length + 2)) {
             throw new ParseException("Invalid multipart body. Ran out of data while processing.");
           }
         } else {
