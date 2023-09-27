@@ -50,14 +50,10 @@ public class MultipartStreamTest {
     };
   }
 
-  @Test(dataProvider = "badBoundary")
+  @Test(dataProvider = "badBoundary", expectedExceptions = ParseException.class, expectedExceptionsMessageRegExp = "Invalid multipart body. Ran out of data while processing.")
   public void bad_boundaryParameter(String boundary) throws IOException {
-    try {
-      MultipartStream stream = new MultipartStream(new ByteArrayInputStream(boundary.getBytes()), "----WebKitFormBoundaryTWfMVJErBoLURJIe".getBytes(), 1024);
-      stream.process(new HashMap<>(), new LinkedList<>());
-    } catch (ParseException e) {
-      assertEquals(e.getMessage(), "Invalid multipart body. Ran out of data while processing.");
-    }
+    new MultipartStream(new ByteArrayInputStream(boundary.getBytes()), "----WebKitFormBoundaryTWfMVJErBoLURJIe".getBytes(), 1024)
+        .process(new HashMap<>(), new LinkedList<>());
   }
 
   @Test
