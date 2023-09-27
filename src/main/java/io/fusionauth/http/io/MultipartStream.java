@@ -1,5 +1,5 @@
 /*
- * Copyright (c) 2022, FusionAuth, All Rights Reserved
+ * Copyright (c) 2022-2023, FusionAuth, All Rights Reserved
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -311,7 +311,10 @@ public class MultipartStream {
             processor.process(current, partialBoundary);
           }
 
-          reload(boundary.length + 2); // Minimum is at least a full boundary
+          // Minimum is at least a full boundary
+          if (!reload(boundary.length + 2)) {
+            throw new ParseException("Invalid multipart body. Ran out of data while processing.");
+          }
         } else {
           processor.process(current, boundaryIndex);
           current = boundaryIndex;

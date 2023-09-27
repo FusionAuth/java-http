@@ -1,5 +1,5 @@
 /*
- * Copyright (c) 2022, FusionAuth, All Rights Reserved
+ * Copyright (c) 2022-2023, FusionAuth, All Rights Reserved
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -25,11 +25,37 @@ import java.util.List;
 import java.util.Map;
 
 import io.fusionauth.http.FileInfo;
+import io.fusionauth.http.ParseException;
 import org.testng.annotations.DataProvider;
 import org.testng.annotations.Test;
 import static org.testng.Assert.assertEquals;
 
+/**
+ * @author Brian Pontarelli
+ */
 public class MultipartStreamTest {
+  @DataProvider(name = "badBoundary")
+  public Object[][] badBoundary() {
+    return new Object[][]{
+        {"""
+        ------WebKitFormBoundaryTWfMVJErBoLURJIe\r
+        Content-Disposition: form-data; name="foo"\r
+        \r
+        bar----WebKitFormBoundaryTWfMVJErBoLURJIe--"""},
+        {"""
+        ------WebKitFormBoundaryTWfMVJErBoLURJIe\r
+        Content-Disposition: form-data; name="foo"\r
+        \r
+        bar------WebKitFormBoundaryTWfMVJErBoLURJIe--"""}
+    };
+  }
+
+  @Test(dataProvider = "badBoundary", expectedExceptions = ParseException.class, expectedExceptionsMessageRegExp = "Invalid multipart body. Ran out of data while processing.")
+  public void bad_boundaryParameter(String boundary) throws IOException {
+    new MultipartStream(new ByteArrayInputStream(boundary.getBytes()), "----WebKitFormBoundaryTWfMVJErBoLURJIe".getBytes(), 1024)
+        .process(new HashMap<>(), new LinkedList<>());
+  }
+
   @Test
   public void boundaryInParameter() throws IOException {
     ByteArrayInputStream is = new ByteArrayInputStream("""
