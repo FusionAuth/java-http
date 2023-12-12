@@ -537,6 +537,22 @@ public class HTTPRequest implements Buildable<HTTPRequest> {
     return queryString;
   }
 
+  public String getRawHost() {
+    return host;
+  }
+
+  public String getRawIPAddress() {
+    return ipAddress;
+  }
+
+  public int getRawPort() {
+    return port;
+  }
+
+  public String getRawScheme() {
+    return scheme;
+  }
+
   public String getScheme() {
     String xScheme = getHeader(Headers.XForwardedProto);
     return xScheme == null ? scheme : xScheme;
