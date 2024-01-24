@@ -25,19 +25,12 @@ import java.io.IOException;
 import java.nio.ByteBuffer;
 import java.nio.channels.SelectionKey;
 import java.security.GeneralSecurityException;
-import java.util.concurrent.ExecutorService;
-import java.util.concurrent.Executors;
-import java.util.concurrent.atomic.AtomicInteger;
 
 import io.fusionauth.http.ParseException;
 import io.fusionauth.http.log.Logger;
 import io.fusionauth.http.security.SecurityTools;
 
 public class HTTPS11Processor implements HTTPProcessor {
-  private static final AtomicInteger threadCount = new AtomicInteger(1);
-
-  private static final ExecutorService executor = Executors.newCachedThreadPool(r -> new Thread(r, "TLS Handshake Thread " + threadCount.getAndIncrement()));
-
   private final SSLEngine engine;
 
   private final Logger logger;
@@ -70,9 +63,6 @@ public class HTTPS11Processor implements HTTPProcessor {
       this.myAppData = new ByteBuffer[]{peerAppData};
       this.myNetData = new ByteBuffer[]{peerNetData};
 
-      // Set the remaining on the myNetData to be 0. This is how we tell the write operation that we have nothing to write, so it can handshake/wrap
-//      this.myNetData[0].flip();
-
       engine.beginHandshake();
       HandshakeStatus tlsStatus = engine.getHandshakeStatus();
       if (tlsStatus == HandshakeStatus.NEED_UNWRAP) {
@@ -98,6 +88,8 @@ public class HTTPS11Processor implements HTTPProcessor {
     if (this.engine == null) {
       return delegate.close(endOfStream);
     }
+
+    engine.getSession().invalidate();
 
     if (endOfStream) {
       try {
@@ -186,7 +178,6 @@ public class HTTPS11Processor implements HTTPProcessor {
     if (result.getStatus() == Status.BUFFER_UNDERFLOW) {
       logger.trace("(HTTPS-R-UF)BUFFER_UNDERFLOW {} {}", peerNetData, peerAppData);
       peerNetData = resizeBuffer(peerNetData, engine.getSession().getPacketBufferSize());
-//      return handshakeState != null ? handshakeState : delegate.state(); // Keep reading
       return ProcessorState.Read; // Keep reading
     }
 
@@ -298,12 +289,12 @@ public class HTTPS11Processor implements HTTPProcessor {
 
       // If there is an overflow, resize the network buffer and retry the wrap
       if (result.getStatus() == Status.BUFFER_OVERFLOW) {
-        logger.trace("(HTTPS-W-OF)");
+        logger.trace("(HTTPS-W-OF) {} {}", peerNetData, peerAppData);
         peerNetData = resizeBuffer(peerNetData, engine.getSession().getApplicationBufferSize());
       }
-    } while (result.getStatus() == Status.BUFFER_OVERFLOW);
+    } while (result.getStatus() != Status.OK);
 
-    logger.trace("(HTTPS-W-DONE)");
+    logger.trace("(HTTPS-W-DONE) {} {}", peerNetData, peerAppData);
     peerNetData.flip();
     return myNetData;
   }
@@ -321,12 +312,21 @@ public class HTTPS11Processor implements HTTPProcessor {
 
     ProcessorState newState;
     if (handshakeState != null) {
+      // TODO : What if we don't write all the handshake data to the client? I think this will screw up the newState and think we are in a Read,
+      //  but really we are still in handshakeState of Write
+
+      // TODO : Does this fix the TODO above?
+      if (peerNetData.hasRemaining()) {
+        throw new IllegalStateException("Oh shit!");
+      }
+
       var tlsStatus = engine.getHandshakeStatus();
       newState = handleHandshake(tlsStatus);
       if (newState == ProcessorState.Read) {
         peerNetData.clear();
       }
 
+      logger.trace("(HTTPS-WROTE-HS)DONE {} {}", peerNetData, peerAppData);
       return newState;
     }
 
@@ -337,6 +337,7 @@ public class HTTPS11Processor implements HTTPProcessor {
       peerNetData.clear();
     }
 
+    logger.trace("(HTTPS-WROTE)DONE {} {}", peerNetData, peerAppData);
     return newState;
   }
 
@@ -370,34 +371,25 @@ public class HTTPS11Processor implements HTTPProcessor {
   }
 
   private ProcessorState handleHandshake(HandshakeStatus newTLSStatus) {
-    if (newTLSStatus == HandshakeStatus.NEED_UNWRAP_AGAIN) {
-      handshakeState = ProcessorState.Read;
-      return handshakeState;
-    }
+    logger.trace("(HTTPS-HS-{}) ", newTLSStatus);
 
     if (newTLSStatus == HandshakeStatus.NEED_TASK) {
-      logger.trace("(HTTPS-HS-TASK)");
-
       // Keep hard looping until the thread finishes (sucks but not sure what else to do here)
       do {
-        newTLSStatus = engine.getHandshakeStatus();
-
         Runnable task;
         while ((task = engine.getDelegatedTask()) != null) {
-          executor.submit(task);
+          task.run();
         }
+        newTLSStatus = engine.getHandshakeStatus();
       } while (newTLSStatus == HandshakeStatus.NEED_TASK);
     }
 
-    if (newTLSStatus == HandshakeStatus.NEED_UNWRAP) {
-      logger.trace("(HTTPS-HS-UNWRAP)");
+    logger.trace("(HTTPS-HS-{}) ", newTLSStatus);
+    if (newTLSStatus == HandshakeStatus.NEED_UNWRAP || newTLSStatus == HandshakeStatus.NEED_UNWRAP_AGAIN) {
       handshakeState = ProcessorState.Read;
     } else if (newTLSStatus == HandshakeStatus.NEED_WRAP) {
-      logger.trace("(HTTPS-HS-WRAP)");
       handshakeState = ProcessorState.Write;
     } else {
-      logger.trace("(HTTPS-HS-DONE) {}", newTLSStatus.name());
-
       if (!peerNetData.hasRemaining()) {
         logger.trace("(HTTPS-HS-DONE-DATA) {}", newTLSStatus.name() + "-" + delegate.state());
         handshakeState = null;

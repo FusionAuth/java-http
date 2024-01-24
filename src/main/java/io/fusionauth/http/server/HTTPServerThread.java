@@ -243,7 +243,7 @@ public class HTTPServerThread extends Thread implements Closeable, Notifier {
 
         // Close the processor, which should kill the thread
         if (key.attachment() != null) {
-          ((HTTPProcessor) key.attachment()).close(false);
+          ((HTTPProcessor) key.attachment()).close(true);
         }
 
         key.cancel();

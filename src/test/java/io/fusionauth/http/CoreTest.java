@@ -422,6 +422,7 @@ public class CoreTest extends BaseTest {
       var client = makeClient(scheme, null);
       long start = System.currentTimeMillis();
       for (int i = 0; i < iterations; i++) {
+        System.out.println("Iteration " + i);
         var response = client.send(
             HttpRequest.newBuilder().uri(uri).header(Headers.Connection, Connections.Close).GET().build(),
             r -> BodySubscribers.ofString(StandardCharsets.UTF_8)
