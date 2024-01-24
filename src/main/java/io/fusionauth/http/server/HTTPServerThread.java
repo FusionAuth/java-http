@@ -326,6 +326,7 @@ public class HTTPServerThread extends Thread implements Closeable, Notifier {
   private void read(SelectionKey key) throws IOException {
     HTTPProcessor processor = (HTTPProcessor) key.attachment();
     ProcessorState state = processor.state();
+    logger.trace("(R) {}", state);
     SocketChannel client = (SocketChannel) key.channel();
     if (state == ProcessorState.Read) {
       ByteBuffer buffer = processor.readBuffer();

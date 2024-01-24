@@ -66,6 +66,7 @@ public class HTTPRequestProcessor {
 
   public RequestState processBodyBytes() {
     bodyProcessor.processBuffer(inputStream);
+    logger.trace("(BODY) {} {}", bodyProcessor.currentBuffer(), bodyProcessor.totalBytesProcessed());
 
     if (bodyProcessor.isComplete()) {
       inputStream.signalDone();
@@ -115,7 +116,7 @@ public class HTTPRequestProcessor {
 
           int size = Math.max(buffer.remaining(), bufferSize);
           if (contentLength != null) {
-            logger.debug("Handling body using Content-Length header");
+            logger.debug("Handling body using Content-Length header {}", contentLength);
             bodyProcessor = new ContentLengthBodyProcessor(size, contentLength);
           } else {
             logger.debug("Handling body using Chunked data");

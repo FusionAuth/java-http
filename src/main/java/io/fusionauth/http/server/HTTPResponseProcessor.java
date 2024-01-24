@@ -70,7 +70,7 @@ public class HTTPResponseProcessor {
 
       // Construct the preamble if needed and return it if there is any bytes left
       if (preambleBuffers == null) {
-        logger.debug("The worker thread has bytes to write or has closed the stream, but the preamble hasn't been sent yet. Generating preamble");
+        logger.debug("The server (via a worker thread or the server due to an Expect request) has bytes to write or has closed the stream, but the preamble hasn't been sent yet. Generating preamble");
         int maxHeadLength = configuration.getMaxHeadLength();
         if (state == ResponseState.Preamble) {
           fillInHeaders();
