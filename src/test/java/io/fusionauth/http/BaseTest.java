@@ -15,6 +15,7 @@
  */
 package io.fusionauth.http;
 
+import java.io.File;
 import java.io.IOException;
 import java.io.InputStream;
 import java.io.OutputStream;
@@ -23,6 +24,9 @@ import java.net.CookieHandler;
 import java.net.Socket;
 import java.net.URI;
 import java.net.http.HttpClient;
+import java.nio.file.Files;
+import java.nio.file.Paths;
+import java.nio.file.StandardOpenOption;
 import java.security.GeneralSecurityException;
 import java.security.InvalidAlgorithmParameterException;
 import java.security.KeyPair;
@@ -351,21 +355,25 @@ public abstract class BaseTest {
       String trace = logger.toString();
 
       // Intentionally leaving empty lines here
-      System.out.println("""
+      try {
+        Files.write(Paths.get("output.txt"), """
+                                   
+                  
+                                   
+            Test failure
+            -----------------
+            Exception: {{exception}}
+            Message: {{message}}
                                  
-                
-                                 
-          Test failure
-          -----------------
-          Exception: {{exception}}
-          Message: {{message}}
-                               
-          HTTP Trace:
-          {{trace}}
-          -----------------
-           """.replace("{{exception}}", throwable != null ? throwable.getClass().getSimpleName() : "-")
-              .replace("{{message}}", throwable != null ? (throwable.getMessage() != null ? throwable.getMessage() : "-") : "-")
-              .replace("{{trace}}", trace));
+            HTTP Trace:
+            {{trace}}
+            -----------------
+             """.replace("{{exception}}", throwable != null ? throwable.getClass().getSimpleName() : "-")
+                .replace("{{message}}", throwable != null ? (throwable.getMessage() != null ? throwable.getMessage() : "-") : "-")
+                .replace("{{trace}}", trace).getBytes(), StandardOpenOption.TRUNCATE_EXISTING, StandardOpenOption.CREATE);
+      } catch (IOException e) {
+        throw new RuntimeException(e);
+      }
     }
 
     @Override

@@ -31,6 +31,8 @@ import io.fusionauth.http.log.Logger;
 import io.fusionauth.http.security.SecurityTools;
 
 public class HTTPS11Processor implements HTTPProcessor {
+  public static int count = 0;
+
   private final SSLEngine engine;
 
   private final Logger logger;
@@ -41,14 +43,15 @@ public class HTTPS11Processor implements HTTPProcessor {
 
   private HTTP11Processor delegate;
 
+  private ByteBuffer encryptedData;
+
   private volatile ProcessorState handshakeState;
 
-  private ByteBuffer peerAppData;
-
-  private ByteBuffer peerNetData;
+  private ByteBuffer inboundDecryptedData;
 
   public HTTPS11Processor(HTTP11Processor delegate, HTTPServerConfiguration configuration, HTTPListenerConfiguration listenerConfiguration)
       throws GeneralSecurityException, IOException {
+    System.out.println("Client " + (count++));
     this.delegate = delegate;
     this.logger = configuration.getLoggerFactory().getLogger(HTTPS11Processor.class);
 
@@ -58,10 +61,10 @@ public class HTTPS11Processor implements HTTPProcessor {
       this.engine.setUseClientMode(false);
 
       SSLSession session = engine.getSession();
-      this.peerAppData = ByteBuffer.allocate(session.getApplicationBufferSize());
-      this.peerNetData = ByteBuffer.allocate(session.getPacketBufferSize());
-      this.myAppData = new ByteBuffer[]{peerAppData};
-      this.myNetData = new ByteBuffer[]{peerNetData};
+      this.inboundDecryptedData = ByteBuffer.allocate(session.getApplicationBufferSize());
+      this.encryptedData = ByteBuffer.allocate(session.getPacketBufferSize());
+      this.myAppData = new ByteBuffer[]{inboundDecryptedData};
+      this.myNetData = new ByteBuffer[]{encryptedData};
 
       engine.beginHandshake();
       HandshakeStatus tlsStatus = engine.getHandshakeStatus();
@@ -76,18 +79,18 @@ public class HTTPS11Processor implements HTTPProcessor {
       this.engine = null;
       this.myAppData = null;
       this.myNetData = null;
-      this.peerAppData = null;
-      this.peerNetData = null;
+      this.inboundDecryptedData = null;
+      this.encryptedData = null;
     }
   }
 
   @Override
   public ProcessorState close(boolean endOfStream) {
-    logger.trace("(HTTPS-C)");
-
     if (this.engine == null) {
       return delegate.close(endOfStream);
     }
+
+    logger.trace(count + " (HTTPS-C) {} {}", engine.isInboundDone(), engine.isOutboundDone());
 
     engine.getSession().invalidate();
 
@@ -95,6 +98,7 @@ public class HTTPS11Processor implements HTTPProcessor {
       try {
         engine.closeInbound();
       } catch (IOException e) {
+        logger.trace(count + " (HTTPS-C) {}", e);
         // Smother
       }
     }
@@ -107,7 +111,7 @@ public class HTTPS11Processor implements HTTPProcessor {
 
   @Override
   public void failure(Throwable t) {
-    logger.trace("(HTTPS-F)");
+    logger.trace(count + " (HTTPS-F)");
     delegate.failure(t);
   }
 
@@ -118,7 +122,7 @@ public class HTTPS11Processor implements HTTPProcessor {
    */
   @Override
   public int initialKeyOps() {
-    logger.trace("(HTTPS-A)");
+    logger.trace(count + " (HTTPS-A)");
     if (engine == null) {
       return delegate.initialKeyOps();
     }
@@ -134,6 +138,9 @@ public class HTTPS11Processor implements HTTPProcessor {
     return delegate.lastUsed();
   }
 
+  // TODO : at the end of handshake, the final read contains 90 bytes of handshake and 144 bytes of body
+  //  then, we actually write the ack back to the the client of the handshake completing. During this ACK is when
+  //  delete that body stuff
   @Override
   public ProcessorState read(ByteBuffer buffer) throws IOException {
     delegate.markUsed();
@@ -142,7 +149,8 @@ public class HTTPS11Processor implements HTTPProcessor {
       return delegate.read(buffer);
     }
 
-    peerAppData.clear();
+    // TODO : This likely wrong since we might have real bytes here!
+//    peerAppData.clear();
 
     // Unwrapping using one of these cases:
     //    Handshake Data (plain text or encrypted/signed) ---> Ignore (this side doesn't matter as it is internal to SSLEngine)
@@ -156,54 +164,56 @@ public class HTTPS11Processor implements HTTPProcessor {
     SSLEngineResult result;
     Status status;
     do {
-      logger.trace("(HTTPS-R) {} {}", peerNetData, peerAppData);
-      result = engine.unwrap(peerNetData, peerAppData);
-      logger.trace("(HTTPS-R2) {} {}", peerNetData, peerAppData);
+      // TODO : This might contain handshake and preamble!!!!
+      logger.trace(count + " (HTTPS-R) {} {}", encryptedData, inboundDecryptedData);
+      result = engine.unwrap(encryptedData, inboundDecryptedData);
+      logger.trace(count + " (HTTPS-R2) {} {}", encryptedData, inboundDecryptedData);
+
+      encryptedData.compact();
 
       // If things got closed, just bail without doing any work
       status = result.getStatus();
       if (status == Status.CLOSED) {
-        logger.trace("(HTTPS-R-C)");
+        logger.trace(count + " (HTTPS-R-C)");
         return close(false);
       }
 
-      if (status == Status.BUFFER_OVERFLOW) {
-        logger.trace("(HTTPS-R-OF)BUFFER_OVERFLOW {} {}", peerNetData, peerAppData);
-        peerAppData = resizeBuffer(peerAppData, engine.getSession().getApplicationBufferSize());
+      if (result.getStatus() == Status.BUFFER_UNDERFLOW) {
+        logger.trace(count + " (HTTPS-R-UF)BUFFER_UNDERFLOW {} {}", encryptedData, inboundDecryptedData);
+        encryptedData = resizeBuffer(encryptedData, engine.getSession().getPacketBufferSize());
+        return ProcessorState.Read; // Keep reading
       }
-    } while (status == Status.BUFFER_OVERFLOW);
 
-    peerNetData.compact();
+      if (status == Status.BUFFER_OVERFLOW) {
+        logger.trace(count + " (HTTPS-R-OF)BUFFER_OVERFLOW {} {}", encryptedData, inboundDecryptedData);
+        inboundDecryptedData = resizeBuffer(inboundDecryptedData, engine.getSession().getApplicationBufferSize());
+      }
 
-    if (result.getStatus() == Status.BUFFER_UNDERFLOW) {
-      logger.trace("(HTTPS-R-UF)BUFFER_UNDERFLOW {} {}", peerNetData, peerAppData);
-      peerNetData = resizeBuffer(peerNetData, engine.getSession().getPacketBufferSize());
-      return ProcessorState.Read; // Keep reading
-    }
+      // If we are handshaking, then handle the handshake states
+      var tlsStatus = result.getHandshakeStatus();
+      if (tlsStatus != HandshakeStatus.FINISHED && tlsStatus != HandshakeStatus.NOT_HANDSHAKING) {
+        logger.trace(count + " (HTTPS-R-HS) {} {}", encryptedData, inboundDecryptedData);
+        var newTLSStatus = result.getHandshakeStatus();
+        handshakeState = handleHandshake(newTLSStatus);
+        logger.trace(count + " (HTTPS-R-HS) {} {}", encryptedData, inboundDecryptedData);
+      } else {
+        // Handle a normal read by passing the decrypted bytes down to the delegate
+        logger.trace(count + " (HTTPS-R-RQ-R)");
+        handshakeState = null;
+        drainToDelegate();
+        logger.trace(count + " (HTTPS-R-RQ-R2) {} {} {}", encryptedData, inboundDecryptedData, engine.getHandshakeStatus());
+      }
 
-    // If we are handshaking, then handle the handshake states
-    var tlsStatus = result.getHandshakeStatus();
-    if (tlsStatus != HandshakeStatus.FINISHED && tlsStatus != HandshakeStatus.NOT_HANDSHAKING) {
-      logger.trace("(HTTPS-R-HS) {} {}", peerNetData, peerAppData);
-      var newTLSStatus = result.getHandshakeStatus();
-      handshakeState = handleHandshake(newTLSStatus);
-      logger.trace("(HTTPS-R-HS) {} {}", peerNetData, peerAppData);
-    } else {
-      // Handle a normal read by passing the decrypted bytes down to the delegate
-      logger.trace("(HTTPS-R-RQ-R)");
-      handshakeState = null;
-      drainToDelegate();
-      logger.trace("(HTTPS-R-RQ-R2) {} {} {}", peerNetData, peerAppData, engine.getHandshakeStatus());
-    }
+      var newState = handshakeState != null ? handshakeState : delegate.state();
+      if (newState == ProcessorState.Write) {
+        // Set the position to the limit such that the write operation knows it is the first write (which clears the buffer in the write method)
+        encryptedData.position(encryptedData.limit());
+      }
 
-    var newState = handshakeState != null ? handshakeState : delegate.state();
-    if (newState == ProcessorState.Write) {
-      // Set the position to the limit such that the write operation knows it is the first write (which clears the buffer in the write method)
-      peerNetData.position(peerNetData.limit());
-    }
+      logger.trace(count + " (HTTPS-R-DONE) {} {} {} {}", handshakeState, newState, encryptedData, inboundDecryptedData);
+    } while (encryptedData.hasRemaining());
 
-    logger.trace("(HTTPS-R-DONE) {} {} {} {}", handshakeState, newState, peerNetData, peerAppData);
-    return newState;
+    return null;
   }
 
   @Override
@@ -215,7 +225,7 @@ public class HTTPS11Processor implements HTTPProcessor {
     }
 
     // Always read into the peer network buffer
-    return peerNetData;
+    return encryptedData;
   }
 
   @Override
@@ -245,7 +255,7 @@ public class HTTPS11Processor implements HTTPProcessor {
     }
 
     // We haven't written it all out yet, so return the existing bytes in the encrypted/handshake buffer
-    if (peerNetData.hasRemaining()) {
+    if (encryptedData.hasRemaining()) {
       return myNetData;
     }
 
@@ -257,7 +267,7 @@ public class HTTPS11Processor implements HTTPProcessor {
 
     ByteBuffer[] plainTextBuffers;
     if (tlsStatus == HandshakeStatus.NEED_WRAP) {
-      logger.trace("(HTTPS-W-HS)");
+      logger.trace(count + " (HTTPS-W-HS)");
       plainTextBuffers = myAppData; // This buffer isn't actually used, so it can be anything
     } else {
       handshakeState = null;
@@ -268,17 +278,17 @@ public class HTTPS11Processor implements HTTPProcessor {
       return null;
     }
 
-    peerNetData.clear();
+    encryptedData.clear();
 
     SSLEngineResult result;
     do {
-      logger.trace("(HTTPS-W) {} {}", peerNetData, peerAppData);
-      result = engine.wrap(plainTextBuffers, peerNetData);
-      logger.trace("(HTTPS-W2) {} {}", peerNetData, peerAppData);
+      logger.trace(count + " (HTTPS-W) {} {}", encryptedData, inboundDecryptedData);
+      result = engine.wrap(plainTextBuffers, encryptedData);
+      logger.trace(count + " (HTTPS-W2) {} {}", encryptedData, inboundDecryptedData);
 
       // If things got closed, just bail without doing any work
       if (result.getStatus() == Status.CLOSED) {
-        logger.trace("(HTTPS-W-C) {} {}", peerNetData, peerAppData);
+        logger.trace(count + " (HTTPS-W-C) {} {}", encryptedData, inboundDecryptedData);
         close(false);
         return null;
       }
@@ -289,13 +299,13 @@ public class HTTPS11Processor implements HTTPProcessor {
 
       // If there is an overflow, resize the network buffer and retry the wrap
       if (result.getStatus() == Status.BUFFER_OVERFLOW) {
-        logger.trace("(HTTPS-W-OF) {} {}", peerNetData, peerAppData);
-        peerNetData = resizeBuffer(peerNetData, engine.getSession().getApplicationBufferSize());
+        logger.trace(count + " (HTTPS-W-OF) {} {}", encryptedData, inboundDecryptedData);
+        encryptedData = resizeBuffer(encryptedData, engine.getSession().getApplicationBufferSize());
       }
     } while (result.getStatus() != Status.OK);
 
-    logger.trace("(HTTPS-W-DONE) {} {}", peerNetData, peerAppData);
-    peerNetData.flip();
+    logger.trace(count + " (HTTPS-W-DONE) {} {}", encryptedData, inboundDecryptedData);
+    encryptedData.flip();
     return myNetData;
   }
 
@@ -308,7 +318,7 @@ public class HTTPS11Processor implements HTTPProcessor {
   public ProcessorState wrote(long num) throws IOException {
     delegate.markUsed();
 
-    logger.trace("(HTTPS-WROTE) {} {}", peerNetData, peerAppData);
+    logger.trace(count + " (HTTPS-WROTE) {} {}", encryptedData, inboundDecryptedData);
 
     ProcessorState newState;
     if (handshakeState != null) {
@@ -316,62 +326,62 @@ public class HTTPS11Processor implements HTTPProcessor {
       //  but really we are still in handshakeState of Write
 
       // TODO : Does this fix the TODO above?
-      if (peerNetData.hasRemaining()) {
+      if (encryptedData.hasRemaining()) {
         throw new IllegalStateException("Oh shit!");
       }
 
       var tlsStatus = engine.getHandshakeStatus();
       newState = handleHandshake(tlsStatus);
       if (newState == ProcessorState.Read) {
-        peerNetData.clear();
+        encryptedData.clear();
       }
 
-      logger.trace("(HTTPS-WROTE-HS)DONE {} {}", peerNetData, peerAppData);
+      logger.trace(count + " (HTTPS-WROTE-HS)DONE {} {}", encryptedData, inboundDecryptedData);
       return newState;
     }
 
     newState = delegate.wrote(num);
-    if (newState != ProcessorState.Write && peerNetData != null) {
+    if (newState != ProcessorState.Write && encryptedData != null) {
       // The write-operation is done, but we still might need to read (Expect/Continue handling for example). Therefore, we need to clear the network
       // buffer to prepare for the read
-      peerNetData.clear();
+      encryptedData.clear();
     }
 
-    logger.trace("(HTTPS-WROTE)DONE {} {}", peerNetData, peerAppData);
+    logger.trace(count + " (HTTPS-WROTE)DONE {} {}", encryptedData, inboundDecryptedData);
     return newState;
   }
 
   private void drainToDelegate() throws IOException {
-    peerAppData.flip();
+    inboundDecryptedData.flip();
 //    System.out.print(new String(peerAppData.array(), peerAppData.position(), peerAppData.limit()));
 
-    while (peerAppData.hasRemaining()) {
+    while (inboundDecryptedData.hasRemaining()) {
       var buf = delegate.readBuffer();
       if (buf == null) {
-        logger.trace("(HTTPS-R-NULL)");
+        logger.trace(count + " (HTTPS-R-NULL)");
         throw new ParseException("Unable to complete HTTP request because the server thought the request was complete but the client sent more data");
       }
 
-      logger.trace("(HTTPS-R-DELEGATE) {} {}", buf, peerAppData);
+      logger.trace(count + " (HTTPS-R-DELEGATE) {} {}", buf, inboundDecryptedData);
 
       // Copy it
-      int length = Math.min(buf.remaining(), peerAppData.remaining());
-      buf.put(buf.position(), peerAppData, peerAppData.position(), length);
+      int length = Math.min(buf.remaining(), inboundDecryptedData.remaining());
+      buf.put(buf.position(), inboundDecryptedData, inboundDecryptedData.position(), length);
       buf.position(buf.position() + length);
       buf.flip();
-      peerAppData.position(peerAppData.position() + length);
-      logger.trace("(HTTPS-R-DELEGATE)COPY {} {}", buf, peerAppData);
+      inboundDecryptedData.position(inboundDecryptedData.position() + length);
+      logger.trace(count + " (HTTPS-R-DELEGATE)COPY {} {}", buf, inboundDecryptedData);
 
       // Pass it down
       var newState = delegate.read(buf);
-      logger.trace("(HTTPS-R-DELEGATE)DONE {}", newState);
+      logger.trace(count + " (HTTPS-R-DELEGATE)DONE {}", newState);
     }
 
-    peerAppData.clear();
+    inboundDecryptedData.clear();
   }
 
   private ProcessorState handleHandshake(HandshakeStatus newTLSStatus) {
-    logger.trace("(HTTPS-HS-{}) ", newTLSStatus);
+    logger.trace(count + " (HTTPS-HS-{}) ", newTLSStatus);
 
     if (newTLSStatus == HandshakeStatus.NEED_TASK) {
       // Keep hard looping until the thread finishes (sucks but not sure what else to do here)
@@ -384,14 +394,14 @@ public class HTTPS11Processor implements HTTPProcessor {
       } while (newTLSStatus == HandshakeStatus.NEED_TASK);
     }
 
-    logger.trace("(HTTPS-HS-{}) ", newTLSStatus);
+    logger.trace(count + " (HTTPS-HS-{}) ", newTLSStatus);
     if (newTLSStatus == HandshakeStatus.NEED_UNWRAP || newTLSStatus == HandshakeStatus.NEED_UNWRAP_AGAIN) {
       handshakeState = ProcessorState.Read;
     } else if (newTLSStatus == HandshakeStatus.NEED_WRAP) {
       handshakeState = ProcessorState.Write;
     } else {
-      if (!peerNetData.hasRemaining()) {
-        logger.trace("(HTTPS-HS-DONE-DATA) {}", newTLSStatus.name() + "-" + delegate.state());
+      if (!encryptedData.hasRemaining()) {
+        logger.trace(count + " (HTTPS-HS-DONE-DATA) {}", newTLSStatus.name() + "-" + delegate.state());
         handshakeState = null;
         return delegate.state();
       }

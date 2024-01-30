@@ -52,6 +52,7 @@ import org.testng.annotations.Test;
 import static org.testng.Assert.assertEquals;
 import static org.testng.Assert.assertNull;
 import static org.testng.Assert.assertTrue;
+import static org.testng.Assert.expectThrows;
 import static org.testng.Assert.fail;
 
 /**
@@ -424,7 +425,11 @@ public class CoreTest extends BaseTest {
       for (int i = 0; i < iterations; i++) {
         System.out.println("Iteration " + i);
         var response = client.send(
-            HttpRequest.newBuilder().uri(uri).header(Headers.Connection, Connections.Close).GET().build(),
+            HttpRequest.newBuilder()
+                       .uri(uri)
+                       .header(Headers.Connection, Connections.Close)
+                       .POST(BodyPublishers.noBody())
+                       .build(),
             r -> BodySubscribers.ofString(StandardCharsets.UTF_8)
         );
 

@@ -235,28 +235,43 @@ public class HTTPServerThread extends Thread implements Closeable, Notifier {
   }
 
   private void cancelAndCloseKey(SelectionKey key) {
-    if (key != null) {
-      try (var client = key.channel()) {
-        if (logger.isDebugEnabled() && client instanceof SocketChannel socketChannel) {
-          logger.debug("Closing connection to client [{}]", socketChannel.getRemoteAddress().toString());
-        }
+    if (key == null) {
+      return;
+    }
 
-        // Close the processor, which should kill the thread
-        if (key.attachment() != null) {
-          ((HTTPProcessor) key.attachment()).close(true);
-        }
-
-        key.cancel();
-
-        if (client.validOps() != SelectionKey.OP_ACCEPT && instrumenter != null) {
-          instrumenter.connectionClosed();
-        }
-      } catch (Throwable t) {
-        logger.error("An exception was thrown while trying to cancel a SelectionKey and close a channel with a client due to an exception being thrown for that specific client. Enable debug logging to see the error", t);
+    try (var client = key.channel()) {
+      if (logger.isDebugEnabled() && client instanceof SocketChannel socketChannel) {
+        logger.debug("Closing connection to client [{}]", socketChannel.getRemoteAddress().toString());
       }
 
-      logger.trace("(C)");
+      // Close the processor, which should kill the thread
+      if (key.attachment() != null) {
+        ProcessorState state = ((HTTPProcessor) key.attachment()).close(true);
+
+        // Handle state transitions here in case there is more data to write/read. If that is the case, then we should return rather than
+        // cancel the key
+        if (state == ProcessorState.Read) {
+          key.interestOps(SelectionKey.OP_READ);
+          return;
+        }
+
+        if (state == ProcessorState.Write) {
+          key.interestOps(SelectionKey.OP_WRITE);
+          return;
+        }
+      }
+
+      client.close();
+      key.cancel();
+
+      if (client.validOps() != SelectionKey.OP_ACCEPT && instrumenter != null) {
+        instrumenter.connectionClosed();
+      }
+    } catch (Throwable t) {
+      logger.error("An exception was thrown while trying to cancel a SelectionKey and close a channel with a client due to an exception being thrown for that specific client. Enable debug logging to see the error", t);
     }
+
+    logger.trace("(C)");
   }
 
   @SuppressWarnings("resource")
@@ -381,7 +396,7 @@ public class HTTPServerThread extends Thread implements Closeable, Notifier {
 
       if (num < 0) {
         logger.debug("Client refused bytes or terminated the connection. Num bytes is [{}]. Closing connection", num);
-        state = processor.close(true);
+        processor.close(true); // Don't use the new state because the socket is toast
       } else {
         if (num > 0) {
           logger.debug("Wrote [{}] bytes to the client", num);
