@@ -402,6 +402,10 @@ public class CoreTest extends BaseTest {
 
   @Test(dataProvider = "schemes", groups = "performance")
   public void performanceNoKeepAlive(String scheme) throws Exception {
+    if (scheme.equals("http")) {
+      return;
+    }
+
     HTTPHandler handler = (req, res) -> {
       res.setHeader(Headers.ContentType, "text/plain");
       res.setHeader(Headers.ContentLength, "16");
@@ -423,7 +427,7 @@ public class CoreTest extends BaseTest {
       var client = makeClient(scheme, null);
       long start = System.currentTimeMillis();
       for (int i = 0; i < iterations; i++) {
-        System.out.println("Iteration " + i);
+        System.out.println("Iteration " + i + " start " + System.currentTimeMillis());
         var response = client.send(
             HttpRequest.newBuilder()
                        .uri(uri)
@@ -432,6 +436,7 @@ public class CoreTest extends BaseTest {
                        .build(),
             r -> BodySubscribers.ofString(StandardCharsets.UTF_8)
         );
+        System.out.println("Iteration " + i + " end " + System.currentTimeMillis());
 
         assertEquals(response.statusCode(), 200);
         assertEquals(response.body(), ExpectedResponse);

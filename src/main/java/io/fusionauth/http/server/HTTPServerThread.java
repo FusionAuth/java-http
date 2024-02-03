@@ -217,7 +217,7 @@ public class HTTPServerThread extends Thread implements Closeable, Notifier {
   private void accept(SelectionKey key) throws GeneralSecurityException, IOException {
     var client = channel.accept();
     HTTP11Processor httpProcessor = new HTTP11Processor(configuration, listenerConfiguration, this, preambleBuffer, threadPool, ipAddress(client));
-    HTTPS11Processor tlsProcessor = new HTTPS11Processor(httpProcessor, configuration, listenerConfiguration);
+    HTTPS11ProcessorNew tlsProcessor = new HTTPS11ProcessorNew(httpProcessor, configuration, listenerConfiguration);
     client.configureBlocking(false);
     client.register(key.selector(), tlsProcessor.initialKeyOps(), tlsProcessor);
 
@@ -251,11 +251,13 @@ public class HTTPServerThread extends Thread implements Closeable, Notifier {
         // Handle state transitions here in case there is more data to write/read. If that is the case, then we should return rather than
         // cancel the key
         if (state == ProcessorState.Read) {
+          logger.trace("(HTTP-SERVER-CLOSE-READ)");
           key.interestOps(SelectionKey.OP_READ);
           return;
         }
 
         if (state == ProcessorState.Write) {
+          logger.trace("(HTTP-SERVER-CLOSE-WRITE)");
           key.interestOps(SelectionKey.OP_WRITE);
           return;
         }
@@ -379,7 +381,7 @@ public class HTTPServerThread extends Thread implements Closeable, Notifier {
   }
 
   private void write(SelectionKey key) throws IOException {
-    HTTPS11Processor processor = (HTTPS11Processor) key.attachment();
+    HTTPS11ProcessorNew processor = (HTTPS11ProcessorNew) key.attachment();
     ProcessorState state = processor.state();
     SocketChannel client = (SocketChannel) key.channel();
     ByteBuffer[] buffers = processor.writeBuffers();
