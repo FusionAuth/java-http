@@ -167,6 +167,7 @@ public class HTTPS11ProcessorNew implements HTTPProcessor {
     logger.trace(count + " (HTTPS-READ) {} {} {} {}", handshakeData, encryptedData, decryptedData, state);
     delegate.markUsed();
 
+    // HTTPS is disabled
     if (engine == null) {
       return delegate.read(buffer);
     }
@@ -221,6 +222,7 @@ public class HTTPS11ProcessorNew implements HTTPProcessor {
     logger.trace(count + " (HTTPS-READ-BUFFER) {} {} {} {}", handshakeData, encryptedData, decryptedData, state);
     delegate.markUsed();
 
+    // HTTPS is disabled
     if (engine == null) {
       return delegate.readBuffer();
     }
@@ -236,6 +238,7 @@ public class HTTPS11ProcessorNew implements HTTPProcessor {
 
   @Override
   public ProcessorState state() {
+    // HTTPS is disabled
     if (engine == null) {
       return delegate.state();
     }
@@ -252,6 +255,7 @@ public class HTTPS11ProcessorNew implements HTTPProcessor {
     logger.trace(count + " (HTTPS-WRITE-BUFFERS) {} {} {} {}", handshakeData, encryptedData, decryptedData, state);
     delegate.markUsed();
 
+    // HTTPS is disabled
     if (engine == null) {
       return delegate.writeBuffers();
     }
@@ -287,6 +291,12 @@ public class HTTPS11ProcessorNew implements HTTPProcessor {
   @Override
   public ProcessorState wrote(long num) throws IOException {
     delegate.markUsed();
+
+    // HTTPS is disabled
+    if (engine == null) {
+      return delegate.wrote(num);
+    }
+
     logger.trace(count + " (HTTPS-WROTE) {} {} {} {}", handshakeData, encryptedData, decryptedData, state);
 
     if (state == HTTPSState.HandshakeWriting && !handshakeData.hasRemaining()) {
@@ -314,6 +324,16 @@ public class HTTPS11ProcessorNew implements HTTPProcessor {
         case Close -> HTTPSState.Close;
         case Reset -> HTTPSState.Reset;
       };
+
+      if (state == HTTPSState.BodyRead) {
+        // This condition should never happen because the write-operation should have written out the entire buffer
+        if (encryptedData.hasRemaining()) {
+          throw new IllegalStateException("The encrypted data still has data to write, but the HTTP processor changed states.");
+        }
+
+        // Clear the encrypted side of the buffer to start the read
+        encryptedData.clear();
+      }
     }
 
     logger.trace(count + " (HTTPS-WROTE-DONE) {} {} {} {}", handshakeData, encryptedData, decryptedData, state);
