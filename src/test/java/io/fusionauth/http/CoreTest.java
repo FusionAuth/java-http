@@ -52,7 +52,6 @@ import org.testng.annotations.Test;
 import static org.testng.Assert.assertEquals;
 import static org.testng.Assert.assertNull;
 import static org.testng.Assert.assertTrue;
-import static org.testng.Assert.expectThrows;
 import static org.testng.Assert.fail;
 
 /**
@@ -402,10 +401,6 @@ public class CoreTest extends BaseTest {
 
   @Test(dataProvider = "schemes", groups = "performance")
   public void performanceNoKeepAlive(String scheme) throws Exception {
-    if (scheme.equals("http")) {
-      return;
-    }
-
     HTTPHandler handler = (req, res) -> {
       res.setHeader(Headers.ContentType, "text/plain");
       res.setHeader(Headers.ContentLength, "16");
@@ -420,7 +415,7 @@ public class CoreTest extends BaseTest {
       }
     };
 
-    int iterations = 1_000;
+    int iterations = 10_000;
     CountingInstrumenter instrumenter = new CountingInstrumenter();
     try (HTTPServer ignore = makeServer(scheme, handler, instrumenter).start()) {
       URI uri = makeURI(scheme, "");
@@ -440,6 +435,9 @@ public class CoreTest extends BaseTest {
 
         assertEquals(response.statusCode(), 200);
         assertEquals(response.body(), ExpectedResponse);
+
+        // Wipe the logger, so we only have the final failed request
+        resetLogger();
       }
 
       long end = System.currentTimeMillis();
