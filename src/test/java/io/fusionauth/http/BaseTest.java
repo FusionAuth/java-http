@@ -127,6 +127,8 @@ public abstract class BaseTest {
 
   static {
     logger.setLevel(Level.Trace);
+    System.setProperty("sun.net.http.retryPost", "false");
+    System.setProperty("jdk.httpclient.allowRestrictedHeaders", "connection");
   }
 
   public HttpClient makeClient(String scheme, CookieHandler cookieHandler) throws GeneralSecurityException, IOException {

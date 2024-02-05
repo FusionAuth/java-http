@@ -52,11 +52,6 @@ public class ChunkedTest extends BaseTest {
 
   public static final String RequestBody = "{\"message\":\"Hello World\"";
 
-  static {
-    System.setProperty("sun.net.http.retryPost", "false");
-    System.setProperty("jdk.httpclient.allowRestrictedHeaders", "connection");
-  }
-
   @Test(dataProvider = "schemes")
   public void chunkedRequest(String scheme) throws Exception {
     HTTPHandler handler = (req, res) -> {
@@ -262,6 +257,9 @@ public class ChunkedTest extends BaseTest {
         if (i % 1_000 == 0) {
           System.out.println(i);
         }
+
+        // Wipe the logger, so we only have the final failed request
+        resetLogger();
       }
 
       long end = System.currentTimeMillis();

@@ -246,8 +246,21 @@ public class HTTPS11ProcessorNew implements HTTPProcessor {
     return toProcessorState();
   }
 
+  /**
+   * Updates the delegate in order to reset the state of it (HTTP state machine). This also resets the TLS state back to a BodyRead
+   *
+   * @param delegate The new delegate.
+   */
   public void updateDelegate(HTTP11Processor delegate) {
     this.delegate = delegate;
+    this.state = HTTPSState.BodyRead;
+
+    // Reset all the buffers since this is a new request/response cycle
+    if (engine != null) {
+      this.decryptedData.clear();
+      this.encryptedData.clear();
+      this.handshakeData.clear();
+    }
   }
 
   @Override
