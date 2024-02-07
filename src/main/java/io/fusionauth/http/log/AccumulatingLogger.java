@@ -27,7 +27,7 @@ import java.util.List;
 public class AccumulatingLogger extends BaseLogger {
   private final List<String> messages = new ArrayList<>();
 
-  public void reset() {
+  public synchronized void reset() {
     messages.clear();
   }
 
@@ -37,7 +37,7 @@ public class AccumulatingLogger extends BaseLogger {
   }
 
   @Override
-  protected void handleMessage(String message) {
+  protected synchronized void handleMessage(String message) {
     messages.add(message);
   }
 }

@@ -181,6 +181,7 @@ public class HTTP11Processor implements HTTPProcessor {
       state = ProcessorState.Write;
     }
 
+    logger.trace("(RR)");
     return state;
   }
 

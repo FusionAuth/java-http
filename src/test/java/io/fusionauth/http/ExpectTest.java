@@ -44,11 +44,6 @@ public class ExpectTest extends BaseTest {
 
   public static final String RequestBody = "{\"message\":\"Hello World\"";
 
-  static {
-    System.setProperty("sun.net.http.retryPost", "false");
-    System.setProperty("jdk.httpclient.allowRestrictedHeaders", "connection");
-  }
-
   @Test(dataProvider = "schemes")
   public void expect(String scheme) throws Exception {
     HTTPHandler handler = (req, res) -> {

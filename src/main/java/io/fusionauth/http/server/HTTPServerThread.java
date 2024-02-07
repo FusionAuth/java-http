@@ -27,7 +27,6 @@ import java.nio.channels.ServerSocketChannel;
 import java.nio.channels.SocketChannel;
 import java.security.GeneralSecurityException;
 import java.time.Duration;
-import java.util.List;
 import java.util.Map;
 
 import io.fusionauth.http.ClientAbortException;
@@ -127,33 +126,33 @@ public class HTTPServerThread extends Thread implements Closeable, Notifier {
       return;
     }
 
-    // Update the keys based on any changes to the processor state
-    var keys = List.copyOf(selector.keys());
-    for (SelectionKey key : keys) {
-      try {
-        // If the key is toast, skip it
-        if (!key.isValid()) {
-          continue;
-        }
-
-        HTTPProcessor processor = (HTTPProcessor) key.attachment();
-        if (processor == null) { // No processor for you!
-          continue;
-        }
-
-        ProcessorState state = processor.state();
-        if (state == ProcessorState.Read && key.interestOps() != SelectionKey.OP_READ) {
-          logger.debug("Flipping a SelectionKey to Read because it wasn't in the right state");
-          key.interestOps(SelectionKey.OP_READ);
-        } else if (state == ProcessorState.Write && key.interestOps() != SelectionKey.OP_WRITE) {
-          logger.debug("Flipping a SelectionKey to Write because it wasn't in the right state");
-          key.interestOps(SelectionKey.OP_WRITE);
-        }
-      } catch (Throwable t) {
-        // Smother since the key is likely invalid
-        logger.debug("Exception occurred while trying to update a key", t);
-      }
-    }
+//    // Update the keys based on any changes to the processor state
+//    var keys = List.copyOf(selector.keys());
+//    for (SelectionKey key : keys) {
+//      try {
+//        // If the key is toast, skip it
+//        if (!key.isValid()) {
+//          continue;
+//        }
+//
+//        HTTPProcessor processor = (HTTPProcessor) key.attachment();
+//        if (processor == null) { // No processor for you!
+//          continue;
+//        }
+//
+//        ProcessorState state = processor.state();
+//        if (state == ProcessorState.Read && key.interestOps() != SelectionKey.OP_READ) {
+//          logger.debug("Flipping a SelectionKey to Read because it wasn't in the right state");
+//          key.interestOps(SelectionKey.OP_READ);
+//        } else if (state == ProcessorState.Write && key.interestOps() != SelectionKey.OP_WRITE) {
+//          logger.debug("Flipping a SelectionKey to Write because it wasn't in the right state");
+//          key.interestOps(SelectionKey.OP_WRITE);
+//        }
+//      } catch (Throwable t) {
+//        // Smother since the key is likely invalid
+//        logger.debug("Exception occurred while trying to update a key", t);
+//      }
+//    }
 
     // Wake-up! Time to put on a little make-up!
     selector.wakeup();
@@ -235,28 +234,45 @@ public class HTTPServerThread extends Thread implements Closeable, Notifier {
   }
 
   private void cancelAndCloseKey(SelectionKey key) {
-    if (key != null) {
-      try (var client = key.channel()) {
-        if (logger.isDebugEnabled() && client instanceof SocketChannel socketChannel) {
-          logger.debug("Closing connection to client [{}]", socketChannel.getRemoteAddress().toString());
-        }
+    if (key == null) {
+      return;
+    }
 
-        // Close the processor, which should kill the thread
-        if (key.attachment() != null) {
-          ((HTTPProcessor) key.attachment()).close(false);
-        }
-
-        key.cancel();
-
-        if (client.validOps() != SelectionKey.OP_ACCEPT && instrumenter != null) {
-          instrumenter.connectionClosed();
-        }
-      } catch (Throwable t) {
-        logger.error("An exception was thrown while trying to cancel a SelectionKey and close a channel with a client due to an exception being thrown for that specific client. Enable debug logging to see the error", t);
+    try (var client = key.channel()) {
+      if (logger.isDebugEnabled() && client instanceof SocketChannel socketChannel) {
+        logger.debug("Closing connection to client [{}]", socketChannel.getRemoteAddress().toString());
       }
 
-      logger.trace("(C)");
+      // Close the processor, which should kill the thread
+      if (key.attachment() != null) {
+        ProcessorState state = ((HTTPProcessor) key.attachment()).close(true);
+
+        // Handle state transitions here in case there is more data to write/read. If that is the case, then we should return rather than
+        // cancel the key
+        if (state == ProcessorState.Read) {
+          logger.trace("(HTTP-SERVER-CLOSE-READ)");
+          key.interestOps(SelectionKey.OP_READ);
+          return;
+        }
+
+        if (state == ProcessorState.Write) {
+          logger.trace("(HTTP-SERVER-CLOSE-WRITE)");
+          key.interestOps(SelectionKey.OP_WRITE);
+          return;
+        }
+      }
+
+      client.close();
+      key.cancel();
+
+      if (client.validOps() != SelectionKey.OP_ACCEPT && instrumenter != null) {
+        instrumenter.connectionClosed();
+      }
+    } catch (Throwable t) {
+      logger.error("An exception was thrown while trying to cancel a SelectionKey and close a channel with a client due to an exception being thrown for that specific client. Enable debug logging to see the error", t);
     }
+
+    logger.trace("(C)");
   }
 
   @SuppressWarnings("resource")
@@ -326,6 +342,7 @@ public class HTTPServerThread extends Thread implements Closeable, Notifier {
   private void read(SelectionKey key) throws IOException {
     HTTPProcessor processor = (HTTPProcessor) key.attachment();
     ProcessorState state = processor.state();
+    logger.trace("(R) {}", state);
     SocketChannel client = (SocketChannel) key.channel();
     if (state == ProcessorState.Read) {
       ByteBuffer buffer = processor.readBuffer();
@@ -380,7 +397,7 @@ public class HTTPServerThread extends Thread implements Closeable, Notifier {
 
       if (num < 0) {
         logger.debug("Client refused bytes or terminated the connection. Num bytes is [{}]. Closing connection", num);
-        state = processor.close(true);
+        processor.close(true); // Don't use the new state because the socket is toast
       } else {
         if (num > 0) {
           logger.debug("Wrote [{}] bytes to the client", num);

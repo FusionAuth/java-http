@@ -17,42 +17,41 @@ package io.fusionauth.http.server;
 
 import javax.net.ssl.SSLContext;
 import javax.net.ssl.SSLEngine;
+import javax.net.ssl.SSLEngineResult;
 import javax.net.ssl.SSLEngineResult.HandshakeStatus;
 import javax.net.ssl.SSLEngineResult.Status;
+import javax.net.ssl.SSLException;
 import javax.net.ssl.SSLSession;
 import java.io.IOException;
 import java.nio.ByteBuffer;
 import java.nio.channels.SelectionKey;
 import java.security.GeneralSecurityException;
-import java.util.concurrent.ExecutorService;
-import java.util.concurrent.Executors;
-import java.util.concurrent.atomic.AtomicInteger;
 
+import io.fusionauth.http.ParseException;
 import io.fusionauth.http.log.Logger;
 import io.fusionauth.http.security.SecurityTools;
 
 public class HTTPS11Processor implements HTTPProcessor {
-  private static final AtomicInteger threadCount = new AtomicInteger(1);
-
-  private static final ExecutorService executor = Executors.newCachedThreadPool(r -> new Thread(r, "TLS Handshake Thread " + threadCount.getAndIncrement()));
+  private final ByteBuffer[] encryptedDataArray;
 
   private final SSLEngine engine;
 
+  private final ByteBuffer[] handshakeDataArray;
+
   private final Logger logger;
 
-  private final ByteBuffer[] myAppData;
-
-  private final ByteBuffer[] myNetData;
-
-  private final ByteBuffer peerAppData;
+  private ByteBuffer decryptedData;
 
   private HTTP11Processor delegate;
 
-  private volatile ProcessorState handshakeState;
+  private ByteBuffer encryptedData;
 
-  private ByteBuffer peerNetData;
+  private ByteBuffer handshakeData;
 
-  public HTTPS11Processor(HTTP11Processor delegate, HTTPServerConfiguration configuration, HTTPListenerConfiguration listenerConfiguration)
+  private volatile HTTPSState state;
+
+  public HTTPS11Processor(HTTP11Processor delegate, HTTPServerConfiguration configuration,
+                          HTTPListenerConfiguration listenerConfiguration)
       throws GeneralSecurityException, IOException {
     this.delegate = delegate;
     this.logger = configuration.getLoggerFactory().getLogger(HTTPS11Processor.class);
@@ -63,58 +62,66 @@ public class HTTPS11Processor implements HTTPProcessor {
       this.engine.setUseClientMode(false);
 
       SSLSession session = engine.getSession();
-      this.myAppData = new ByteBuffer[]{ByteBuffer.allocate(session.getApplicationBufferSize())};
-      this.myNetData = new ByteBuffer[]{ByteBuffer.allocate(session.getPacketBufferSize())};
-      this.peerAppData = ByteBuffer.allocate(session.getApplicationBufferSize());
-      this.peerNetData = ByteBuffer.allocate(session.getPacketBufferSize());
-
-      // Set the remaining on the myNetData to be 0. This is how we tell the write operation that we have nothing to write, so it can handshake/wrap
-      this.myNetData[0].flip();
+      this.decryptedData = ByteBuffer.allocate(session.getApplicationBufferSize());
+      this.encryptedData = ByteBuffer.allocate(session.getPacketBufferSize());
+      this.handshakeData = ByteBuffer.allocate(session.getPacketBufferSize());
+      this.encryptedDataArray = new ByteBuffer[]{encryptedData};
+      this.handshakeDataArray = new ByteBuffer[]{handshakeData};
 
       engine.beginHandshake();
       HandshakeStatus tlsStatus = engine.getHandshakeStatus();
       if (tlsStatus == HandshakeStatus.NEED_UNWRAP) {
-        this.handshakeState = ProcessorState.Read;
+        this.state = HTTPSState.HandshakeRead;
       } else if (tlsStatus == HandshakeStatus.NEED_WRAP) {
-        this.handshakeState = ProcessorState.Write;
+        this.state = HTTPSState.HandshakeWrite;
       } else {
         throw new IllegalStateException("The SSLEngine is not in a valid state. It should be in the handshake state, but it is in the state [" + tlsStatus + "]");
       }
     } else {
       this.engine = null;
-      this.myAppData = null;
-      this.myNetData = null;
-      this.peerAppData = null;
-      this.peerNetData = null;
+      this.decryptedData = null;
+      this.encryptedData = null;
+      this.encryptedDataArray = null;
+      this.handshakeData = null;
+      this.handshakeDataArray = null;
     }
   }
 
   @Override
   public ProcessorState close(boolean endOfStream) {
-    logger.trace("(HTTPS-C)");
-
     if (this.engine == null) {
       return delegate.close(endOfStream);
     }
 
-    if (endOfStream) {
-      try {
-        engine.closeInbound();
-      } catch (IOException e) {
-        // Smother
-      }
+    logger.trace("(HTTPS-CLOSE) {} {}", engine.isInboundDone(), engine.isOutboundDone());
+
+    engine.getSession().invalidate();
+
+    try {
+      delegate.close(endOfStream);
+      engine.closeOutbound();
+      state = HTTPSState.HandshakeWrite;
+
+      encryptedData.clear();
+      decryptedData.clear();
+      var result = engine.wrap(decryptedData, encryptedData);
+      logger.trace("(HTTPS-CLOSE) {} {} {} {} {} {} {}", engine.isInboundDone(), engine.isOutboundDone(), encryptedData, decryptedData, result.getStatus(), result.getHandshakeStatus(), state);
+    } catch (SSLException e) {
+      // Ignore since we are closing
     }
 
-    delegate.close(endOfStream);
-    handshakeState = ProcessorState.Write;
-    engine.closeOutbound();
-    return handshakeState;
+    return toProcessorState();
   }
 
   @Override
   public void failure(Throwable t) {
-    logger.trace("(HTTPS-F)");
+    logger.trace("(HTTPS-FAILURE)");
     delegate.failure(t);
+    state = switch (delegate.state()) {
+      case Close -> HTTPSState.Close;
+      case Write -> HTTPSState.BodyWrite;
+      default -> throw new IllegalStateException("Unexpected failure state from the HTTP11Processor (delegate to the HTTPS11Processor)");
+    };
   }
 
   /**
@@ -124,12 +131,12 @@ public class HTTPS11Processor implements HTTPProcessor {
    */
   @Override
   public int initialKeyOps() {
-    logger.trace("(HTTPS-A)");
+    logger.trace("(HTTPS-ACCEPT)");
     if (engine == null) {
       return delegate.initialKeyOps();
     }
 
-    return handshakeState == ProcessorState.Read ? SelectionKey.OP_READ : SelectionKey.OP_WRITE;
+    return toProcessorState() == ProcessorState.Read ? SelectionKey.OP_READ : SelectionKey.OP_WRITE;
   }
 
   /**
@@ -140,87 +147,76 @@ public class HTTPS11Processor implements HTTPProcessor {
     return delegate.lastUsed();
   }
 
+  // TODO : at the end of handshake, the final read contains 90 bytes of handshake and 144 bytes of body
+  //  then, we actually write the ack back to the the client of the handshake completing. During this ACK is when
+  //  delete that body stuff
   @Override
   public ProcessorState read(ByteBuffer buffer) throws IOException {
+    logger.trace("(HTTPS-READ) {} {} {} {}", handshakeData, encryptedData, decryptedData, state);
     delegate.markUsed();
 
+    // HTTPS is disabled
     if (engine == null) {
       return delegate.read(buffer);
     }
 
-    var tlsStatus = engine.getHandshakeStatus();
-    ByteBuffer decryptBuffer;
-    if (tlsStatus != HandshakeStatus.NOT_HANDSHAKING && tlsStatus != HandshakeStatus.FINISHED) {
-      logger.trace("(HTTPS-R-HS)" + tlsStatus);
-      decryptBuffer = peerAppData.clear();
-    } else {
-      logger.trace("(HTTPS-R-RQ)");
-      handshakeState = null;
-      decryptBuffer = delegate.readBuffer();
+    if (state == HTTPSState.HandshakeRead || state == HTTPSState.HandshakeWrite) {
+      state = handshake();
+
+      if (handshakeData.hasRemaining()) {
+        // This shouldn't happen, but let's resize just in case
+        if (handshakeData.remaining() > encryptedData.remaining()) {
+          logger.trace("(HTTPS-READ-RESIZE-AFTER-HANDSHAKE-BEFORE) {} {} {} {}", handshakeData, encryptedData, decryptedData, state);
+          encryptedData = resizeBuffer(encryptedData, encryptedData.capacity() + handshakeData.remaining());
+          logger.trace("(HTTPS-READ-RESIZE-AFTER-HANDSHAKE-AFTER) {} {} {} {}", handshakeData, encryptedData, decryptedData, state);
+        }
+
+        encryptedData.put(handshakeData);
+        logger.trace("(HTTPS-READ-COPY-AFTER-HANDSHAKE) {} {} {} {}", handshakeData, encryptedData, decryptedData, state);
+      }
+
+      // We've got more handshaking to do
+      if (state == HTTPSState.HandshakeRead || state == HTTPSState.HandshakeWrite) {
+        handshakeData.clear();
+        return toProcessorState();
+      }
+
+      if (encryptedData.hasRemaining()) {
+        // We are no longer handshaking, but there are bytes, which we should assume are body bytes and fall through to the code below
+        state = HTTPSState.BodyRead;
+        encryptedData.compact();
+      } else {
+        // We are done handshaking, clear the buffer to start the body read
+        encryptedData.clear();
+      }
     }
 
-    // TODO : Not sure if this is correct
-    if (decryptBuffer == null) {
-      logger.trace("(HTTPS-R-NULL)");
-      return delegate.state();
-    }
+    decrypt();
 
-    // Unwrapping using one of these cases:
-    //    Handshake Data (plain text or encrypted/signed) ---> Ignore (this side doesn't matter as it is internal to SSLEngine)
-    //        * If OK - might need TASK
-    //        * If Underflow - Handshake Data was not enough or there isn't enough space in the buffer
-    //        * If Overflow - ??
-    //    Encrypted Data ---> Plain Text Data (send to the HTTP handler)
-    //        * If OK - send the decrypted data to the app
-    //        * If Underflow - Encrypted Data was not enough or there isn't enough space in the network buffer
-    //        * If Overflow - The encrypted data was larger than the buffer the app is using (Preamble or body buffers)
-    var result = engine.unwrap(peerNetData, decryptBuffer);
+    // Check if we are done reading
+    state = switch (delegate.state()) {
+      case Read -> HTTPSState.BodyRead;
+      case Write -> HTTPSState.BodyWrite;
+      case Close -> HTTPSState.Close;
+      case Reset -> HTTPSState.Reset;
+    };
 
-    // This will always put position at limit, so if there is data in the buffer, it will always be at the start and position will be greater than 0
-    // Therefore, we will need to flip this if we are resizing (i.e. for an underflow)
-    peerNetData.compact();
-
-    if (result.getStatus() == Status.BUFFER_UNDERFLOW) {
-      logger.trace("(HTTPS-R-UF)");
-      peerNetData = handleBufferUnderflow(peerNetData);
-      return handshakeState != null ? handshakeState : delegate.state(); // Keep reading
-    } else if (result.getStatus() == Status.CLOSED) {
-      logger.trace("(HTTPS-R-C)");
-      return close(false);
-    } else if (result.getStatus() == Status.BUFFER_OVERFLOW) {
-      throw new IllegalStateException("A buffer overflow is not expected during an unwrap operation. This occurs because the preamble or body buffers are too small. Increase their sizes to avoid this issue.");
-    }
-
-    if (tlsStatus == HandshakeStatus.NOT_HANDSHAKING || tlsStatus == HandshakeStatus.FINISHED) {
-      logger.trace("(HTTPS-R-RQ-R)");
-      handshakeState = null;
-      decryptBuffer.flip();
-      return delegate.read(decryptBuffer);
-    }
-
-    logger.trace("(HTTPS-HS-UW){}", peerNetData);
-    var newTLSStatus = result.getHandshakeStatus();
-    var newState = handleHandshake(newTLSStatus);
-
-    // Sometimes the peer network side still has more handshake data and/or request data, so we can recurse to handle whatever is remaining
-    if (handshakeState == ProcessorState.Read && peerNetData.position() > 0 && result.bytesConsumed() > 0) {
-      peerNetData.flip();
-      return read(peerNetData);
-    }
-
-    return newState;
+    logger.trace("(HTTPS-READ-DONE) {} {} {}", encryptedData, decryptedData, state);
+    return toProcessorState();
   }
 
   @Override
   public ByteBuffer readBuffer() {
+    logger.trace("(HTTPS-READ-BUFFER) {} {} {} {}", handshakeData, encryptedData, decryptedData, state);
     delegate.markUsed();
 
+    // HTTPS is disabled
     if (engine == null) {
       return delegate.readBuffer();
     }
 
     // Always read into the peer network buffer
-    return peerNetData;
+    return state == HTTPSState.HandshakeRead ? handshakeData : encryptedData;
   }
 
   @Override
@@ -230,68 +226,62 @@ public class HTTPS11Processor implements HTTPProcessor {
 
   @Override
   public ProcessorState state() {
+    // HTTPS is disabled
     if (engine == null) {
       return delegate.state();
     }
 
-    return handshakeState != null ? handshakeState : delegate.state();
+    return toProcessorState();
   }
 
+  /**
+   * Updates the delegate in order to reset the state of it (HTTP state machine). This also resets the TLS state back to a BodyRead
+   *
+   * @param delegate The new delegate.
+   */
   public void updateDelegate(HTTP11Processor delegate) {
     this.delegate = delegate;
+    this.state = HTTPSState.BodyRead;
+
+    // Reset all the buffers since this is a new request/response cycle
+    if (engine != null) {
+      this.decryptedData.clear();
+      this.encryptedData.clear();
+      this.handshakeData.clear();
+    }
   }
 
   @Override
   public ByteBuffer[] writeBuffers() throws IOException {
+    logger.trace("(HTTPS-WRITE-BUFFERS) {} {} {} {}", handshakeData, encryptedData, decryptedData, state);
     delegate.markUsed();
 
+    // HTTPS is disabled
     if (engine == null) {
       return delegate.writeBuffers();
     }
 
-    // We haven't written it all out yet, so return the existing bytes in the encrypted/handshake buffer
-    if (myNetData[0].hasRemaining()) {
-      return myNetData;
+    // We haven't written it all out yet, so return the existing bytes in the encrypted or handshake buffer
+    if (state == HTTPSState.HandshakeWriting && handshakeData.hasRemaining()) {
+      return handshakeDataArray;
     }
 
-    var tlsStatus = engine.getHandshakeStatus();
-    if (tlsStatus == HandshakeStatus.NEED_UNWRAP) {
-      handshakeState = ProcessorState.Read;
-      return null;
+    if (state == HTTPSState.BodyWriting && encryptedData.hasRemaining()) {
+      return encryptedDataArray;
     }
 
-    // TODO : can bytes be in the handshake that clear() doesn't even provide enough protection
-    ByteBuffer[] plainTextBuffers;
-    if (tlsStatus == HandshakeStatus.NEED_WRAP) {
-      logger.trace("(HTTPS-W-HS)");
-      myAppData[0].clear(); // TODO : Always clear for the handshake??
-      plainTextBuffers = myAppData;
+    if (state == HTTPSState.HandshakeRead || state == HTTPSState.HandshakeWrite) {
+      state = handshake();
     } else {
-      handshakeState = null;
-      plainTextBuffers = delegate.writeBuffers();
+      encrypt();
     }
 
-    if (plainTextBuffers == null) {
+    // If we aren't writing, bail
+    if (state != HTTPSState.BodyWriting && state != HTTPSState.HandshakeWriting) {
       return null;
     }
 
-    myNetData[0].clear();
-    var result = engine.wrap(plainTextBuffers, myNetData[0]);
-    if (result.getStatus() == Status.BUFFER_OVERFLOW) {
-      logger.trace("(HTTPS-W-OF)");
-      myNetData[0] = handleBufferOverflow(myNetData[0]);
-    } else if (result.getStatus() == Status.CLOSED) {
-      logger.trace("(HTTPS-W-C)");
-      close(false);
-      return null;
-    } else if (result.getStatus() == Status.BUFFER_UNDERFLOW) {
-      throw new IllegalStateException("A buffer underflow is not expected during a wrap operation according to the Javadoc. Maybe this is something we need to fix.");
-    } else {
-      logger.trace("(HTTPS-W-RQ)");
-      myNetData[0].flip();
-    }
-
-    return myNetData;
+    return state == HTTPSState.HandshakeWriting ? handshakeDataArray : encryptedDataArray;
   }
 
   @Override
@@ -303,77 +293,297 @@ public class HTTPS11Processor implements HTTPProcessor {
   public ProcessorState wrote(long num) throws IOException {
     delegate.markUsed();
 
-    if (handshakeState == null) {
+    // HTTPS is disabled
+    if (engine == null) {
       return delegate.wrote(num);
     }
 
-    var tlsStatus = engine.getHandshakeStatus();
-    return handleHandshake(tlsStatus);
+    logger.trace("(HTTPS-WROTE) {} {} {} {}", handshakeData, encryptedData, decryptedData, state);
+
+    if (state == HTTPSState.HandshakeWriting && !handshakeData.hasRemaining()) {
+      handshakeData.clear();
+
+      var handshakeStatus = engine.getHandshakeStatus();
+      state = switch (handshakeStatus) {
+        case NEED_WRAP -> HTTPSState.HandshakeWrite;
+        case NEED_UNWRAP, NEED_UNWRAP_AGAIN -> HTTPSState.HandshakeRead;
+        case FINISHED, NOT_HANDSHAKING -> HTTPSState.BodyRead;
+        default -> throw new IllegalStateException("Handshaking went from write to task, which was unexpected");
+      };
+
+      // This means we had body data during handshaking, and we need to handle it here
+      if (state == HTTPSState.BodyRead && encryptedData.position() > 0) {
+        encryptedData.flip();
+        read(encryptedData);
+      }
+    } else {
+      // Check if we are done writing
+      var newState = delegate.wrote(num);
+      state = switch (newState) {
+        case Read -> HTTPSState.BodyRead;
+        case Write -> HTTPSState.BodyWrite;
+        case Close -> HTTPSState.Close;
+        case Reset -> HTTPSState.Reset;
+      };
+
+      if (state == HTTPSState.BodyRead) {
+        // This condition should never happen because the write-operation should have written out the entire buffer
+        if (encryptedData.hasRemaining()) {
+          throw new IllegalStateException("The encrypted data still has data to write, but the HTTP processor changed states.");
+        }
+
+        // Clear the encrypted side of the buffer to start the read
+        encryptedData.clear();
+      }
+    }
+
+    logger.trace("(HTTPS-WROTE-DONE) {} {} {} {}", handshakeData, encryptedData, decryptedData, state);
+    return toProcessorState();
   }
 
-  private ByteBuffer handleBufferOverflow(ByteBuffer buffer) {
-    int applicationSize = engine.getSession().getApplicationBufferSize();
-    ByteBuffer newBuffer = ByteBuffer.allocate(applicationSize + buffer.position());
-    buffer.flip();
-    newBuffer.put(buffer);
-    return newBuffer;
+  private void copyToDelegate() throws IOException {
+    decryptedData.flip();
+
+    while (decryptedData.hasRemaining()) {
+      var buf = delegate.readBuffer();
+      if (buf == null) {
+        logger.trace("(HTTPS-DECRYPT-COPY-TO-DELEGATE-NULL)");
+        throw new ParseException("Unable to complete HTTP request because the server thought the request was complete but the client sent more data");
+      }
+
+      logger.trace("(HTTPS-DECRYPT-COPY-TO-DELEGATE) {} {} {}", encryptedData, decryptedData, state);
+
+      // Copy it
+      int length = Math.min(buf.remaining(), decryptedData.remaining());
+      buf.put(buf.position(), decryptedData, decryptedData.position(), length);
+      buf.position(buf.position() + length);
+      buf.flip();
+      decryptedData.position(decryptedData.position() + length);
+      logger.trace("(HTTPS-DECRYPT-COPY-TO-DELEGATE-COPIED) {} {} {}", encryptedData, decryptedData, state);
+
+      // Pass it down
+      var newState = delegate.read(buf);
+      logger.trace("(HTTPS-DECRYPT-COPY-TO-DELEGATE-DONE) {} {} {} {}", encryptedData, decryptedData, state, newState);
+    }
   }
 
-  private ByteBuffer handleBufferUnderflow(ByteBuffer buffer) {
-    int networkSize = engine.getSession().getPacketBufferSize();
-    if (networkSize > buffer.capacity()) {
-      ByteBuffer newBuffer = ByteBuffer.allocate(networkSize);
-      buffer.flip();
+  private void decrypt() throws IOException {
+//    var handshakeStatus = engine.getHandshakeStatus();
+//    if (handshakeStatus != HandshakeStatus.FINISHED && handshakeStatus != HandshakeStatus.NOT_HANDSHAKING) {
+//      throw new IllegalStateException("Unexpected handshake after the connection was in the body processing state.");
+//    }
+
+    if (state != HTTPSState.BodyRead) {
+      throw new IllegalStateException("Somehow we got into a state of [" + state + "] but should be in BodyRead.");
+    }
+
+    boolean overflowedAlready = false;
+    SSLEngineResult result;
+    while (encryptedData.hasRemaining()) {
+      logger.trace("(HTTPS-DECRYPT-BEFORE) {} {} {}", encryptedData, decryptedData, state);
+      result = engine.unwrap(encryptedData, decryptedData);
+      logger.trace("(HTTPS-DECRYPT-AFTER) {} {} {}", encryptedData, decryptedData, state);
+
+      Status status = result.getStatus();
+      if (status == Status.BUFFER_OVERFLOW) {
+        logger.trace("(HTTPS-DECRYPT-OVERFLOW) {} {} {}", encryptedData, decryptedData, state);
+        if (overflowedAlready) {
+          throw new IllegalStateException("We already overflowed the decryption buffer and resized it, so this is extremely unexpected.");
+        }
+
+        overflowedAlready = true;
+        decryptedData = resizeBuffer(decryptedData, engine.getSession().getApplicationBufferSize());
+        continue;
+      }
+
+      if (status == Status.BUFFER_UNDERFLOW) {
+        logger.trace("(HTTPS-DECRYPT-UNDERFLOW-BEFORE) {} {} {}", encryptedData, decryptedData, state);
+        encryptedData.compact(); // Compact for good measure and then go read some more
+        logger.trace("(HTTPS-DECRYPT-UNDERFLOW-AFTER) {} {} {}", encryptedData, decryptedData, state);
+        return;
+      }
+
+      if (status == Status.CLOSED) {
+        logger.trace("(HTTPS-DECRYPT-CLOSE) {} {} {}", encryptedData, decryptedData, state);
+        state = HTTPSState.Close;
+        return;
+      }
+
+      copyToDelegate();
+      decryptedData.clear(); // Should have been fully drained to delegate
+    }
+
+    encryptedData.clear();
+  }
+
+  private void encrypt() throws SSLException {
+    logger.trace("(HTTPS-ENCRYPT) {} {} {}", encryptedData, decryptedData, state);
+    var buffers = delegate.writeBuffers();
+    if (buffers == null || buffers.length == 0) {
+      return;
+    }
+
+    // This is safe because we only get here when there are no more bytes remaining to write
+    encryptedData.clear();
+    logger.trace("(HTTPS-ENCRYPT-CLEAR) {} {} {}", encryptedData, decryptedData, state);
+
+    Status status;
+    do {
+      logger.trace("(HTTPS-ENCRYPT-WRAP-BEFORE) {} {} {}", encryptedData, decryptedData, state);
+      var result = engine.wrap(buffers, encryptedData);
+      status = result.getStatus();
+      logger.trace("(HTTPS-ENCRYPT-WRAP-AFTER) {} {} {} {}", encryptedData, decryptedData, state, status);
+
+      // We don't have enough bytes from the application, let the worker thread keep processing and we'll be back
+      if (status == Status.BUFFER_UNDERFLOW) {
+        return;
+      }
+
+      if (status == Status.CLOSED) {
+        state = HTTPSState.Close;
+        return;
+      }
+
+      if (status == Status.BUFFER_OVERFLOW) {
+        encryptedData = resizeBuffer(encryptedData, engine.getSession().getPacketBufferSize());
+        logger.trace("(HTTPS-ENCRYPT-RESIZE) {} {} {}", encryptedData, decryptedData, state);
+      }
+    } while (status == Status.BUFFER_OVERFLOW);
+
+    encryptedData.flip();
+    state = HTTPSState.BodyWriting;
+  }
+
+  private HandshakeStatus handleHandshakeTask(HandshakeStatus handshakeStatus) {
+    if (handshakeStatus == HandshakeStatus.NEED_TASK) {
+      logger.trace("(HTTPS-HANDSHAKE-TASK) {} {} {} {}", handshakeData, encryptedData, decryptedData, state);
+      // Keep hard looping until the thread finishes (sucks but not sure what else to do here)
+      do {
+        Runnable task;
+        while ((task = engine.getDelegatedTask()) != null) {
+          task.run();
+        }
+
+        handshakeStatus = engine.getHandshakeStatus();
+      } while (handshakeStatus == HandshakeStatus.NEED_TASK);
+
+      logger.trace("(HTTPS-HANDSHAKE-TASK-DONE) {} {} {} {} {}", handshakeData, encryptedData, decryptedData, state, handshakeStatus);
+    }
+
+    return handshakeStatus;
+  }
+
+  private HTTPSState handshake() throws SSLException {
+    var handshakeStatus = engine.getHandshakeStatus();
+    if (handshakeStatus == HandshakeStatus.FINISHED || handshakeStatus == HandshakeStatus.NOT_HANDSHAKING) {
+      return HTTPSState.BodyRead;
+    }
+
+    handshakeStatus = handleHandshakeTask(handshakeStatus);
+
+    if (handshakeStatus == HandshakeStatus.NEED_UNWRAP || handshakeStatus == HandshakeStatus.NEED_UNWRAP_AGAIN) {
+      logger.trace("(HTTPS-HANDSHAKE-UNWRAP) {} {} {} {}", handshakeData, encryptedData, decryptedData, state);
+      SSLEngineResult result = null;
+      while ((handshakeStatus == HandshakeStatus.NEED_UNWRAP || handshakeStatus == HandshakeStatus.NEED_UNWRAP_AGAIN) && handshakeData.hasRemaining()) {
+        logger.trace("(HTTPS-HANDSHAKE-UNWRAP-BEFORE) {} {} {} {}", handshakeData, encryptedData, decryptedData, state);
+        result = engine.unwrap(handshakeData, decryptedData);
+        logger.trace("(HTTPS-HANDSHAKE-UNWRAP-AFTER) {} {} {} {}", handshakeData, encryptedData, decryptedData, state);
+
+        Status status = result.getStatus();
+        if (status == Status.BUFFER_OVERFLOW) {
+          throw new IllegalStateException("Handshake reading should never overflow the network buffer. It is sized such that it can handle a full TLS packet.");
+        }
+
+        if (status == Status.BUFFER_UNDERFLOW) {
+          logger.trace("(HTTPS-HANDSHAKE-UNWRAP-UNDERFLOW) {} {} {} {}", handshakeData, encryptedData, decryptedData, state);
+          handshakeData.compact(); // Compact for good measure and then go read some more
+          return HTTPSState.HandshakeRead;
+        }
+
+        if (status == Status.CLOSED) {
+          logger.trace("(HTTPS-HANDSHAKE-UNWRAP-CLOSE) {} {} {} {}", handshakeData, encryptedData, decryptedData, state);
+          return HTTPSState.Close;
+        }
+
+        handshakeStatus = result.getHandshakeStatus();
+        handshakeStatus = handleHandshakeTask(handshakeStatus); // In case the handshake immediately went into a NEED_TASK mode
+      }
+
+      // We never had any bytes to handle, bail!
+      if (result == null) {
+        logger.trace("(HTTPS-HANDSHAKE-UNWRAP-EMPTY) {} {} {} {}", handshakeData, encryptedData, decryptedData, state);
+        return state;
+      }
+
+      logger.trace("(HTTPS-HANDSHAKE-DONE) {} {} {} {}", handshakeData, encryptedData, decryptedData, state);
+      return switch (handshakeStatus) {
+        case NEED_WRAP -> HTTPSState.HandshakeWrite;
+        case NEED_UNWRAP, NEED_UNWRAP_AGAIN -> HTTPSState.HandshakeRead;
+        case FINISHED, NOT_HANDSHAKING -> HTTPSState.BodyRead;
+        default -> throw new IllegalStateException("Handshaking got back into a NEED_TASK mode and should have handled that above.");
+      };
+    } else if (handshakeStatus == HandshakeStatus.NEED_WRAP) {
+      logger.trace("(HTTPS-HANDSHAKE-WRAP) {} {} {} {}", handshakeData, encryptedData, decryptedData, state);
+      SSLEngineResult result;
+      Status status;
+      do {
+        logger.trace("(HTTPS-HANDSHAKE-WRAP-BEFORE) {} {} {} {}", handshakeData, encryptedData, decryptedData, state);
+        result = engine.wrap(decryptedData, handshakeData);
+        status = result.getStatus();
+        logger.trace("(HTTPS-HANDSHAKE-WRAP-AFTER) {} {} {} {}", handshakeData, encryptedData, decryptedData, state);
+        if (status == Status.BUFFER_OVERFLOW) {
+          logger.trace("(HTTPS-HANDSHAKE-WRAP-OVERFLOW) {} {} {} {}", handshakeData, encryptedData, decryptedData, state);
+          handshakeData = resizeBuffer(handshakeData, engine.getSession().getPacketBufferSize() + handshakeData.remaining());
+        }
+      } while (status == Status.BUFFER_OVERFLOW);
+
+      if (status == Status.BUFFER_UNDERFLOW) {
+        throw new IllegalStateException("Handshake writing should never underflow the network buffer. The engine handles generating handshake data, so this should be impossible.");
+      }
+
+      if (status == Status.CLOSED) {
+        logger.trace("(HTTPS-HANDSHAKE-WRAP-CLOSE) {} {} {} {}", handshakeData, encryptedData, decryptedData, state);
+        return HTTPSState.Close;
+      }
+
+      // Should have the next chunk of handshake data to write, so transition to the writing mode
+      handshakeData.flip();
+      logger.trace("(HTTPS-HANDSHAKE-DONE) {} {} {} {}", handshakeData, encryptedData, decryptedData, state);
+      return HTTPSState.HandshakeWriting;
+    }
+
+    return state;
+  }
+
+  private ByteBuffer resizeBuffer(ByteBuffer buffer, int engineSize) {
+    if (engineSize > buffer.capacity()) {
+      ByteBuffer newBuffer = ByteBuffer.allocate(engineSize + buffer.remaining());
       newBuffer.put(buffer);
       buffer = newBuffer;
+    } else {
+      buffer.compact();
     }
 
     return buffer;
   }
 
-  private ProcessorState handleHandshake(HandshakeStatus newTLSStatus) throws IOException {
-    if (newTLSStatus == HandshakeStatus.NEED_UNWRAP_AGAIN) {
-      throw new IllegalStateException("The NEED_UNWRAP_AGAIN state should not happen in HTTPS");
-    }
+  private ProcessorState toProcessorState() {
+    return switch (state) {
+      case BodyRead, HandshakeRead -> ProcessorState.Read;
+      case BodyWrite, BodyWriting, HandshakeWrite, HandshakeWriting -> ProcessorState.Write;
+      case Close -> ProcessorState.Close;
+      case Reset -> ProcessorState.Reset;
+    };
+  }
 
-    if (newTLSStatus == HandshakeStatus.NEED_TASK) {
-      logger.trace("(HTTPS-HS-T)");
-
-      // Keep hard looping until the thread finishes (sucks but not sure what else to do here)
-      // TODO : is this sucky?
-      do {
-        newTLSStatus = engine.getHandshakeStatus();
-
-        Runnable task;
-        while ((task = engine.getDelegatedTask()) != null) {
-          executor.submit(task);
-        }
-      } while (newTLSStatus == HandshakeStatus.NEED_TASK);
-    }
-
-    if (newTLSStatus == HandshakeStatus.NEED_UNWRAP) {
-      logger.trace("(HTTPS-HS-R)");
-      handshakeState = ProcessorState.Read;
-    } else if (newTLSStatus == HandshakeStatus.NEED_WRAP) {
-      logger.trace("(HTTPS-HS-W)");
-      handshakeState = ProcessorState.Write;
-    } else {
-      logger.trace("(HTTPS-HS-DONE)" + newTLSStatus.name());
-
-      if (!myNetData[0].hasRemaining()) {
-        logger.trace("(HTTPS-HS-DONE)" + newTLSStatus.name() + "-" + delegate.state());
-        handshakeState = null;
-
-        // This indicates that the client sent along part of the HTTP request preamble with its last handshake. We need to consume that before we continue
-        if (peerNetData.position() > 0) {
-          peerNetData.flip();
-          return read(peerNetData);
-        }
-
-        return delegate.state();
-      }
-    }
-
-    return handshakeState;
+  public enum HTTPSState {
+    BodyRead,
+    BodyWrite,
+    BodyWriting,
+    Close,
+    HandshakeRead,
+    HandshakeWrite,
+    HandshakeWriting,
+    Reset,
   }
 }
