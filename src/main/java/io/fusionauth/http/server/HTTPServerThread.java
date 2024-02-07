@@ -18,21 +18,21 @@ package io.fusionauth.http.server;
 import java.io.Closeable;
 import java.io.IOException;
 import java.net.InetSocketAddress;
+import java.net.ServerSocket;
 import java.net.SocketException;
 import java.nio.ByteBuffer;
 import java.nio.channels.ClosedSelectorException;
 import java.nio.channels.SelectionKey;
-import java.nio.channels.Selector;
-import java.nio.channels.ServerSocketChannel;
 import java.nio.channels.SocketChannel;
 import java.security.GeneralSecurityException;
 import java.time.Duration;
+import java.util.ArrayList;
+import java.util.List;
 import java.util.Map;
 
 import io.fusionauth.http.ClientAbortException;
 import io.fusionauth.http.ParseException;
 import io.fusionauth.http.log.Logger;
-import io.fusionauth.http.util.ThreadPool;
 
 /**
  * A thread that manages the Selection process for a single server socket. Since some server resources are shared, this separates the shared
@@ -41,9 +41,9 @@ import io.fusionauth.http.util.ThreadPool;
  * @author Brian Pontarelli
  */
 public class HTTPServerThread extends Thread implements Closeable, Notifier {
-  private final ServerSocketChannel channel;
-
   private final Duration clientTimeout;
+
+  private final List<Thread> clients = new ArrayList<>();
 
   private final HTTPServerConfiguration configuration;
 
@@ -57,15 +57,11 @@ public class HTTPServerThread extends Thread implements Closeable, Notifier {
 
   private final long minimumWriteThroughput;
 
-  private final ByteBuffer preambleBuffer;
-
-  private final Selector selector;
-
-  private final ThreadPool threadPool;
+  private final ServerSocket socket;
 
   private volatile boolean running = true;
 
-  public HTTPServerThread(HTTPServerConfiguration configuration, HTTPListenerConfiguration listenerConfiguration, ThreadPool threadPool)
+  public HTTPServerThread(HTTPServerConfiguration configuration, HTTPListenerConfiguration listenerConfiguration)
       throws IOException {
     super("HTTP Server Thread");
     this.clientTimeout = configuration.getClientTimeoutDuration();
@@ -75,14 +71,8 @@ public class HTTPServerThread extends Thread implements Closeable, Notifier {
     this.logger = configuration.getLoggerFactory().getLogger(HTTPServerThread.class);
     this.minimumReadThroughput = configuration.getMinimumReadThroughput();
     this.minimumWriteThroughput = configuration.getMinimumWriteThroughput();
-    this.preambleBuffer = ByteBuffer.allocate(configuration.getPreambleBufferSize());
-    this.selector = Selector.open();
-    this.threadPool = threadPool;
 
-    this.channel = ServerSocketChannel.open();
-    this.channel.configureBlocking(false);
-    this.channel.bind(new InetSocketAddress(listenerConfiguration.getBindAddress(), listenerConfiguration.getPort()));
-    this.channel.register(selector, SelectionKey.OP_ACCEPT);
+    this.socket = new ServerSocket(listenerConfiguration.getPort(), -1, listenerConfiguration.getBindAddress());
 
     if (instrumenter != null) {
       instrumenter.serverStarted();
@@ -93,28 +83,15 @@ public class HTTPServerThread extends Thread implements Closeable, Notifier {
   public void close() {
     try {
       running = false;
-      selector.wakeup();
+      socket.close();
       join(2_000L);
-    } catch (InterruptedException e) {
+    } catch (InterruptedException | IOException e) {
       logger.error("Unable to shutdown the HTTP server thread after waiting for 2 seconds. 🤷🏻‍️");
     }
 
     // Close all the client connections as cleanly as possible
-    var keys = selector.keys();
-    for (SelectionKey key : keys) {
-      cancelAndCloseKey(key);
-    }
-
-    try {
-      selector.close();
-    } catch (Throwable t) {
-      logger.error("Unable to close the Selector.", t);
-    }
-
-    try {
-      channel.close();
-    } catch (Throwable t) {
-      logger.error("Unable to close the Channel.", t);
+    for (Thread client : clients) {
+      client.interrupt();
     }
 
     notifyNow();
@@ -122,7 +99,7 @@ public class HTTPServerThread extends Thread implements Closeable, Notifier {
 
   @Override
   public void notifyNow() {
-    if (!selector.isOpen()) {
+    if (!socket.isBound()) {
       return;
     }
 

@@ -15,7 +15,6 @@
  */
 package io.fusionauth.http;
 
-import java.io.File;
 import java.io.IOException;
 import java.io.InputStream;
 import java.io.OutputStream;
@@ -227,13 +226,13 @@ public abstract class BaseTest {
     try {
       X509CertInfo certInfo = new X509CertInfo();
       CertificateX509Key certKey = new CertificateX509Key(publicKey);
-      certInfo.set(X509CertInfo.KEY, certKey);
+      certInfo.setKey(certKey);
       // X.509 Certificate version 3 (0 based)
-      certInfo.set(X509CertInfo.VERSION, new CertificateVersion(2));
-      certInfo.set(X509CertInfo.ALGORITHM_ID, new CertificateAlgorithmId(new AlgorithmId(ObjectIdentifier.of(KnownOIDs.SHA256withRSA))));
-      certInfo.set(X509CertInfo.SUBJECT, new X500Name("CN=" + commonName));
-      certInfo.set(X509CertInfo.VALIDITY, new CertificateValidity(Date.from(Instant.now().minusSeconds(30)), Date.from(Instant.now().plusSeconds(10_000))));
-      certInfo.set(X509CertInfo.SERIAL_NUMBER, new CertificateSerialNumber(new BigInteger(UUID.randomUUID().toString().replace("-", ""), 16)));
+      certInfo.setVersion(new CertificateVersion(2));
+      certInfo.setAlgorithmId(new CertificateAlgorithmId(new AlgorithmId(ObjectIdentifier.of(KnownOIDs.SHA256withRSA))));
+      certInfo.setSubject(new X500Name("CN=" + commonName));
+      certInfo.setValidity(new CertificateValidity(Date.from(Instant.now().minusSeconds(30)), Date.from(Instant.now().plusSeconds(10_000))));
+      certInfo.setSerialNumber(new CertificateSerialNumber(new BigInteger(UUID.randomUUID().toString().replace("-", ""), 16)));
 
       return certInfo;
     } catch (Exception e) {
@@ -256,11 +255,11 @@ public abstract class BaseTest {
     try {
       // Generate the standard CertInfo, but set Issuer and Subject to the same value.
       X509CertInfo certInfo = generateCertInfo(publicKey, "root-ca.fusionauth.io");
-      certInfo.set(X509CertInfo.ISSUER, new X500Name("CN=root-ca.fusionauth.io"));
+      certInfo.setIssuer(new X500Name("CN=root-ca.fusionauth.io"));
 
       // Self-sign certificate
-      return signCertificate(new X509CertImpl(certInfo), privateKey, certInfo, true);
-
+//      return signCertificate(new X509CertImpl(certInfo.getEncodedInfo()), privateKey, certInfo, true);
+      return X509CertImpl.newSigned(certInfo, privateKey, "SHA256withRSA");
     } catch (Exception e) {
       throw new IllegalArgumentException(e);
     }
@@ -289,25 +288,23 @@ public abstract class BaseTest {
 
     try {
       X509CertInfo issuerInfo = new X509CertInfo(issuer.getTBSCertificate());
-      signingRequest.set(X509CertInfo.ISSUER, issuerInfo.get(X509CertInfo.SUBJECT));
-      CertificateExtensions certExtensions = new CertificateExtensions();
+      signingRequest.setIssuer(issuerInfo.getSubject());
 
+      CertificateExtensions certExtensions = new CertificateExtensions();
       if (isCa) {
-        certExtensions.set(BasicConstraintsExtension.NAME, new BasicConstraintsExtension(true, true, 1));
+        certExtensions.setExtension(BasicConstraintsExtension.NAME, new BasicConstraintsExtension(true, true, 1));
       }
 
       // Set the Subject Alternate Names field to the DNS hostname.
-      X500Name subject = (X500Name) signingRequest.get(X509CertInfo.SUBJECT);
+      X500Name subject = signingRequest.getSubject();
       String hostname = subject.getCommonName();
       GeneralNames altNames = new GeneralNames();
       altNames.add(new GeneralName(new DNSName(hostname)));
-      certExtensions.set(SubjectAlternativeNameExtension.NAME, new SubjectAlternativeNameExtension(false, altNames));
-      signingRequest.set(X509CertInfo.EXTENSIONS, certExtensions);
+      certExtensions.setExtension(SubjectAlternativeNameExtension.NAME, new SubjectAlternativeNameExtension(false, altNames));
+      signingRequest.setExtensions(certExtensions);
 
       // Sign it
-      X509CertImpl signed = new X509CertImpl(signingRequest);
-      signed.sign(issuerPrivateKey, "SHA256withRSA");
-      return signed;
+      return X509CertImpl.newSigned(signingRequest, issuerPrivateKey, "SHA256withRSA");
     } catch (Exception e) {
       throw new IllegalArgumentException(e);
     }
@@ -392,7 +389,7 @@ public abstract class BaseTest {
         lastTestMethodCounter = 0;
       }
 
-      if (!iteration.equals("")) {
+      if (!iteration.isEmpty()) {
         iteration += " (" + ++lastTestMethodCounter + ")";
       }
 

@@ -61,9 +61,9 @@ idea = loadPlugin(id: "org.savantbuild.plugin:idea:2.0.0-RC.7")
 release = loadPlugin(id: "org.savantbuild.plugin:release-git:2.0.0-RC.6")
 pom = loadPlugin(id: "org.savantbuild.plugin:pom:2.0.0-RC.6")
 
-java.settings.javaVersion = "17"
+java.settings.javaVersion = "21"
 java.settings.compilerArguments = "--add-exports java.base/sun.security.x509=ALL-UNNAMED --add-exports java.base/sun.security.util=ALL-UNNAMED -XDignore.symbol.file"
-javaTestNG.settings.javaVersion = "17"
+javaTestNG.settings.javaVersion = "21"
 javaTestNG.settings.jvmArguments = "--add-exports java.base/sun.security.x509=ALL-UNNAMED --add-exports java.base/sun.security.util=ALL-UNNAMED"
 javaTestNG.settings.testngArguments = "-listener io.fusionauth.http.BaseTest\$TestListener"
 

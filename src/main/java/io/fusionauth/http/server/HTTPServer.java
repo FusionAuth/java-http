@@ -37,8 +37,6 @@ public class HTTPServer implements Closeable, Configurable<HTTPServer> {
 
   private Logger logger;
 
-  private ThreadPool threadPool;
-
   @Override
   public void close() {
     logger.info("HTTP server shutdown requested. Attempting to close each listener. This could take a while.");
@@ -53,11 +51,7 @@ public class HTTPServer implements Closeable, Configurable<HTTPServer> {
       }
     }
 
-    if (threadPool.shutdown()) {
-      logger.info("HTTP server shutdown successfully.");
-    } else {
-      logger.error("HTTP server shutdown failed. It's harshing my mellow!");
-    }
+    logger.info("HTTP server shutdown successfully.");
   }
 
   @Override
@@ -82,12 +76,9 @@ public class HTTPServer implements Closeable, Configurable<HTTPServer> {
 
     context = new HTTPContext(configuration.getBaseDir());
 
-    // Start the thread pool for the workers
-    threadPool = new ThreadPool(configuration.getNumberOfWorkerThreads(), "HTTP Server Worker Thread", configuration.getShutdownDuration());
-
     try {
       for (HTTPListenerConfiguration listener : configuration.getListeners()) {
-        HTTPServerThread thread = new HTTPServerThread(configuration, listener, threadPool);
+        HTTPServerThread thread = new HTTPServerThread(configuration, listener);
         thread.start();
         threads.add(thread);
 
