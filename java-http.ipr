@@ -1387,6 +1387,7 @@
   </component>
   <component name="ProjectRunConfigurationManager">
     <configuration default="true" type="TestNG">
+      <module name="java-http" />
       <shortenClasspath name="NONE" />
       <useClassPathOnly />
       <option name="SUITE_NAME" value="" />
