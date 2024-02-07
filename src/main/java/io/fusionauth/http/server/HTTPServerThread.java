@@ -27,7 +27,6 @@ import java.nio.channels.ServerSocketChannel;
 import java.nio.channels.SocketChannel;
 import java.security.GeneralSecurityException;
 import java.time.Duration;
-import java.util.List;
 import java.util.Map;
 
 import io.fusionauth.http.ClientAbortException;
@@ -217,7 +216,7 @@ public class HTTPServerThread extends Thread implements Closeable, Notifier {
   private void accept(SelectionKey key) throws GeneralSecurityException, IOException {
     var client = channel.accept();
     HTTP11Processor httpProcessor = new HTTP11Processor(configuration, listenerConfiguration, this, preambleBuffer, threadPool, ipAddress(client));
-    HTTPS11ProcessorNew tlsProcessor = new HTTPS11ProcessorNew(httpProcessor, configuration, listenerConfiguration);
+    HTTPS11Processor tlsProcessor = new HTTPS11Processor(httpProcessor, configuration, listenerConfiguration);
     client.configureBlocking(false);
     client.register(key.selector(), tlsProcessor.initialKeyOps(), tlsProcessor);
 
@@ -381,7 +380,7 @@ public class HTTPServerThread extends Thread implements Closeable, Notifier {
   }
 
   private void write(SelectionKey key) throws IOException {
-    HTTPS11ProcessorNew processor = (HTTPS11ProcessorNew) key.attachment();
+    HTTPS11Processor processor = (HTTPS11Processor) key.attachment();
     ProcessorState state = processor.state();
     SocketChannel client = (SocketChannel) key.channel();
     ByteBuffer[] buffers = processor.writeBuffers();
