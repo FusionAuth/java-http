@@ -34,7 +34,7 @@ import io.fusionauth.http.HTTPValues.Connections;
 import io.fusionauth.http.HTTPValues.ContentTypes;
 import io.fusionauth.http.HTTPValues.Headers;
 import io.fusionauth.http.HTTPValues.Status;
-import io.fusionauth.http.io.DelegatingOutputStream;
+import io.fusionauth.http.server.io.HTTPOutputStream;
 import io.fusionauth.http.util.HTTPTools;
 import io.fusionauth.http.util.HTTPTools.HeaderValue;
 
@@ -49,25 +49,17 @@ public class HTTPResponse {
 
   private final Map<String, List<String>> headers = new HashMap<>();
 
-  private final DelegatingOutputStream outputStream;
-
   private volatile boolean committed;
 
   private Throwable exception;
+
+  private HTTPOutputStream outputStream;
 
   private int status = 200;
 
   private String statusMessage;
 
   private Writer writer;
-
-  public HTTPResponse(OutputStream outputStream, HTTPRequest request, boolean compressByDefault) {
-    this.outputStream = new DelegatingOutputStream(request, this, outputStream, compressByDefault);
-  }
-
-  public HTTPResponse(OutputStream outputStream, HTTPRequest request) {
-    this(outputStream, request, true);
-  }
 
   public void addCookie(Cookie cookie) {
     String path = cookie.path != null ? cookie.path : "/";
@@ -188,6 +180,10 @@ public class HTTPResponse {
 
   public OutputStream getOutputStream() {
     return outputStream;
+  }
+
+  public void setOutputStream(HTTPOutputStream outputStream) {
+    this.outputStream = outputStream;
   }
 
   public String getRedirect() {

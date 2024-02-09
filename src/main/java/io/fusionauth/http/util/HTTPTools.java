@@ -15,65 +15,29 @@
  */
 package io.fusionauth.http.util;
 
+import java.io.IOException;
+import java.io.InputStream;
+import java.io.OutputStream;
 import java.net.URLDecoder;
-import java.nio.ByteBuffer;
 import java.nio.charset.Charset;
 import java.nio.charset.IllegalCharsetNameException;
 import java.nio.charset.StandardCharsets;
+import java.util.Arrays;
 import java.util.HashMap;
 import java.util.LinkedList;
 import java.util.List;
 import java.util.Map;
+import java.util.Map.Entry;
 
+import io.fusionauth.http.HTTPMethod;
 import io.fusionauth.http.HTTPValues.ControlBytes;
 import io.fusionauth.http.HTTPValues.ProtocolBytes;
 import io.fusionauth.http.ParseException;
-import io.fusionauth.http.io.ByteBufferOutputStream;
+import io.fusionauth.http.server.HTTPRequest;
 import io.fusionauth.http.server.HTTPResponse;
+import io.fusionauth.http.server.RequestPreambleState;
 
 public final class HTTPTools {
-  /**
-   * Builds the HTTP response head section (status line, headers, etc).
-   *
-   * @param response  The response.
-   * @param maxLength The maximum length of the complete HTTP response head section.
-   * @return The bytes of the response head section.
-   */
-  public static ByteBuffer buildExpectResponsePreamble(HTTPResponse response, int maxLength) {
-    ByteBufferOutputStream bbos = new ByteBufferOutputStream(1024, maxLength);
-    writeStatusLine(response, bbos);
-    if (response.getStatus() != 100) {
-      bbos.write("Content-Length: 0".getBytes());
-      bbos.write(ControlBytes.CRLF);
-      bbos.write("Connection: close".getBytes());
-      bbos.write(ControlBytes.CRLF);
-    }
-    bbos.write(ControlBytes.CRLF);
-    return bbos.toByteBuffer();
-  }
-
-  /**
-   * Builds the HTTP response head section (status line, headers, etc).
-   *
-   * @param response  The response.
-   * @param maxLength The maximum length of the complete HTTP response head section.
-   * @return The bytes of the response head section.
-   */
-  public static ByteBuffer buildResponsePreamble(HTTPResponse response, int maxLength) {
-    ByteBufferOutputStream bbos = new ByteBufferOutputStream(1024, maxLength);
-    writeStatusLine(response, bbos);
-    response.getHeadersMap().forEach((key, values) ->
-        values.forEach(value -> {
-          bbos.write(key.getBytes());
-          bbos.write(':');
-          bbos.write(' ');
-          bbos.write(value.getBytes());
-          bbos.write(ControlBytes.CRLF);
-        }));
-    bbos.write(ControlBytes.CRLF);
-    return bbos.toByteBuffer();
-  }
-
   /**
    * Determines if the given character (byte) is a digit (i.e. 0-9)
    *
@@ -254,6 +218,103 @@ public final class HTTPTools {
     return new HeaderValue(headerValue, parameters);
   }
 
+  /**
+   * Parses the request preamble directly from the given InputStream.
+   *
+   * @param inputStream The input stream to read the preamble from.
+   * @param request     The HTTP request to populate.
+   * @return Any leftover body bytes from the last read from the InputStream.
+   * @throws IOException If the read fails.
+   */
+  public static byte[] parseRequestPreamble(InputStream inputStream, HTTPRequest request) throws IOException {
+    RequestPreambleState state = RequestPreambleState.RequestProtocol;
+    StringBuilder builder = new StringBuilder();
+    String headerName = null;
+
+    byte[] buffer = new byte[1024];
+    int read = 0;
+    int index = 0;
+    while (state != RequestPreambleState.Complete) {
+      read = inputStream.read(buffer);
+      if (read < 0) {
+        throw new IOException("Client closed the socket.");
+      }
+
+      for (index = 0; index < read && state != RequestPreambleState.Complete; index++) {
+        // If there is a state transition, store the value properly and reset the builder (if needed)
+        byte ch = buffer[index];
+        RequestPreambleState nextState = state.next(ch);
+        if (nextState != state) {
+          switch (state) {
+            case RequestMethod -> request.setMethod(HTTPMethod.of(builder.toString()));
+            case RequestPath -> request.setPath(builder.toString());
+            case RequestProtocol -> request.setProtocol(builder.toString());
+            case HeaderName -> headerName = builder.toString();
+            case HeaderValue -> request.addHeader(headerName, builder.toString());
+          }
+
+          // If the next state is storing, reset the builder
+          if (nextState.store()) {
+            builder.delete(0, builder.length());
+            builder.appendCodePoint(ch);
+          }
+        } else if (state.store()) {
+          // If the current state is storing, store the character
+          builder.appendCodePoint(ch);
+        }
+
+        state = nextState;
+      }
+    }
+
+    byte[] leftover = null;
+    if (index < read) {
+      leftover = Arrays.copyOfRange(buffer, index, read);
+    }
+
+    return leftover;
+  }
+
+  /**
+   * Writes the HTTP response head section (status line, headers, etc).
+   *
+   * @param response     The response.
+   * @param outputStream The output stream to write the preamble to.
+   * @throws IOException If the stream threw an exception.
+   */
+  public static void writeExpectResponsePreamble(HTTPResponse response, OutputStream outputStream) throws IOException {
+    writeStatusLine(response, outputStream);
+    if (response.getStatus() != 100) {
+      outputStream.write("Content-Length: 0".getBytes());
+      outputStream.write(ControlBytes.CRLF);
+      outputStream.write("Connection: close".getBytes());
+      outputStream.write(ControlBytes.CRLF);
+    }
+    outputStream.write(ControlBytes.CRLF);
+  }
+
+  /**
+   * Writes the HTTP response head section (status line, headers, etc).
+   *
+   * @param response     The response.
+   * @param outputStream The output stream to write the preamble to.
+   * @throws IOException If the stream threw an exception.
+   */
+  public static void writeResponsePreamble(HTTPResponse response, OutputStream outputStream) throws IOException {
+    writeStatusLine(response, outputStream);
+    for (Entry<String, List<String>> headers : response.getHeadersMap().entrySet()) {
+      String name = headers.getKey();
+      for (String value : headers.getValue()) {
+        outputStream.write(name.getBytes());
+        outputStream.write(':');
+        outputStream.write(' ');
+        outputStream.write(value.getBytes());
+        outputStream.write(ControlBytes.CRLF);
+      }
+    }
+    outputStream.write(ControlBytes.CRLF);
+  }
+
   private static void parseHeaderParameter(char[] chars, int start, int end, Map<String, String> parameters) {
     boolean encoded = false;
     Charset charset = null;
@@ -320,8 +381,9 @@ public final class HTTPTools {
    *
    * @param response The response to pull the status information from.
    * @param out      The OutputStream.
+   * @throws IOException If the stream threw an exception.
    */
-  private static void writeStatusLine(HTTPResponse response, ByteBufferOutputStream out) {
+  private static void writeStatusLine(HTTPResponse response, OutputStream out) throws IOException {
     out.write(ProtocolBytes.HTTTP1_1);
     out.write(' ');
     out.write(Integer.toString(response.getStatus()).getBytes());

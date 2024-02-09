@@ -16624,8 +16624,8 @@ Thread[HTTP Server Worker Thread 28,5,main] WAITING
 Thread[HTTP Server Thread,5,main] RUNNABLE
 	at java.base@17.0.3/java.lang.Thread.dumpThreads(Native Method)
 	at java.base@17.0.3/java.lang.Thread.getAllStackTraces(Thread.java:1662)
-	at app//io.fusionauth.http.server.HTTPServerThread.lambda$cleanup$2(HTTPServerThread.java:248)
-	at app//io.fusionauth.http.server.HTTPServerThread$$Lambda$306/0x00000008002ce0a8.accept(Unknown Source)
+	at app//io.fusionauth.http.server.HTTPServerRunnable.lambda$cleanup$2(HTTPServerThread.java:248)
+	at app//io.fusionauth.http.server.HTTPServerRunnable$$Lambda$306/0x00000008002ce0a8.accept(Unknown Source)
 	at java.base@17.0.3/java.util.stream.ForEachOps$ForEachOp$OfRef.accept(ForEachOps.java:183)
 	at java.base@17.0.3/java.util.stream.ReferencePipeline$2$1.accept(ReferencePipeline.java:179)
 	at java.base@17.0.3/java.util.stream.ReferencePipeline$2$1.accept(ReferencePipeline.java:179)
@@ -16636,8 +16636,8 @@ Thread[HTTP Server Thread,5,main] RUNNABLE
 	at java.base@17.0.3/java.util.stream.ForEachOps$ForEachOp$OfRef.evaluateSequential(ForEachOps.java:173)
 	at java.base@17.0.3/java.util.stream.AbstractPipeline.evaluate(AbstractPipeline.java:234)
 	at java.base@17.0.3/java.util.stream.ReferencePipeline.forEach(ReferencePipeline.java:596)
-	at app//io.fusionauth.http.server.HTTPServerThread.cleanup(HTTPServerThread.java:241)
-	at app//io.fusionauth.http.server.HTTPServerThread.run(HTTPServerThread.java:169)
+	at app//io.fusionauth.http.server.HTTPServerRunnable.cleanup(HTTPServerThread.java:241)
+	at app//io.fusionauth.http.server.HTTPServerRunnable.run(HTTPServerThread.java:169)
 
 Thread[HTTP Server Worker Thread 23,5,main] WAITING
 	at java.base@17.0.3/jdk.internal.misc.Unsafe.park(Native Method)

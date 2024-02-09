@@ -21,7 +21,6 @@ import java.util.ArrayList;
 import java.util.List;
 
 import io.fusionauth.http.log.Logger;
-import io.fusionauth.http.util.ThreadPool;
 
 /**
  * The server bro!
@@ -29,7 +28,7 @@ import io.fusionauth.http.util.ThreadPool;
  * @author Brian Pontarelli
  */
 public class HTTPServer implements Closeable, Configurable<HTTPServer> {
-  private final List<HTTPServerThread> threads = new ArrayList<>();
+  private final List<Thread> servers = new ArrayList<>();
 
   private HTTPServerConfiguration configuration = new HTTPServerConfiguration();
 
@@ -41,10 +40,9 @@ public class HTTPServer implements Closeable, Configurable<HTTPServer> {
   public void close() {
     logger.info("HTTP server shutdown requested. Attempting to close each listener. This could take a while.");
 
-    for (HTTPServerThread thread : threads) {
-      thread.close();
-
+    for (Thread thread : servers) {
       try {
+        thread.interrupt();
         thread.join(10_000);
       } catch (InterruptedException e) {
         // Ignore so we join on all the threads
@@ -78,9 +76,11 @@ public class HTTPServer implements Closeable, Configurable<HTTPServer> {
 
     try {
       for (HTTPListenerConfiguration listener : configuration.getListeners()) {
-        HTTPServerThread thread = new HTTPServerThread(configuration, listener);
-        thread.start();
-        threads.add(thread);
+        HTTPServerRunnable server = new HTTPServerRunnable(configuration, listener);
+        Thread thread = Thread.ofVirtual()
+                              .name("HTTP server [" + listener.getBindAddress().toString() + ":" + listener.getPort() + "]")
+                              .start(server);
+        servers.add(thread);
 
         logger.info("HTTP server listening on port [{}]", listener.getPort());
       }

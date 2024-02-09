@@ -15,8 +15,12 @@
  */
 package io.fusionauth.http.server;
 
+import java.net.Socket;
+
 import io.fusionauth.http.log.Logger;
-import io.fusionauth.http.log.LoggerFactory;
+import io.fusionauth.http.server.io.HTTPInputStream;
+import io.fusionauth.http.server.io.HTTPOutputStream;
+import io.fusionauth.http.util.HTTPTools;
 import io.fusionauth.http.util.ThreadPool;
 
 /**
@@ -26,35 +30,81 @@ import io.fusionauth.http.util.ThreadPool;
  * @author Brian Pontarelli
  */
 public class HTTPWorker implements Runnable {
-  private final HTTPHandler handler;
+  private final HTTPServerConfiguration configuration;
+
+  private final HTTPListenerConfiguration listener;
 
   private final Logger logger;
 
-  private final HTTPProcessor processor;
+  private final Socket socket;
 
-  private final HTTPRequest request;
+  private HTTPInputStream inputStream;
 
-  private final HTTPResponse response;
+  private HTTPOutputStream outputStream;
 
-  public HTTPWorker(HTTPHandler handler, LoggerFactory loggerFactory, HTTPProcessor processor, HTTPRequest request, HTTPResponse response) {
-    this.handler = handler;
-    this.logger = loggerFactory.getLogger(HTTPWorker.class);
-    this.processor = processor;
-    this.request = request;
-    this.response = response;
+  public HTTPWorker(Socket socket, HTTPServerConfiguration configuration, HTTPListenerConfiguration listener) {
+    this.socket = socket;
+    this.logger = configuration.getLoggerFactory().getLogger(HTTPWorker.class);
+    this.configuration = configuration;
+    this.listener = listener;
+  }
+
+  public Socket getSocket() {
+    return socket;
+  }
+
+  public long lastUsed() {
+    return 0;
+  }
+
+  public long readThroughput() {
+    long readThroughputCalculationDelay = configuration.getReadThroughputCalculationDelay().toMillis();
+    if (inputStream == null || outputStream == null) {
+      return readThroughputCalculationDelay;
+    }
+
+    return inputStream.readThroughput(outputStream.getFirstByteWroteInstant() == -1, readThroughputCalculationDelay);
   }
 
   @Override
   public void run() {
     try {
-      handler.handle(request, response);
+      HTTPRequest request = new HTTPRequest(configuration.getContextPath(), configuration.getMultipartBufferSize(),
+          listener.getCertificate() != null ? "https" : "http", listener.getPort(), listener.getBindAddress().getHostAddress());
 
-      // Close the stream to signal that the work is done. If the handler calls this also, it won't hurt to call it here as well
+      var bodyBytes = HTTPTools.parseRequestPreamble(socket.getInputStream(), request);
+      inputStream = new HTTPInputStream(request, configuration.getLoggerFactory().getLogger(HTTPInputStream.class), socket.getInputStream(), bodyBytes);
+      request.setInputStream(inputStream);
+
+      var response = new HTTPResponse();
+      outputStream = new HTTPOutputStream(request, response, socket.getOutputStream(), configuration.isCompressByDefault());
+      response.setOutputStream(outputStream);
+
+      var handler = configuration.getHandler();
+      handler.handle(request, response);
       response.close();
+
+      if (!response.isKeepAlive()) {
+        socket.shutdownInput();
+        socket.shutdownOutput();
+        socket.close();
+      }
     } catch (Throwable t) {
       // Log the error and signal a failure
       logger.error("HTTP worker threw an exception while processing a request", t);
-      processor.failure(t);
     }
+  }
+
+  public WorkerState state() {
+    return outputStream.isCommitted() ? WorkerState.Write : WorkerState.Read;
+  }
+
+  public long writeThroughput() {
+    long writeThroughputCalculationDelay = configuration.getWriteThroughputCalculationDelay().toMillis();
+    if (outputStream == null) {
+      return writeThroughputCalculationDelay;
+    }
+
+    return outputStream.writeThroughput(writeThroughputCalculationDelay);
   }
 }

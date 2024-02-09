@@ -44,7 +44,7 @@ import io.fusionauth.http.HTTPMethod;
 import io.fusionauth.http.HTTPValues.ContentTypes;
 import io.fusionauth.http.HTTPValues.Headers;
 import io.fusionauth.http.HTTPValues.TransferEncodings;
-import io.fusionauth.http.body.BodyException;
+import io.fusionauth.http.io.BodyException;
 import io.fusionauth.http.io.MultipartStream;
 import io.fusionauth.http.util.HTTPTools;
 import io.fusionauth.http.util.HTTPTools.HeaderValue;

@@ -13,23 +13,14 @@
  * either express or implied. See the License for the specific
  * language governing permissions and limitations under the License.
  */
-package io.fusionauth.http.body.response;
-
-import java.nio.ByteBuffer;
+package io.fusionauth.http.server;
 
 /**
- * A body processor that handles when there is no body.
+ * Simple worker state that indicates if the worker is reading or writing.
  *
  * @author Brian Pontarelli
  */
-public class EmptyBodyProcessor implements BodyProcessor {
-  @Override
-  public ByteBuffer[] currentBuffers() {
-    return null;
-  }
-
-  @Override
-  public boolean isComplete() {
-    return true;
-  }
+public enum WorkerState {
+  Read,
+  Write
 }
