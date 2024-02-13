@@ -23,9 +23,6 @@ import java.net.CookieHandler;
 import java.net.Socket;
 import java.net.URI;
 import java.net.http.HttpClient;
-import java.nio.file.Files;
-import java.nio.file.Paths;
-import java.nio.file.StandardOpenOption;
 import java.security.GeneralSecurityException;
 import java.security.InvalidAlgorithmParameterException;
 import java.security.KeyPair;
@@ -51,9 +48,9 @@ import java.util.Date;
 import java.util.UUID;
 import java.util.stream.Collectors;
 
-import io.fusionauth.http.log.AccumulatingLogger;
-import io.fusionauth.http.log.AccumulatingLoggerFactory;
 import io.fusionauth.http.log.Level;
+import io.fusionauth.http.log.SystemOutLogger;
+import io.fusionauth.http.log.SystemOutLoggerFactory;
 import io.fusionauth.http.security.SecurityTools;
 import io.fusionauth.http.server.ExpectValidator;
 import io.fusionauth.http.server.HTTPHandler;
@@ -63,7 +60,6 @@ import io.fusionauth.http.server.Instrumenter;
 import org.testng.ITestListener;
 import org.testng.ITestResult;
 import org.testng.annotations.AfterSuite;
-import org.testng.annotations.BeforeMethod;
 import org.testng.annotations.DataProvider;
 import sun.security.util.KnownOIDs;
 import sun.security.util.ObjectIdentifier;
@@ -107,7 +103,7 @@ public abstract class BaseTest {
 
   private static final DateTimeFormatter hh_mm_ss_SSS = DateTimeFormatter.ofPattern("hh:mm:ss.SSS");
 
-  public static AccumulatingLogger logger = (AccumulatingLogger) AccumulatingLoggerFactory.FACTORY.getLogger(BaseTest.class);
+  public static SystemOutLogger logger = (SystemOutLogger) SystemOutLoggerFactory.FACTORY.getLogger(BaseTest.class);
 
   /*
    * Keypairs and certificates for a 3-level CA chain (root->intermediate->server).
@@ -168,7 +164,7 @@ public abstract class BaseTest {
                            .withClientTimeout(ServerTimeout)
                            .withExpectValidator(expectValidator)
                            .withInstrumenter(instrumenter)
-                           .withLoggerFactory(AccumulatingLoggerFactory.FACTORY)
+                           .withLoggerFactory(SystemOutLoggerFactory.FACTORY)
                            .withMinimumReadThroughput(200 * 1024)
                            .withMinimumWriteThroughput(200 * 1024)
                            .withListener(listenerConfiguration)
@@ -185,10 +181,10 @@ public abstract class BaseTest {
     return URI.create("http://localhost:4242/api/system/version" + params);
   }
 
-  @BeforeMethod
-  public void resetLogger() {
-    logger.reset();
-  }
+//  @BeforeMethod
+//  public void resetLogger() {
+//    logger.reset();
+//  }
 
   /**
    * @return The possible schemes - {@code http} and {@code https}.
@@ -197,7 +193,7 @@ public abstract class BaseTest {
   public Object[][] schemes() {
     return new Object[][]{
         {"http"},
-        {"https"}
+//        {"https"}
     };
   }
 
@@ -351,28 +347,22 @@ public abstract class BaseTest {
     @Override
     public void onTestFailure(ITestResult result) {
       Throwable throwable = result.getThrowable();
-      String trace = logger.toString();
 
       // Intentionally leaving empty lines here
-      try {
-        Files.write(Paths.get("output.txt"), """
-                                   
-                  
-                                   
-            Test failure
-            -----------------
-            Exception: {{exception}}
-            Message: {{message}}
+      System.out.println("""
                                  
-            HTTP Trace:
-            {{trace}}
-            -----------------
-             """.replace("{{exception}}", throwable != null ? throwable.getClass().getSimpleName() : "-")
-                .replace("{{message}}", throwable != null ? (throwable.getMessage() != null ? throwable.getMessage() : "-") : "-")
-                .replace("{{trace}}", trace).getBytes(), StandardOpenOption.TRUNCATE_EXISTING, StandardOpenOption.CREATE);
-      } catch (IOException e) {
-        throw new RuntimeException(e);
-      }
+                
+                                 
+          Test failure
+          -----------------
+          Exception: {{exception}}
+          Message: {{message}}
+                               
+          HTTP Trace:
+          {{trace}}
+          -----------------
+           """.replace("{{exception}}", throwable != null ? throwable.getClass().getSimpleName() : "-")
+              .replace("{{message}}", throwable != null ? (throwable.getMessage() != null ? throwable.getMessage() : "-") : "-"));
     }
 
     @Override

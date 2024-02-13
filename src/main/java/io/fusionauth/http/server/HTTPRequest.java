@@ -369,7 +369,7 @@ public class HTTPRequest implements Buildable<HTTPRequest> {
 
   public String getHeader(String name) {
     List<String> values = getHeaders(name);
-    return values != null && values.size() > 0 ? values.get(0) : null;
+    return values != null && !values.isEmpty() ? values.getFirst() : null;
   }
 
   public List<String> getHeaders(String name) {

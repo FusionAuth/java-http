@@ -22,16 +22,31 @@ import java.util.zip.GZIPOutputStream;
 
 import io.fusionauth.http.HTTPValues.ContentEncodings;
 import io.fusionauth.http.HTTPValues.Headers;
+import io.fusionauth.http.HTTPValues.TransferEncodings;
+import io.fusionauth.http.io.ChunkedOutputStream;
 import io.fusionauth.http.server.HTTPRequest;
 import io.fusionauth.http.server.HTTPResponse;
+import io.fusionauth.http.server.HTTPServerConfiguration;
+import io.fusionauth.http.server.HTTPThroughput;
+import io.fusionauth.http.server.Instrumenter;
 import io.fusionauth.http.util.HTTPTools;
 
+/**
+ * The primary output stream for the HTTP server (currently supporting version 1.1). This handles delegating to compression and chunking
+ * output streams, depending on the response headers the application set.
+ *
+ * @author Brian Pontarelli
+ */
 public class HTTPOutputStream extends OutputStream {
+  private final Instrumenter instrumenter;
+
+  private final int maxChunkSize;
+
   private final HTTPRequest request;
 
   private final HTTPResponse response;
 
-  private long bytesWritten;
+  private final HTTPThroughput throughput;
 
   private boolean committed;
 
@@ -39,27 +54,36 @@ public class HTTPOutputStream extends OutputStream {
 
   private OutputStream delegate;
 
-  private long firstByteWroteInstant;
-
-  public HTTPOutputStream(HTTPRequest request, HTTPResponse response, OutputStream delegate, boolean compressByDefault) {
+  public HTTPOutputStream(HTTPServerConfiguration configuration, HTTPThroughput throughput, HTTPRequest request, HTTPResponse response,
+                          OutputStream delegate) {
     this.request = request;
     this.response = response;
-    this.delegate = delegate;
-    this.compress = compressByDefault;
+    this.throughput = throughput;
+    this.compress = configuration.isCompressByDefault();
+    this.instrumenter = configuration.getInstrumenter();
+    this.maxChunkSize = configuration.getRequestBufferSize();
+
+    // Always make the main output stream uncloseable because this is likely the SocketOutputStream. We handle Keep-Alive and Close in the
+    // HTTPWorker
+    this.delegate = new UncloseableOutputStream(delegate);
   }
 
   @Override
   public void close() throws IOException {
-    // Ignore because we don't know if we should be closing the socket's OutputStream
+    if (!committed) {
+      commit();
+    }
+
+    delegate.close();
   }
 
   @Override
   public void flush() throws IOException {
-    delegate.flush();
-  }
+    if (!committed) {
+      commit();
+    }
 
-  public long getFirstByteWroteInstant() {
-    return firstByteWroteInstant;
+    delegate.flush();
   }
 
   public boolean isCommitted() {
@@ -100,31 +124,31 @@ public class HTTPOutputStream extends OutputStream {
   }
 
   @Override
-  public void write(byte[] b, int off, int len) throws IOException {
-    if (firstByteWroteInstant == 0) {
-      firstByteWroteInstant = System.currentTimeMillis();
-    }
-
+  public void write(byte[] buffer, int offset, int length) throws IOException {
     if (!committed) {
       commit();
     }
 
-    delegate.write(b, off, len);
-    bytesWritten++;
+    delegate.write(buffer, offset, length);
+    throughput.writeThroughput(length);
+
+    if (instrumenter != null) {
+      instrumenter.wroteToClient(length);
+    }
   }
 
   @Override
   public void write(int b) throws IOException {
-    if (firstByteWroteInstant == 0) {
-      firstByteWroteInstant = System.currentTimeMillis();
-    }
-
     if (!committed) {
       commit();
     }
 
     delegate.write(b);
-    bytesWritten++;
+    throughput.wrote(1);
+
+    if (instrumenter != null) {
+      instrumenter.wroteToClient(1);
+    }
   }
 
   @Override
@@ -132,21 +156,6 @@ public class HTTPOutputStream extends OutputStream {
     write(b, 0, b.length);
   }
 
-  public long writeThroughput(long writeThroughputCalculationDelay) {
-    // Haven't written anything yet or not enough time has passed to calculated throughput (2s)
-    if (firstByteWroteInstant == -1 || bytesWritten == 0) {
-      return Long.MAX_VALUE;
-    }
-
-    // Always use currentTime since this calculation is ongoing until the client reads all the bytes
-    long millis = System.currentTimeMillis() - firstByteWroteInstant;
-    if (millis < writeThroughputCalculationDelay) {
-      return Long.MAX_VALUE;
-    }
-
-    double result = ((double) bytesWritten / (double) millis) * 1_000;
-    return Math.round(result);
-  }
 
   /**
    * Initialize the actual OutputStream latent so that we can call setCompress more than once. The GZIPOutputStream writes bytes to the
@@ -156,31 +165,81 @@ public class HTTPOutputStream extends OutputStream {
   private void commit() throws IOException {
     committed = true;
 
-    // Short circuit if there is nothing to do
-    if (!compress) {
-      return;
-    }
+    // Determine the encoding based on the Content-Length header. This should be before the encoding OutputStream so that the chunked parts
+    // are the compressed body.
+    OutputStream finalDelegate = delegate;
+    if (response.getContentLength() == null) {
+      finalDelegate = new ChunkedOutputStream(finalDelegate, maxChunkSize);
+      response.setHeader(Headers.TransferEncoding, TransferEncodings.Chunked);
 
-    // Attempt to honor the requested encoding(s) in order, taking the first match
-    // - If a match is not found, we will not compress the response.
-    for (String encoding : request.getAcceptEncodings()) {
-      if (encoding.equalsIgnoreCase(ContentEncodings.Gzip)) {
-        try {
-          delegate = new GZIPOutputStream(delegate);
-          response.setHeader(Headers.ContentEncoding, ContentEncodings.Gzip);
-          return;
-        } catch (IOException e) {
-          throw new RuntimeException(e);
-        }
-      } else if (encoding.equalsIgnoreCase(ContentEncodings.Deflate)) {
-        delegate = new DeflaterOutputStream(delegate);
-        response.setHeader(Headers.ContentEncoding, ContentEncodings.Deflate);
-        return;
+      if (instrumenter != null) {
+        instrumenter.chunkedResponse();
       }
     }
 
-    compress = false;
+    // Attempt to honor the requested encoding(s) in order, taking the first match. If a match is not found, we don't compress the response.
+    if (compress) {
+      for (String encoding : request.getAcceptEncodings()) {
+        if (encoding.equalsIgnoreCase(ContentEncodings.Gzip)) {
+          try {
+            finalDelegate = new GZIPOutputStream(finalDelegate);
+            response.setHeader(Headers.ContentEncoding, ContentEncodings.Gzip);
+            response.setHeader(Headers.Vary, Headers.AcceptEncoding);
+            break;
+          } catch (IOException e) {
+            throw new RuntimeException(e);
+          }
+        } else if (encoding.equalsIgnoreCase(ContentEncodings.Deflate)) {
+          finalDelegate = new DeflaterOutputStream(finalDelegate, true);
+          response.setHeader(Headers.ContentEncoding, ContentEncodings.Deflate);
+          response.setHeader(Headers.Vary, Headers.AcceptEncoding);
+          break;
+        }
+      }
+    }
 
+    // Write the response preamble directly to the Socket OutputStream (the original delegate)
     HTTPTools.writeResponsePreamble(response, delegate);
+
+    // Next, change the delegate to account for compression and/or chunking and wrap it in an uncloseable stream
+    delegate = finalDelegate;
+  }
+
+  /**
+   * Uncloseable stream that overrides all methods to delegate them to another OutputStream, except {@link #close()}.
+   *
+   * @author Brian Pontarelli
+   */
+  private static class UncloseableOutputStream extends OutputStream {
+    private final OutputStream delegate;
+
+    public UncloseableOutputStream(OutputStream delegate) {
+      this.delegate = delegate;
+    }
+
+    @Override
+    public void close() {
+      // No-op (uncloseable)
+    }
+
+    @Override
+    public void flush() throws IOException {
+      delegate.flush();
+    }
+
+    @Override
+    public void write(byte[] b) throws IOException {
+      delegate.write(b);
+    }
+
+    @Override
+    public void write(byte[] b, int off, int len) throws IOException {
+      delegate.write(b, off, len);
+    }
+
+    @Override
+    public void write(int b) throws IOException {
+      delegate.write(b);
+    }
   }
 }

@@ -15,7 +15,6 @@
  */
 package io.fusionauth.http.io;
 
-import java.io.FilterInputStream;
 import java.io.IOException;
 import java.io.InputStream;
 
@@ -24,115 +23,111 @@ import io.fusionauth.http.util.HTTPTools;
 
 /**
  * A filter InputStream that handles the chunked body while passing the body bytes down to the delegate stream.
+ * <p>
+ * TODO: This can be much more efficient by not handling each chunk separately.
  *
  * @author Brian Pontarelli
  */
-public class ChunkedInputStream extends FilterInputStream {
+public class ChunkedInputStream extends InputStream {
   private final byte[] buffer;
 
-  private final byte[] chunkBuffer;
+  private final InputStream delegate;
 
   private final StringBuilder headerSizeHex = new StringBuilder();
 
-  private int chunkBufferIndex;
+  private int bufferIndex;
 
-  private int chunkBufferLength;
+  private int bufferLength;
 
-  private int chunkBytesRead;
+  private int chunkBytesRemaining;
 
-  private long chunkTotalSize;
+  private int chunkSize;
 
   private ChunkedBodyState state = ChunkedBodyState.ChunkSize;
 
-  private int totalBytesRead;
-
   public ChunkedInputStream(InputStream delegate, int bufferSize) {
-    super(delegate);
+    this.delegate = delegate;
     this.buffer = new byte[bufferSize];
-    this.chunkBuffer = new byte[bufferSize];
-  }
-
-  @Override
-  public int read(byte[] b) throws IOException {
-    return read(b, 0, b.length);
   }
 
   @Override
   public int read(byte[] b, int off, int len) throws IOException {
-    if (state != ChunkedBodyState.Chunk || chunkBufferIndex >= chunkBufferLength) {
-      if (!processChunk()) {
-        return -1;
-      }
-    }
-
-    int remainingInBuffer = chunkBufferLength - chunkBufferIndex;
-    int toRead = Math.min(remainingInBuffer, len);
-    System.arraycopy(chunkBuffer, chunkBufferIndex, b, off, toRead);
-    chunkBytesRead += toRead;
-    totalBytesRead += toRead;
-    return toRead;
+    return processChunk(b, off, len);
   }
 
   @Override
   public int read() throws IOException {
-    if (state != ChunkedBodyState.Chunk || chunkBufferIndex >= chunkBufferLength) {
-      if (!processChunk()) {
-        return -1;
-      }
-    }
-
-    chunkBytesRead++;
-    totalBytesRead++;
-    return chunkBuffer[chunkBufferIndex++] & 0xFF;
+    return read(new byte[1]); // Slow but this method should never be called
   }
 
-  private boolean processChunk() throws IOException {
-    int read;
-    while ((read = super.read(buffer)) > 0) {
-      for (int i = 0; i < read; i++) {
-        var nextState = state.next(buffer[i], chunkTotalSize, chunkBytesRead);
-
-        // We are DONE!
-        if (nextState == ChunkedBodyState.Complete) {
-          state = nextState;
-          return false;
-        }
-
-        if (nextState == ChunkedBodyState.ChunkSize) {
-          headerSizeHex.appendCodePoint(buffer[i]);
-        } else if (state != ChunkedBodyState.Chunk && nextState == ChunkedBodyState.Chunk) {
-          // This means we finished reading the size and are ready to start processing
-          if (headerSizeHex.isEmpty()) {
-            throw new ChunkException("Chunk size is missing");
-          }
-
-          // This is the start of a chunk, so set the size and counter and reset the size hex string
-          long chunkSizeLong = Long.parseLong(headerSizeHex, 0, headerSizeHex.length(), 16);
-          chunkBytesRead = 0;
-          chunkBufferIndex = 0;
-          chunkTotalSize = (int) chunkSizeLong;
-          headerSizeHex.delete(0, headerSizeHex.length());
-
-          if (chunkTotalSize > 0) {
-            System.arraycopy(buffer, i, chunkBuffer, 0, read);
-            chunkBufferLength = read;
-            return true;
-          }
-        } else if (nextState == ChunkedBodyState.Chunk) {
-          // This means we are in a chunk that was only partially finished last time and needs to be continued
-          chunkBufferIndex = 0;
-          if (chunkTotalSize > 0) {
-            System.arraycopy(buffer, i, chunkBuffer, 0, read);
-            chunkBufferLength = read;
-            return true;
-          }
-        }
-
-        state = nextState;
-      }
+  private int processChunk(byte[] destination, int offset, int length) throws IOException {
+    // Bail early if the state machine is done
+    if (state == ChunkedBodyState.Complete) {
+      return -1;
     }
 
-    return false;
+    // Read some more if we are out of bytes
+    if (bufferIndex >= bufferLength) {
+      bufferIndex = 0;
+      bufferLength = delegate.read(buffer);
+    }
+
+    if (bufferLength == 0) {
+      return 0;
+    }
+
+    for (; bufferIndex < bufferLength; bufferIndex++) {
+      var nextState = state.next(buffer[bufferIndex], chunkSize, chunkSize - chunkBytesRemaining);
+
+      // We are DONE!
+      if (nextState == ChunkedBodyState.Complete) {
+        state = nextState;
+        bufferIndex++;
+        return -1;
+      }
+
+      // Record the size hex digit
+      if (nextState == ChunkedBodyState.ChunkSize) {
+        headerSizeHex.appendCodePoint(buffer[bufferIndex]);
+        state = nextState;
+        continue;
+      }
+
+      // No chunk processing, just continue to the next character
+      if (nextState == ChunkedBodyState.ChunkSizeCR || nextState == ChunkedBodyState.ChunkSizeLF ||
+          nextState == ChunkedBodyState.ChunkCR || nextState == ChunkedBodyState.ChunkLF) {
+        state = nextState;
+        continue;
+      }
+
+      if (state != ChunkedBodyState.Chunk && nextState == ChunkedBodyState.Chunk) {
+        // This means we finished reading the size and are ready to start processing
+        if (headerSizeHex.isEmpty()) {
+          throw new ChunkException("Chunk size is missing");
+        }
+
+        // This is the start of a chunk, so set the size and counter and reset the size hex string
+        chunkSize = (int) Long.parseLong(headerSizeHex, 0, headerSizeHex.length(), 16);
+        chunkBytesRemaining = chunkSize;
+        headerSizeHex.delete(0, headerSizeHex.length());
+
+        // AF\r1234 i=3 length=42 read=7 chunkSize=175(AF)
+        if (chunkSize == 0) {
+          state = nextState;
+          return 0;
+        }
+      }
+
+      int remainingInBuffer = bufferLength - bufferIndex;
+      int copied = Math.min(Math.min(chunkBytesRemaining, remainingInBuffer), length); // That's an ugly baby!
+      System.arraycopy(buffer, bufferIndex, destination, offset, copied);
+      bufferIndex += copied;
+      chunkBytesRemaining -= copied;
+      state = nextState;
+      return copied;
+    }
+
+    return 0;
   }
 
   public enum ChunkedBodyState {
@@ -205,7 +200,7 @@ public class ChunkedInputStream extends FilterInputStream {
     Complete {
       @Override
       public ChunkedBodyState next(byte ch, long length, long bytesRead) {
-        return null;
+        return Complete;
       }
     };
 

@@ -17,7 +17,6 @@ package io.fusionauth.http.io;
 
 import java.io.IOException;
 import java.io.OutputStream;
-import java.nio.ByteBuffer;
 
 import io.fusionauth.http.HTTPValues.ControlBytes;
 
@@ -27,11 +26,13 @@ import io.fusionauth.http.HTTPValues.ControlBytes;
  * @author Brian Pontarelli
  */
 public class ChunkedOutputStream extends OutputStream {
-  private final OutputStream delegate;
-
   private final byte[] buffer;
 
+  private final OutputStream delegate;
+
   private int bufferIndex;
+
+  private boolean closed;
 
   public ChunkedOutputStream(OutputStream delegate, int maxChunkSize) {
     this.delegate = delegate;
@@ -39,10 +40,37 @@ public class ChunkedOutputStream extends OutputStream {
   }
 
   @Override
-  public void write(int b) throws IOException {
-    if (bufferIndex < buffer.length) {
-      buffer[bufferIndex++] = (byte) b;
+  public void close() throws IOException {
+    if (!closed) {
+      flush();
+      delegate.write(ControlBytes.ChunkedTerminator);
+      delegate.flush();
+      delegate.close();
     }
+
+    closed = true;
+  }
+
+  @Override
+  public void flush() throws IOException {
+    if (closed) {
+      return;
+    }
+
+    if (bufferIndex > 0) {
+      String header = Integer.toHexString(bufferIndex) + "\r\n";
+      delegate.write(header.getBytes());
+      delegate.write(buffer, 0, bufferIndex);
+      delegate.write(ControlBytes.CRLF);
+
+      String output = new String(buffer, 0, bufferIndex);
+      System.out.println(output);
+      System.out.flush();
+
+      bufferIndex = 0;
+    }
+
+    delegate.flush();
   }
 
   @Override
@@ -53,28 +81,22 @@ public class ChunkedOutputStream extends OutputStream {
   @Override
   public void write(byte[] b, int offset, int length) throws IOException {
     int index = offset;
-    while (index < b.length) {
-      int wrote = Math.min(buffer.length - bufferIndex, b.length);
+    while (index < length) {
+      int wrote = Math.min(buffer.length - bufferIndex, length);
       System.arraycopy(b, 0, buffer, bufferIndex, wrote);
       bufferIndex += wrote;
       index += wrote;
 
       if (bufferIndex >= buffer.length) {
         flush();
-        bufferIndex = 0;
       }
     }
   }
 
   @Override
-  public void flush() throws IOException {
-    if (bufferIndex > 0) {
-      String header = Integer.toHexString(bufferIndex) + "\r\n";
-      delegate.write(header.getBytes());
-      delegate.write(buffer, 0, bufferIndex);
-      delegate.write(ControlBytes.CRLF);
-    } else {
-      delegate.write(ControlBytes.ChunkedTerminator);
+  public void write(int b) throws IOException {
+    if (bufferIndex < buffer.length) {
+      buffer[bufferIndex++] = (byte) b;
     }
   }
 }

@@ -21,43 +21,35 @@ import java.io.InputStream;
 import io.fusionauth.http.io.ChunkedInputStream;
 import io.fusionauth.http.log.Logger;
 import io.fusionauth.http.server.HTTPRequest;
+import io.fusionauth.http.server.HTTPServerConfiguration;
+import io.fusionauth.http.server.HTTPThroughput;
+import io.fusionauth.http.server.Instrumenter;
 
 public class HTTPInputStream extends InputStream {
+  private final Instrumenter instrumenter;
+
   private final Logger logger;
 
   private final HTTPRequest request;
+
+  private final HTTPThroughput throughput;
 
   private byte[] bodyBytes;
 
   private int bodyBytesIndex;
 
-  private long bytesRead;
-
   private boolean committed;
 
   private InputStream delegate;
 
-  private long firstByteReadInstant;
-
-  private long lastByteReadInstant;
-
-  public HTTPInputStream(HTTPRequest request, Logger logger, InputStream delegate, byte[] bodyBytes) {
+  public HTTPInputStream(HTTPServerConfiguration configuration, HTTPThroughput throughput, HTTPRequest request, InputStream delegate,
+                         byte[] bodyBytes) {
+    this.logger = configuration.getLoggerFactory().getLogger(HTTPInputStream.class);
+    this.instrumenter = configuration.getInstrumenter();
     this.request = request;
-    this.logger = logger;
     this.delegate = delegate;
     this.bodyBytes = bodyBytes;
-  }
-
-  public long getBytesRead() {
-    return bytesRead;
-  }
-
-  public long getFirstByteReadInstant() {
-    return firstByteReadInstant;
-  }
-
-  public long getLastByteReadInstant() {
-    return lastByteReadInstant;
+    this.throughput = throughput;
   }
 
   @Override
@@ -67,11 +59,6 @@ public class HTTPInputStream extends InputStream {
 
   @Override
   public int read() throws IOException {
-    long now = System.currentTimeMillis();
-    if (firstByteReadInstant == 0) {
-      firstByteReadInstant = now;
-    }
-
     if (!committed) {
       commit();
       committed = true;
@@ -88,18 +75,17 @@ public class HTTPInputStream extends InputStream {
       b = delegate.read();
     }
 
-    bytesRead++;
-    lastByteReadInstant = now;
+    throughput.read(1);
+
+    if (instrumenter != null) {
+      instrumenter.readFromClient(1);
+    }
+
     return b;
   }
 
   @Override
   public int read(byte[] buffer) throws IOException {
-    long now = System.currentTimeMillis();
-    if (firstByteReadInstant == 0) {
-      firstByteReadInstant = now;
-    }
-
     if (!committed) {
       commit();
       committed = true;
@@ -118,18 +104,17 @@ public class HTTPInputStream extends InputStream {
       read = delegate.read(buffer);
     }
 
-    bytesRead += read;
-    lastByteReadInstant = now;
+    throughput.read(read);
+
+    if (instrumenter != null) {
+      instrumenter.readFromClient(read);
+    }
+
     return read;
   }
 
   @Override
   public int read(byte[] buffer, int offset, int length) throws IOException {
-    long now = System.currentTimeMillis();
-    if (firstByteReadInstant == 0) {
-      firstByteReadInstant = now;
-    }
-
     if (!committed) {
       commit();
       committed = true;
@@ -148,29 +133,13 @@ public class HTTPInputStream extends InputStream {
       read = delegate.read(buffer);
     }
 
-    bytesRead += read;
-    lastByteReadInstant = now;
+    throughput.read(read);
+
+    if (instrumenter != null) {
+      instrumenter.readFromClient(read);
+    }
+
     return read;
-  }
-
-  public long readThroughput(boolean noBytesWritten, long readThroughputCalculationDelay) {
-    // Haven't read anything yet, or we read everything in the first read (instants are equal)
-    if (firstByteReadInstant == -1 || bytesRead == 0 || lastByteReadInstant == firstByteReadInstant) {
-      return Long.MAX_VALUE;
-    }
-
-    if (noBytesWritten) {
-      long millis = System.currentTimeMillis() - firstByteReadInstant;
-      if (millis < readThroughputCalculationDelay) {
-        return Long.MAX_VALUE;
-      }
-
-      double result = ((double) bytesRead / (double) millis) * 1_000;
-      return Math.round(result);
-    }
-
-    double result = ((double) bytesRead / (double) (lastByteReadInstant - firstByteReadInstant)) * 1_000;
-    return Math.round(result);
   }
 
   private void commit() {
@@ -183,6 +152,10 @@ public class HTTPInputStream extends InputStream {
     } else if (request.isChunked()) {
       logger.debug("Client indicated it was sending an entity-body in the request. Handling body using chunked encoding.");
       delegate = new ChunkedInputStream(delegate, 1024);
+
+      if (instrumenter != null) {
+        instrumenter.chunkedRequest();
+      }
     } else {
       logger.debug("Client indicated it was NOT sending an entity-body in the request");
     }

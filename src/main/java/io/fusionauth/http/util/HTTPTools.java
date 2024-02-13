@@ -227,7 +227,7 @@ public final class HTTPTools {
    * @throws IOException If the read fails.
    */
   public static byte[] parseRequestPreamble(InputStream inputStream, HTTPRequest request) throws IOException {
-    RequestPreambleState state = RequestPreambleState.RequestProtocol;
+    RequestPreambleState state = RequestPreambleState.RequestMethod;
     StringBuilder builder = new StringBuilder();
     String headerName = null;
 

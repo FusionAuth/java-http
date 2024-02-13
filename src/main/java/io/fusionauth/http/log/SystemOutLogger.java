@@ -21,13 +21,6 @@ package io.fusionauth.http.log;
  * @author Brian Pontarelli
  */
 public class SystemOutLogger extends BaseLogger {
-  public static Level LEVEL = Level.Info;
-
-  @Override
-  protected int getLevelOrdinal() {
-    return SystemOutLogger.LEVEL.ordinal();
-  }
-
   @Override
   protected void handleMessage(String message) {
     System.out.println(message);

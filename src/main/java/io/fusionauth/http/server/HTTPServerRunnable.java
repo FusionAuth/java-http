@@ -18,6 +18,8 @@ package io.fusionauth.http.server;
 import java.io.IOException;
 import java.net.ServerSocket;
 import java.net.Socket;
+import java.net.SocketException;
+import java.net.SocketTimeoutException;
 import java.time.Duration;
 import java.util.ArrayList;
 import java.util.Iterator;
@@ -51,6 +53,8 @@ public class HTTPServerRunnable implements Runnable {
 
   private final ServerSocket socket;
 
+  private volatile boolean running;
+
   public HTTPServerRunnable(HTTPServerConfiguration configuration, HTTPListenerConfiguration listener) throws IOException {
     this.configuration = configuration;
     this.listener = listener;
@@ -61,6 +65,7 @@ public class HTTPServerRunnable implements Runnable {
     this.minimumWriteThroughput = configuration.getMinimumWriteThroughput();
 
     this.socket = new ServerSocket(listener.getPort(), -1, listener.getBindAddress());
+    this.socket.setSoTimeout(1_000); // Allows us to clean up periodically
 
     if (instrumenter != null) {
       instrumenter.serverStarted();
@@ -69,20 +74,35 @@ public class HTTPServerRunnable implements Runnable {
 
   @Override
   public void run() {
-    while (true) {
+    running = true;
+    while (running) {
       try {
         Socket clientSocket = socket.accept();
-        HTTPWorker runnable = new HTTPWorker(clientSocket, configuration, listener);
+        clientSocket.setSoTimeout((int) configuration.getClientTimeoutDuration().toMillis());
+        logger.debug("Accepted inbound connection with [{}] existing connections", clients.size());
+
+        if (instrumenter != null) {
+          instrumenter.acceptedConnection();
+        }
+
+        HTTPThroughput throughput = new HTTPThroughput(configuration.getReadThroughputCalculationDelay().toMillis(), configuration.getWriteThroughputCalculationDelay().toMillis());
+        HTTPWorker runnable = new HTTPWorker(clientSocket, configuration, instrumenter, listener, throughput);
         Thread client = Thread.ofVirtual()
                               .name("HTTP client [" + clientSocket.getRemoteSocketAddress() + "]")
                               .start(runnable);
-        clients.add(new ClientInfo(client, runnable));
-        cleanup();
-      } catch (IOException io) {
-        logger.debug("An IO exception was thrown during processing. These are pretty common.", io);
+        clients.add(new ClientInfo(client, runnable, throughput));
+      } catch (SocketTimeoutException ignore) {
+        // Completely smother since this is expected with the SO_TIMEOUT setting in the constructor
+      } catch (SocketException e) {
+        // This should only happen when the server is shutdown
+        if (Thread.currentThread().isInterrupted()) {
+          running = false;
+        }
       } catch (Throwable t) {
         logger.error("An exception was thrown during server processing. This is a fatal issue and we need to shutdown the server.", t);
         break;
+      } finally {
+        cleanup();
       }
     }
 
@@ -102,14 +122,16 @@ public class HTTPServerRunnable implements Runnable {
       }
 
       long now = System.currentTimeMillis();
+      HTTPThroughput throughput = client.throughput();
       HTTPWorker worker = client.runnable();
       WorkerState state = worker.state();
-      boolean readingSlow = state == WorkerState.Read && worker.readThroughput() < minimumReadThroughput;
-      boolean writingSlow = state == WorkerState.Write && worker.writeThroughput() < minimumWriteThroughput;
-      boolean timedOut = worker.lastUsed() < now - clientTimeout.toMillis();
-      boolean badChannel = readingSlow || writingSlow || timedOut;
+      long workerLastUsed = throughput.lastUsed();
+      boolean readingSlow = state == WorkerState.Read && throughput.readThroughput(now) < minimumReadThroughput;
+      boolean writingSlow = state == WorkerState.Write && throughput.writeThroughput(now) < minimumWriteThroughput;
+      boolean timedOut = workerLastUsed < now - clientTimeout.toMillis();
+      boolean badClient = readingSlow || writingSlow || timedOut;
 
-      if (!badChannel) {
+      if (!badClient) {
         continue;
       }
 
@@ -117,18 +139,18 @@ public class HTTPServerRunnable implements Runnable {
         String message = "";
 
         if (readingSlow) {
-          message += String.format(" Min read throughput [%s], actual throughput [%s].", minimumReadThroughput, worker.readThroughput());
+          message += String.format(" Min read throughput [%s], actual throughput [%s].", minimumReadThroughput, throughput.readThroughput(now));
         }
 
         if (writingSlow) {
-          message += String.format(" Min write throughput [%s], actual throughput [%s].", minimumWriteThroughput, worker.writeThroughput());
+          message += String.format(" Min write throughput [%s], actual throughput [%s].", minimumWriteThroughput, throughput.writeThroughput(now));
         }
 
         if (timedOut) {
-          message += String.format(" Connection timed out. Configured client timeout [%s] ms.", clientTimeout.toMillis());
+          message += String.format(" Connection timed out. Last used [%s]ms ago. Configured client timeout [%s]ms.", (now - workerLastUsed), clientTimeout.toMillis());
         }
 
-        logger.debug("Closing connection readingSlow=[{}] writingSlow=[{}] timedOut=[{}]{}", readingSlow, writingSlow, timedOut, message);
+        logger.debug("Closing connection readingSlow=[{}] writingSlow=[{}] timedOut=[{}] {}", readingSlow, writingSlow, timedOut, message);
         logger.debug("Closing client connection [{}] due to inactivity", worker.getSocket().getRemoteSocketAddress());
 
         StringBuilder threadDump = new StringBuilder();
@@ -142,9 +164,24 @@ public class HTTPServerRunnable implements Runnable {
 
         logger.debug("Thread dump from server side.\n" + threadDump);
       }
+
+      try {
+        var socket = worker.getSocket();
+        socket.shutdownInput();
+        socket.shutdownOutput();
+        socket.close();
+        iterator.remove();
+
+        if (instrumenter != null) {
+          instrumenter.connectionClosed();
+        }
+      } catch (IOException e) {
+        // Log but ignore
+        logger.debug("Unable to close connection to client. [{}]", e);
+      }
     }
   }
 
-  record ClientInfo(Thread thread, HTTPWorker runnable) {
+  record ClientInfo(Thread thread, HTTPWorker runnable, HTTPThroughput throughput) {
   }
 }

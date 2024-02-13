@@ -253,6 +253,8 @@ public final class HTTPValues {
 
     public static final String UserAgent = "User-Agent";
 
+    public static final String Vary = "Vary";
+
     public static final String XForwardedFor = "X-Forwarded-For";
 
     public static final String XForwardedHost = "X-Forwarded-Host";
