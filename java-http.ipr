@@ -1386,7 +1386,7 @@
     <output url="file://$PROJECT_DIR$/out" />
   </component>
   <component name="ProjectRunConfigurationManager">
-    <configuration default="true" type="TestNG">
+    <configuration default="true" type="TestNG" singleton="false">
       <shortenClasspath name="NONE" />
       <useClassPathOnly />
       <option name="SUITE_NAME" value="" />

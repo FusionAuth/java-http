@@ -1,5 +1,5 @@
 /*
- * Copyright (c) 2022, FusionAuth, All Rights Reserved
+ * Copyright (c) 2022-2024, FusionAuth, All Rights Reserved
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -13,9 +13,10 @@
  * either express or implied. See the License for the specific
  * language governing permissions and limitations under the License.
  */
-package io.fusionauth.http.server;
+package io.fusionauth.http.server.internal;
 
 import java.io.IOException;
+import java.io.OutputStream;
 import java.net.Socket;
 import java.net.SocketException;
 import java.net.SocketTimeoutException;
@@ -23,8 +24,16 @@ import java.net.SocketTimeoutException;
 import io.fusionauth.http.ConnectionClosedException;
 import io.fusionauth.http.HTTPValues.Connections;
 import io.fusionauth.http.HTTPValues.Headers;
+import io.fusionauth.http.HTTPValues.Status;
 import io.fusionauth.http.ParseException;
 import io.fusionauth.http.log.Logger;
+import io.fusionauth.http.server.ExpectValidator;
+import io.fusionauth.http.server.HTTPHandler;
+import io.fusionauth.http.server.HTTPListenerConfiguration;
+import io.fusionauth.http.server.HTTPRequest;
+import io.fusionauth.http.server.HTTPResponse;
+import io.fusionauth.http.server.HTTPServerConfiguration;
+import io.fusionauth.http.server.Instrumenter;
 import io.fusionauth.http.server.io.HTTPInputStream;
 import io.fusionauth.http.server.io.HTTPOutputStream;
 import io.fusionauth.http.server.io.Throughput;
@@ -85,6 +94,16 @@ public class HTTPWorker implements Runnable {
         outputStream = new HTTPOutputStream(configuration, throughput, request, response, socket.getOutputStream());
         response.setOutputStream(outputStream);
 
+        // Handle the "expect" response
+        String expect = request.getHeader(Headers.Expect);
+        if (expect != null && expect.equalsIgnoreCase(Status.ContinueRequest)) {
+          // If the "expect" wasn't accepted, close the socket and exit
+          if (!expectContinue(request)) {
+            close(Result.Success);
+            return;
+          }
+        }
+
         var connection = request.getHeader(Headers.Connection);
         if (connection == null || !connection.equalsIgnoreCase(Connections.Close)) {
           response.setHeader(Headers.Connection, Connections.KeepAlive);
@@ -144,7 +163,7 @@ public class HTTPWorker implements Runnable {
     }
 
     // If the conditions are perfect, we can still write back a 500
-    if (outputStream != null && !outputStream.isCommitted() && response != null) {
+    if (result == Result.Failure && outputStream != null && !outputStream.isCommitted() && response != null) {
       response.setStatus(500);
       response.setContentLength(0L);
 
@@ -167,6 +186,21 @@ public class HTTPWorker implements Runnable {
     } catch (IOException e) {
       logger.debug("Could not close the connection because the socket threw an exception.", e);
     }
+  }
+
+  private boolean expectContinue(HTTPRequest request) throws IOException {
+    HTTPResponse expectResponse = new HTTPResponse();
+    ExpectValidator validator = configuration.getExpectValidator();
+    if (validator != null) {
+      validator.validate(request, expectResponse);
+    }
+
+    // Write directly to the socket because the HTTPOutputStream does a lot of extra work that we don't want
+    OutputStream out = socket.getOutputStream();
+    HTTPTools.writeResponsePreamble(expectResponse, out);
+    out.flush();
+
+    return expectResponse.getStatus() == 100;
   }
 
   private enum Result {

@@ -36,7 +36,6 @@ import io.fusionauth.http.HTTPValues.ProtocolBytes;
 import io.fusionauth.http.ParseException;
 import io.fusionauth.http.server.HTTPRequest;
 import io.fusionauth.http.server.HTTPResponse;
-import io.fusionauth.http.server.RequestPreambleState;
 
 public final class HTTPTools {
   /**

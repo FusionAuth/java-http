@@ -1,5 +1,5 @@
 /*
- * Copyright (c) 2022, FusionAuth, All Rights Reserved
+ * Copyright (c) 2022-2024, FusionAuth, All Rights Reserved
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -13,10 +13,9 @@
  * either express or implied. See the License for the specific
  * language governing permissions and limitations under the License.
  */
-package io.fusionauth.http.server;
+package io.fusionauth.http.util;
 
 import io.fusionauth.http.ParseException;
-import io.fusionauth.http.util.HTTPTools;
 
 /**
  * Finite state machine parser for an HTTP 1.1 request preamble. This is the start-line and headers.

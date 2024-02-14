@@ -35,7 +35,7 @@ import io.fusionauth.http.HTTPValues.ControlBytes;
 import io.fusionauth.http.HTTPValues.DispositionParameters;
 import io.fusionauth.http.HTTPValues.Headers;
 import io.fusionauth.http.ParseException;
-import io.fusionauth.http.server.RequestPreambleState;
+import io.fusionauth.http.util.RequestPreambleState;
 import io.fusionauth.http.util.HTTPTools;
 import io.fusionauth.http.util.HTTPTools.HeaderValue;
 

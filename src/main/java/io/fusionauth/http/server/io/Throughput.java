@@ -15,7 +15,7 @@
  */
 package io.fusionauth.http.server.io;
 
-import io.fusionauth.http.server.HTTPWorker;
+import io.fusionauth.http.server.internal.HTTPWorker;
 
 /**
  * This class allows the {@link HTTPWorker} to hook into other classes without passing around interfaces, loggers, and configuration.

@@ -84,9 +84,8 @@ public class ExpectTest extends BaseTest {
     };
 
     CountingInstrumenter instrumenter = new CountingInstrumenter();
-    try (HTTPServer ignore = makeServer(scheme, handler, instrumenter, validator).start()) {
+    try (HTTPServer ignore = makeServer(scheme, handler, instrumenter, validator).start(); var client = makeClient(scheme, null)) {
       URI uri = makeURI(scheme, "");
-      var client = makeClient(scheme, null);
       var response = client.send(
           HttpRequest.newBuilder().uri(uri).header(Headers.ContentType, "application/json").expectContinue(true).POST(BodyPublishers.ofString(RequestBody)).build(),
           r -> BodySubscribers.ofString(StandardCharsets.UTF_8)
@@ -110,9 +109,8 @@ public class ExpectTest extends BaseTest {
     };
 
     CountingInstrumenter instrumenter = new CountingInstrumenter();
-    try (HTTPServer ignore = makeServer(scheme, handler, instrumenter, validator).start()) {
+    try (HTTPServer ignore = makeServer(scheme, handler, instrumenter, validator).start(); var client = makeClient(scheme, null)) {
       URI uri = makeURI(scheme, "");
-      var client = makeClient(scheme, null);
       var response = client.send(
           HttpRequest.newBuilder().uri(uri).header(Headers.ContentType, "application/json").expectContinue(true).POST(BodyPublishers.ofString(RequestBody)).build(),
           r -> BodySubscribers.ofString(StandardCharsets.UTF_8)

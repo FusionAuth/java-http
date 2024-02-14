@@ -1,5 +1,5 @@
 /*
- * Copyright (c) 2022-2023, FusionAuth, All Rights Reserved
+ * Copyright (c) 2022-2024, FusionAuth, All Rights Reserved
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -13,7 +13,7 @@
  * either express or implied. See the License for the specific
  * language governing permissions and limitations under the License.
  */
-package io.fusionauth.http.server;
+package io.fusionauth.http.server.internal;
 
 import java.io.IOException;
 import java.net.ServerSocket;
@@ -27,6 +27,9 @@ import java.util.List;
 import java.util.Map;
 
 import io.fusionauth.http.log.Logger;
+import io.fusionauth.http.server.HTTPListenerConfiguration;
+import io.fusionauth.http.server.HTTPServerConfiguration;
+import io.fusionauth.http.server.Instrumenter;
 import io.fusionauth.http.server.io.Throughput;
 
 /**
