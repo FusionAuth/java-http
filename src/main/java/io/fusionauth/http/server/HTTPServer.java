@@ -16,7 +16,6 @@
 package io.fusionauth.http.server;
 
 import java.io.Closeable;
-import java.io.IOException;
 import java.util.ArrayList;
 import java.util.List;
 
@@ -87,7 +86,7 @@ public class HTTPServer implements Closeable, Configurable<HTTPServer> {
       }
 
       logger.info("HTTP server started successfully");
-    } catch (IOException e) {
+    } catch (Exception e) {
       logger.error("Unable to start the HTTP server because one of the listeners threw an exception.", e);
 
       // Clean up the threads that did start

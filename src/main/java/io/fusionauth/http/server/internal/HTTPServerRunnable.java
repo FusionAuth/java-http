@@ -15,11 +15,13 @@
  */
 package io.fusionauth.http.server.internal;
 
+import javax.net.ssl.SSLContext;
 import java.io.IOException;
 import java.net.ServerSocket;
 import java.net.Socket;
 import java.net.SocketException;
 import java.net.SocketTimeoutException;
+import java.security.GeneralSecurityException;
 import java.time.Duration;
 import java.util.ArrayList;
 import java.util.Iterator;
@@ -27,6 +29,7 @@ import java.util.List;
 import java.util.Map;
 
 import io.fusionauth.http.log.Logger;
+import io.fusionauth.http.security.SecurityTools;
 import io.fusionauth.http.server.HTTPListenerConfiguration;
 import io.fusionauth.http.server.HTTPServerConfiguration;
 import io.fusionauth.http.server.Instrumenter;
@@ -59,7 +62,8 @@ public class HTTPServerRunnable implements Runnable {
 
   private volatile boolean running;
 
-  public HTTPServerRunnable(HTTPServerConfiguration configuration, HTTPListenerConfiguration listener) throws IOException {
+  public HTTPServerRunnable(HTTPServerConfiguration configuration, HTTPListenerConfiguration listener)
+      throws IOException, GeneralSecurityException {
     this.configuration = configuration;
     this.listener = listener;
     this.clientTimeout = configuration.getClientTimeoutDuration();
@@ -68,7 +72,13 @@ public class HTTPServerRunnable implements Runnable {
     this.minimumReadThroughput = configuration.getMinimumReadThroughput();
     this.minimumWriteThroughput = configuration.getMinimumWriteThroughput();
 
-    this.socket = new ServerSocket(listener.getPort(), -1, listener.getBindAddress());
+    if (listener.isTLS()) {
+      SSLContext context = SecurityTools.serverContext(listener.getCertificateChain(), listener.getPrivateKey());
+      this.socket = context.getServerSocketFactory().createServerSocket(listener.getPort(), -1, listener.getBindAddress());
+    } else {
+      this.socket = new ServerSocket(listener.getPort(), -1, listener.getBindAddress());
+    }
+
     this.socket.setSoTimeout(1_000); // Allows us to clean up periodically
 
     if (instrumenter != null) {
@@ -110,9 +120,16 @@ public class HTTPServerRunnable implements Runnable {
       }
     }
 
-    // Close all the client connections as cleanly as possible
-    for (ClientInfo client : clients) {
-      client.thread().interrupt();
+    try {
+      // Close all the client connections as cleanly as possible
+      for (ClientInfo client : clients) {
+        client.thread().interrupt();
+      }
+
+      // Close the server socket
+      socket.close();
+    } catch (IOException e) {
+      throw new RuntimeException(e);
     }
   }
 
@@ -123,6 +140,7 @@ public class HTTPServerRunnable implements Runnable {
       Thread thread = client.thread();
       if (!thread.isAlive()) {
         iterator.remove();
+        continue;
       }
 
       long now = System.currentTimeMillis();

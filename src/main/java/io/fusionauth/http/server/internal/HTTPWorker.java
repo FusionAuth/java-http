@@ -15,6 +15,7 @@
  */
 package io.fusionauth.http.server.internal;
 
+import javax.net.ssl.SSLSocket;
 import java.io.IOException;
 import java.io.OutputStream;
 import java.net.Socket;
@@ -38,6 +39,7 @@ import io.fusionauth.http.server.io.HTTPInputStream;
 import io.fusionauth.http.server.io.HTTPOutputStream;
 import io.fusionauth.http.server.io.Throughput;
 import io.fusionauth.http.server.io.ThroughputInputStream;
+import io.fusionauth.http.server.io.ThroughputOutputStream;
 import io.fusionauth.http.util.HTTPTools;
 import io.fusionauth.http.util.ThreadPool;
 
@@ -82,16 +84,23 @@ public class HTTPWorker implements Runnable {
   public void run() {
     boolean keepAlive = false;
     try {
+      // Start the handshake immediately
+      if (socket instanceof SSLSocket sslSocket) {
+        sslSocket.startHandshake();
+      }
+
       while (true) {
         var request = new HTTPRequest(configuration.getContextPath(), configuration.getMultipartBufferSize(),
             listener.getCertificate() != null ? "https" : "http", listener.getPort(), socket.getInetAddress().getHostAddress());
 
         var inputStream = new ThroughputInputStream(socket.getInputStream(), throughput);
         var bodyBytes = HTTPTools.parseRequestPreamble(inputStream, request);
-        request.setInputStream(new HTTPInputStream(configuration, request, inputStream, bodyBytes));
+        var httpInputStream = new HTTPInputStream(configuration, request, inputStream, bodyBytes);
+        request.setInputStream(httpInputStream);
 
+        var throughputOutputStream = new ThroughputOutputStream(socket.getOutputStream(), throughput);
         response = new HTTPResponse();
-        outputStream = new HTTPOutputStream(configuration, throughput, request, response, socket.getOutputStream());
+        outputStream = new HTTPOutputStream(configuration, throughput, request, response, throughputOutputStream);
         response.setOutputStream(outputStream);
 
         // Handle the "expect" response
@@ -122,6 +131,9 @@ public class HTTPWorker implements Runnable {
           close(Result.Success);
           break;
         }
+
+        // Purge the extra bytes in case the handler didn't read everything
+        httpInputStream.purge();
       }
     } catch (SocketTimeoutException | ConnectionClosedException e) {
       // This might be a read timeout or a Keep-Alive timeout. The failure state is based on that flag
@@ -158,9 +170,9 @@ public class HTTPWorker implements Runnable {
 
   private void close(Result result) {
     // The server might have already closed the socket, so we don't need to do that here
-    if (socket.isClosed()) {
-      return;
-    }
+//    if (socket.isClosed() && socket.isInputShutdown() && socket.isOutputShutdown()) {
+//      return;
+//    }
 
     // If the conditions are perfect, we can still write back a 500
     if (result == Result.Failure && outputStream != null && !outputStream.isCommitted() && response != null) {
@@ -179,6 +191,10 @@ public class HTTPWorker implements Runnable {
     }
 
     try {
+      if (socket instanceof SSLSocket sslSocket) {
+        sslSocket.getSession().invalidate();
+      }
+
       logger.debug("Closing connection [{}]", result);
       socket.shutdownInput();
       socket.shutdownOutput();

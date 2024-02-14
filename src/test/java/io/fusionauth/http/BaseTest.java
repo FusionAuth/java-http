@@ -91,13 +91,13 @@ public abstract class BaseTest {
    * This timeout is used for the HttpClient during each test. If you are in a debugger, you will need to change this timeout to be much
    * larger, otherwise, the client might truncate the request to the server.
    */
-  public static final Duration ClientTimeout = Duration.ofSeconds(2);
+  public static final Duration ClientTimeout = Duration.ofSeconds(2_000);
 
   /**
    * This timeout is used for the HTTPServer during each test. If you are in a debugger, you will need to change this timeout to be much
    * larger, otherwise, the server will toss out the request.
    */
-  public static final Duration ServerTimeout = Duration.ofSeconds(2);
+  public static final Duration ServerTimeout = Duration.ofSeconds(2_000);
 
   private static final ZonedDateTime TestStarted = ZonedDateTime.now();
 
@@ -193,7 +193,7 @@ public abstract class BaseTest {
   public Object[][] schemes() {
     return new Object[][]{
         {"http"},
-//        {"https"}
+        {"https"}
     };
   }
 

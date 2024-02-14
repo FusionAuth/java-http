@@ -58,4 +58,11 @@ public class ThroughputInputStream extends FilterInputStream {
     }
     return read;
   }
+
+  @Override
+  public long skip(long n) throws IOException {
+    long skipped = super.skip(n);
+    throughput.read(skipped);
+    return skipped;
+  }
 }

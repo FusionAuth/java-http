@@ -62,11 +62,6 @@ public class ChunkedOutputStream extends OutputStream {
       delegate.write(header.getBytes());
       delegate.write(buffer, 0, bufferIndex);
       delegate.write(ControlBytes.CRLF);
-
-      String output = new String(buffer, 0, bufferIndex);
-      System.out.println(output);
-      System.out.flush();
-
       bufferIndex = 0;
     }
 

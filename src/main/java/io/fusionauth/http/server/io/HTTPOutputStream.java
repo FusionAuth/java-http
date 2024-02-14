@@ -70,7 +70,7 @@ public class HTTPOutputStream extends OutputStream {
   @Override
   public void close() throws IOException {
     if (!committed) {
-      commit();
+      commit(true);
     }
 
     delegate.close();
@@ -78,10 +78,6 @@ public class HTTPOutputStream extends OutputStream {
 
   @Override
   public void flush() throws IOException {
-    if (!committed) {
-      commit();
-    }
-
     delegate.flush();
   }
 
@@ -125,7 +121,7 @@ public class HTTPOutputStream extends OutputStream {
   @Override
   public void write(byte[] buffer, int offset, int length) throws IOException {
     if (!committed) {
-      commit();
+      commit(false);
     }
 
     delegate.write(buffer, offset, length);
@@ -139,7 +135,7 @@ public class HTTPOutputStream extends OutputStream {
   @Override
   public void write(int b) throws IOException {
     if (!committed) {
-      commit();
+      commit(false);
     }
 
     delegate.write(b);
@@ -161,7 +157,7 @@ public class HTTPOutputStream extends OutputStream {
    * OutputStream during construction which means we cannot build it more than once. This is why we must wait until we know for certain we
    * are going to write bytes to construct the compressing OutputStream.
    */
-  private void commit() throws IOException {
+  private void commit(boolean closing) throws IOException {
     committed = true;
 
     // Determine the encoding based on the Content-Length header. This should be before the encoding OutputStream so that the chunked parts
@@ -195,6 +191,12 @@ public class HTTPOutputStream extends OutputStream {
           break;
         }
       }
+    }
+
+    // If the output stream is closing, but nothing has been written yet, we can safely set the Content-Length header to 0 to let the client
+    // know nothing more is coming beyond the preamble
+    if (closing) {
+      response.setContentLength(0L);
     }
 
     // Write the response preamble directly to the Socket OutputStream (the original delegate)

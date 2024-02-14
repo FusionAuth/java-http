@@ -35,11 +35,11 @@ public class HTTPInputStream extends InputStream {
 
   private int bodyBytesIndex;
 
+  private long bytesRemaining;
+
   private boolean committed;
 
   private InputStream delegate;
-
-  private long bytesRemaining;
 
   public HTTPInputStream(HTTPServerConfiguration configuration, HTTPRequest request, InputStream delegate, byte[] bodyBytes) {
     this.logger = configuration.getLoggerFactory().getLogger(HTTPInputStream.class);
@@ -57,6 +57,15 @@ public class HTTPInputStream extends InputStream {
   @Override
   public void close() throws IOException {
     // Ignore because we don't know if we should close the socket's InputStream
+  }
+
+  public void purge() throws IOException {
+    if (bodyBytes != null) {
+      bytesRemaining -= (bodyBytes.length - bodyBytesIndex);
+    }
+
+    delegate.skipNBytes(bytesRemaining);
+    bytesRemaining = 0;
   }
 
   @Override
