@@ -141,31 +141,6 @@ public interface Configurable<T extends Configurable<T>> {
   }
 
   /**
-   * Sets the maximum length of the output buffer queue. Defaults to 128.
-   * <p>
-   * This parameter will affect the runtime memory requirement of the server. This can be calculated by multiplying this value by values
-   * returned from {@link HTTPServerConfiguration#getResponseBufferSize()} and {@link HTTPServerConfiguration#getNumberOfWorkerThreads()}.
-   *
-   * @param outputBufferQueueLength The length of the output buffer queue.
-   * @return This.
-   */
-  default T withMaxOutputBufferQueueLength(int outputBufferQueueLength) {
-    configuration().withMaxOutputBufferQueueLength(outputBufferQueueLength);
-    return (T) this;
-  }
-
-  /**
-   * Sets the max preamble length (the start-line and headers constitute the head). Defaults to 64k
-   *
-   * @param maxLength The max preamble length.
-   * @return This.
-   */
-  default T withMaxPreambleLength(int maxLength) {
-    configuration().withMaxPreambleLength(maxLength);
-    return (T) this;
-  }
-
-  /**
    * This configures the minimum number of bytes per second that a client must send a request to the server before the server closes the
    * connection.
    *
@@ -201,32 +176,6 @@ public interface Configurable<T extends Configurable<T>> {
   }
 
   /**
-   * Sets the number of worker threads that will handle requests coming into the HTTP server. Defaults to 40.
-   * <p>
-   * This parameter will affect the runtime memory requirement of the server. This can be calculated by multiplying this value by the
-   * returned from {@link HTTPServerConfiguration#getResponseBufferSize()} and
-   * {@link HTTPServerConfiguration#getMaxOutputBufferQueueLength()}.
-   *
-   * @param numberOfWorkerThreads The number of worker threads.
-   * @return This.
-   */
-  default T withNumberOfWorkerThreads(int numberOfWorkerThreads) {
-    configuration().withNumberOfWorkerThreads(numberOfWorkerThreads);
-    return (T) this;
-  }
-
-  /**
-   * Sets the size of the preamble buffer (that is the buffer that reads the start-line and headers). Defaults to 4096.
-   *
-   * @param size The buffer size.
-   * @return This.
-   */
-  default T withPreambleBufferSize(int size) {
-    configuration().withPreambleBufferSize(size);
-    return (T) this;
-  }
-
-  /**
    * This configures the duration of the initial delay before calculating and enforcing the minimum read throughput. Defaults to 5 seconds.
    * <p>
    * This accounts for some warm up period, and exempts short-lived connections that may have smaller payloads that are more difficult to
@@ -248,21 +197,6 @@ public interface Configurable<T extends Configurable<T>> {
    */
   default T withRequestBufferSize(int requestBufferSize) {
     configuration().withRequestBufferSize(requestBufferSize);
-    return (T) this;
-  }
-
-  /**
-   * Sets the size of the buffer that is used to process the HTTP response. This defaults to 16k.
-   * <p>
-   * This parameter will affect the runtime memory requirement of the server. This can be calculated by multiplying this value by the
-   * returned from {@link HTTPServerConfiguration#getNumberOfWorkerThreads()} and
-   * {@link HTTPServerConfiguration#getMaxOutputBufferQueueLength()}.
-   *
-   * @param responseBufferSize The size of the buffer.
-   * @return This.
-   */
-  default T withResponseBufferSize(int responseBufferSize) {
-    configuration().withResponseBufferSize(responseBufferSize);
     return (T) this;
   }
 

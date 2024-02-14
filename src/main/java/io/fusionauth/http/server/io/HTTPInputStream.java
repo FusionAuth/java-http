@@ -171,16 +171,16 @@ public class HTTPInputStream extends InputStream {
     if (!hasBody) {
       delegate = InputStream.nullInputStream();
     } else if (contentLength != null) {
-      logger.debug("Client indicated it was sending an entity-body in the request. Handling body using Content-Length header {}.", contentLength);
+      logger.trace("Client indicated it was sending an entity-body in the request. Handling body using Content-Length header {}.", contentLength);
     } else if (request.isChunked()) {
-      logger.debug("Client indicated it was sending an entity-body in the request. Handling body using chunked encoding.");
+      logger.trace("Client indicated it was sending an entity-body in the request. Handling body using chunked encoding.");
       delegate = new ChunkedInputStream(delegate, 1024);
 
       if (instrumenter != null) {
         instrumenter.chunkedRequest();
       }
     } else {
-      logger.debug("Client indicated it was NOT sending an entity-body in the request");
+      logger.trace("Client indicated it was NOT sending an entity-body in the request");
     }
   }
 }

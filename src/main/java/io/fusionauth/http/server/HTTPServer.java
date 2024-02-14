@@ -40,12 +40,25 @@ public class HTTPServer implements Closeable, Configurable<HTTPServer> {
   public void close() {
     logger.info("HTTP server shutdown requested. Attempting to close each listener. This could take a while.");
 
+    long start = System.currentTimeMillis();
+    long shutdownDuration = configuration.getShutdownDuration().toMillis();
+
+    // First, interrupt all the threads
+    for (Thread thread : servers) {
+      thread.interrupt();
+    }
+
+    // Next, try joining on them
     for (Thread thread : servers) {
       try {
-        thread.interrupt();
-        thread.join(10_000);
+        thread.join(shutdownDuration);
       } catch (InterruptedException e) {
         // Ignore so we join on all the threads
+      }
+
+      // Just bail
+      if (System.currentTimeMillis() - start > shutdownDuration) {
+        break;
       }
     }
 

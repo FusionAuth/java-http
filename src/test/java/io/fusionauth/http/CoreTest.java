@@ -614,7 +614,6 @@ public class CoreTest extends BaseTest {
                                       .withListener(new HTTPListenerConfiguration(4243))
                                       .withListener(new HTTPListenerConfiguration(4244, certChain, keyPair.getPrivate()))
                                       .withLoggerFactory(AccumulatingLoggerFactory.FACTORY)
-                                      .withNumberOfWorkerThreads(1)
                                       .start();
          var client = makeClient("https", null)) {
       URI uri = URI.create("http://localhost:4242/api/system/version?foo=bar");

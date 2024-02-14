@@ -168,7 +168,6 @@ public abstract class BaseTest {
                            .withMinimumReadThroughput(200 * 1024)
                            .withMinimumWriteThroughput(200 * 1024)
                            .withListener(listenerConfiguration)
-                           .withNumberOfWorkerThreads(1)
                            .withReadThroughputCalculationDelayDuration(Duration.ofSeconds(1))
                            .withWriteThroughputCalculationDelayDuration(Duration.ofSeconds(1));
   }

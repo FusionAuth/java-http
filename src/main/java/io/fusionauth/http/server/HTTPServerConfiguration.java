@@ -48,25 +48,15 @@ public class HTTPServerConfiguration implements Configurable<HTTPServerConfigura
 
   private LoggerFactory loggerFactory = SystemOutLoggerFactory.FACTORY;
 
-  private int maxHeadLength = 128 * 1024;
-
-  private int maxOutputBufferQueueLength = 128;
-
   private long minimumReadThroughput = 16 * 1024; // Per second
 
   private long minimumWriteThroughput = 16 * 1024; // Per second
 
   private int multipartBufferSize = 16 * 1024;
 
-  private int numberOfWorkerThreads = 40;
-
-  private int preambleBufferSize = 16 * 1024;
-
   private Duration readThroughputCalculationDelayDuration = Duration.ofSeconds(5);
 
   private int requestBufferSize = 16 * 1024;
-
-  private int responseBufferSize = 16 * 1024;
 
   private Duration shutdownDuration = Duration.ofSeconds(10);
 
@@ -112,22 +102,6 @@ public class HTTPServerConfiguration implements Configurable<HTTPServerConfigura
     return loggerFactory;
   }
 
-  public int getMaxHeadLength() {
-    return maxHeadLength;
-  }
-
-  /**
-   * This configuration will affect the runtime memory requirement.
-   * <p>
-   * The maximum memory requirement for the output buffer can be calculated multiplying this value by the values returned from
-   * {@link HTTPServerConfiguration#getResponseBufferSize()} and * {@link HTTPServerConfiguration#getNumberOfWorkerThreads()}.
-   *
-   * @return the maximum output buffer queue length.
-   */
-  public int getMaxOutputBufferQueueLength() {
-    return maxOutputBufferQueueLength;
-  }
-
   /**
    * This configuration is the minimum number of bytes per second that a client must send a request to the server before the server closes
    * the connection.
@@ -153,22 +127,6 @@ public class HTTPServerConfiguration implements Configurable<HTTPServerConfigura
   }
 
   /**
-   * The number of worker threads. This configuration will affect the runtime memory requirement.
-   * <p>
-   * The maximum memory requirement for the output buffer can be calculated multiplying this value by the values returned from
-   * {@link HTTPServerConfiguration#getMaxOutputBufferQueueLength()} and * {@link HTTPServerConfiguration#getResponseBufferSize()}.
-   *
-   * @return the number of worker threads.
-   */
-  public int getNumberOfWorkerThreads() {
-    return numberOfWorkerThreads;
-  }
-
-  public int getPreambleBufferSize() {
-    return preambleBufferSize;
-  }
-
-  /**
    * @return the duration that will be used to delay the calculation and enforcement of the minimum read throughput.
    */
   public Duration getReadThroughputCalculationDelay() {
@@ -177,18 +135,6 @@ public class HTTPServerConfiguration implements Configurable<HTTPServerConfigura
 
   public int getRequestBufferSize() {
     return requestBufferSize;
-  }
-
-  /**
-   * The size of the response buffer in bytes. This configuration will affect the runtime memory requirement.
-   * <p>
-   * The maximum memory requirement for the output buffer can be calculated multiplying this value by the values returned from
-   * {@link HTTPServerConfiguration#getMaxOutputBufferQueueLength()} and * {@link HTTPServerConfiguration#getNumberOfWorkerThreads()}.
-   *
-   * @return the response buffer size in bytes.
-   */
-  public int getResponseBufferSize() {
-    return responseBufferSize;
   }
 
   public Duration getShutdownDuration() {
@@ -297,32 +243,6 @@ public class HTTPServerConfiguration implements Configurable<HTTPServerConfigura
   }
 
   /**
-   * {@inheritDoc}
-   */
-  @Override
-  public HTTPServerConfiguration withMaxOutputBufferQueueLength(int outputBufferQueueLength) {
-    if (outputBufferQueueLength < 16) {
-      throw new IllegalArgumentException("The maximum output buffer queue length must be greater than or equal to 16");
-    }
-
-    this.maxOutputBufferQueueLength = outputBufferQueueLength;
-    return this;
-  }
-
-  /**
-   * {@inheritDoc}
-   */
-  @Override
-  public HTTPServerConfiguration withMaxPreambleLength(int maxLength) {
-    if (maxLength <= 0) {
-      throw new IllegalArgumentException("The maximum preamble length must be greater than 0");
-    }
-
-    this.maxHeadLength = maxLength;
-    return this;
-  }
-
-  /**
    * This configures the minimum number of bytes per second that a client must send a request to the server before the server closes the
    * connection.
    *
@@ -372,32 +292,6 @@ public class HTTPServerConfiguration implements Configurable<HTTPServerConfigura
    * {@inheritDoc}
    */
   @Override
-  public HTTPServerConfiguration withNumberOfWorkerThreads(int numberOfWorkerThreads) {
-    if (numberOfWorkerThreads <= 0) {
-      throw new IllegalArgumentException("The number of worker threads must be greater than 0");
-    }
-
-    this.numberOfWorkerThreads = numberOfWorkerThreads;
-    return this;
-  }
-
-  /**
-   * {@inheritDoc}
-   */
-  @Override
-  public HTTPServerConfiguration withPreambleBufferSize(int size) {
-    if (size <= 0) {
-      throw new IllegalArgumentException("The preamble buffer size must be greater than 0");
-    }
-
-    this.preambleBufferSize = size;
-    return this;
-  }
-
-  /**
-   * {@inheritDoc}
-   */
-  @Override
   public HTTPServerConfiguration withReadThroughputCalculationDelayDuration(Duration duration) {
     Objects.requireNonNull(duration, "You cannot set the read throughput delay duration to null");
 
@@ -419,19 +313,6 @@ public class HTTPServerConfiguration implements Configurable<HTTPServerConfigura
     }
 
     this.requestBufferSize = requestBufferSize;
-    return this;
-  }
-
-  /**
-   * {@inheritDoc}
-   */
-  @Override
-  public HTTPServerConfiguration withResponseBufferSize(int responseBufferSize) {
-    if (responseBufferSize <= 0) {
-      throw new IllegalArgumentException("The response buffer size must be greater than 0");
-    }
-
-    this.responseBufferSize = responseBufferSize;
     return this;
   }
 

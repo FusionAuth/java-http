@@ -15,7 +15,6 @@
  */
 package io.fusionauth.http.server.internal;
 
-import javax.net.ssl.SSLSocket;
 import java.io.IOException;
 import java.io.OutputStream;
 import java.net.Socket;
@@ -84,11 +83,6 @@ public class HTTPWorker implements Runnable {
   public void run() {
     boolean keepAlive = false;
     try {
-      // Start the handshake immediately
-      if (socket instanceof SSLSocket sslSocket) {
-        sslSocket.startHandshake();
-      }
-
       while (true) {
         var request = new HTTPRequest(configuration.getContextPath(), configuration.getMultipartBufferSize(),
             listener.getCertificate() != null ? "https" : "http", listener.getPort(), socket.getInetAddress().getHostAddress());
@@ -128,6 +122,7 @@ public class HTTPWorker implements Runnable {
         outputStream = null;
 
         if (!response.isKeepAlive()) {
+          logger.debug("Closing because no Keep-Alive.");
           close(Result.Success);
           break;
         }
@@ -140,18 +135,20 @@ public class HTTPWorker implements Runnable {
       close(keepAlive ? Result.Success : Result.Failure);
 
       if (keepAlive) {
-        logger.debug("Closing connection because the Keep-Alive expired.");
+        logger.debug("Closing because the Keep-Alive expired.", e);
       }
     } catch (ParseException pe) {
       if (instrumenter != null) {
         instrumenter.badRequest();
       }
 
+      logger.debug("Closing because of a bad request.");
       close(Result.Failure);
     } catch (SocketException e) {
       // This should only happen when the server is shutdown and this thread is waiting to read or write. In that case, this will throw a
       // SocketException and the thread will be interrupted. Since the server is being shutdown, we should let the client know.
       if (Thread.currentThread().isInterrupted()) {
+        logger.debug("Closing because server was shutdown.");
         close(Result.Success);
       }
     } catch (IOException io) {
@@ -169,11 +166,6 @@ public class HTTPWorker implements Runnable {
   }
 
   private void close(Result result) {
-    // The server might have already closed the socket, so we don't need to do that here
-//    if (socket.isClosed() && socket.isInputShutdown() && socket.isOutputShutdown()) {
-//      return;
-//    }
-
     // If the conditions are perfect, we can still write back a 500
     if (result == Result.Failure && outputStream != null && !outputStream.isCommitted() && response != null) {
       response.setStatus(500);
@@ -191,11 +183,6 @@ public class HTTPWorker implements Runnable {
     }
 
     try {
-      if (socket instanceof SSLSocket sslSocket) {
-        sslSocket.getSession().invalidate();
-      }
-
-      logger.debug("Closing connection [{}]", result);
       socket.shutdownInput();
       socket.shutdownOutput();
       socket.close();

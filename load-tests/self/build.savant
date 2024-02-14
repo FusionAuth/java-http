@@ -35,7 +35,7 @@ project(group: "io.fusionauth", name: "self", version: "0.1.0", licenses: ["Apac
 
   dependencies {
     group(name: "compile") {
-      dependency(id: "io.fusionauth:java-http:0.1.8")
+      dependency(id: "io.fusionauth:java-http:0.4.0-{integration}")
     }
   }
 
@@ -52,7 +52,7 @@ idea = loadPlugin(id: "org.savantbuild.plugin:idea:2.0.0-RC.4")
 tomcat = loadPlugin(id: "org.savantbuild.plugin:tomcat:2.0.0-RC.4")
 webapp = loadPlugin(id: "org.savantbuild.plugin:webapp:2.0.0-RC.5.{integration}")
 
-java.settings.javaVersion = "17"
+java.settings.javaVersion = "21"
 java.settings.compilerArguments = "--add-exports java.base/sun.security.x509=ALL-UNNAMED --add-exports java.base/sun.security.util=ALL-UNNAMED -XDignore.symbol.file"
 tomcat.settings.buildDirectory = Paths.get("build/dist/tomcat")
 tomcat.settings.buildWebDirectory = Paths.get("build/dist/tomcat/web")

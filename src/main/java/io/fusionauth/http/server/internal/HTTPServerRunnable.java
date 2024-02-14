@@ -93,7 +93,7 @@ public class HTTPServerRunnable implements Runnable {
       try {
         Socket clientSocket = socket.accept();
         clientSocket.setSoTimeout((int) configuration.getClientTimeoutDuration().toMillis());
-        logger.debug("Accepted inbound connection with [{}] existing connections", clients.size());
+        logger.info("Accepted inbound connection with [{}] existing connections", clients.size());
 
         if (instrumenter != null) {
           instrumenter.acceptedConnection();
@@ -139,6 +139,7 @@ public class HTTPServerRunnable implements Runnable {
       ClientInfo client = iterator.next();
       Thread thread = client.thread();
       if (!thread.isAlive()) {
+        logger.info("Thread is dead. Removing.");
         iterator.remove();
         continue;
       }
