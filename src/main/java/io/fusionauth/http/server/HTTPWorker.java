@@ -17,6 +17,7 @@ package io.fusionauth.http.server;
 
 import java.io.IOException;
 import java.net.Socket;
+import java.net.SocketException;
 import java.net.SocketTimeoutException;
 
 import io.fusionauth.http.ConnectionClosedException;
@@ -26,6 +27,8 @@ import io.fusionauth.http.ParseException;
 import io.fusionauth.http.log.Logger;
 import io.fusionauth.http.server.io.HTTPInputStream;
 import io.fusionauth.http.server.io.HTTPOutputStream;
+import io.fusionauth.http.server.io.Throughput;
+import io.fusionauth.http.server.io.ThroughputInputStream;
 import io.fusionauth.http.util.HTTPTools;
 import io.fusionauth.http.util.ThreadPool;
 
@@ -46,14 +49,14 @@ public class HTTPWorker implements Runnable {
 
   private final Socket socket;
 
-  private final HTTPThroughput throughput;
+  private final Throughput throughput;
 
   private volatile HTTPOutputStream outputStream;
 
   private HTTPResponse response;
 
   public HTTPWorker(Socket socket, HTTPServerConfiguration configuration, Instrumenter instrumenter, HTTPListenerConfiguration listener,
-                    HTTPThroughput throughput) {
+                    Throughput throughput) {
     this.socket = socket;
     this.configuration = configuration;
     this.instrumenter = instrumenter;
@@ -74,9 +77,9 @@ public class HTTPWorker implements Runnable {
         var request = new HTTPRequest(configuration.getContextPath(), configuration.getMultipartBufferSize(),
             listener.getCertificate() != null ? "https" : "http", listener.getPort(), socket.getInetAddress().getHostAddress());
 
-        var bodyBytes = HTTPTools.parseRequestPreamble(socket.getInputStream(), request);
-        var inputStream = new HTTPInputStream(configuration, throughput, request, socket.getInputStream(), bodyBytes);
-        request.setInputStream(inputStream);
+        var inputStream = new ThroughputInputStream(socket.getInputStream(), throughput);
+        var bodyBytes = HTTPTools.parseRequestPreamble(inputStream, request);
+        request.setInputStream(new HTTPInputStream(configuration, request, inputStream, bodyBytes));
 
         response = new HTTPResponse();
         outputStream = new HTTPOutputStream(configuration, throughput, request, response, socket.getOutputStream());
@@ -86,6 +89,9 @@ public class HTTPWorker implements Runnable {
         if (connection == null || !connection.equalsIgnoreCase(Connections.Close)) {
           response.setHeader(Headers.Connection, Connections.KeepAlive);
           keepAlive = true;
+        } else {
+          response.setHeader(Headers.Connection, Connections.Close);
+          keepAlive = false;
         }
 
         var handler = configuration.getHandler();
@@ -98,12 +104,12 @@ public class HTTPWorker implements Runnable {
           break;
         }
       }
-    } catch (SocketTimeoutException ste) {
+    } catch (SocketTimeoutException | ConnectionClosedException e) {
       // This might be a read timeout or a Keep-Alive timeout. The failure state is based on that flag
       close(keepAlive ? Result.Success : Result.Failure);
 
       if (keepAlive) {
-        logger.debug("Closing connection because the Keep-Alive expired");
+        logger.debug("Closing connection because the Keep-Alive expired.");
       }
     } catch (ParseException pe) {
       if (instrumenter != null) {
@@ -111,12 +117,18 @@ public class HTTPWorker implements Runnable {
       }
 
       close(Result.Failure);
+    } catch (SocketException e) {
+      // This should only happen when the server is shutdown and this thread is waiting to read or write. In that case, this will throw a
+      // SocketException and the thread will be interrupted. Since the server is being shutdown, we should let the client know.
+      if (Thread.currentThread().isInterrupted()) {
+        close(Result.Success);
+      }
     } catch (IOException io) {
       logger.debug("An IO exception was thrown during processing. These are pretty common.", io);
       close(Result.Failure);
     } catch (Throwable t) {
       // Log the error and signal a failure
-      logger.error("HTTP worker threw an exception while processing a request", t);
+      logger.error("HTTP worker threw an exception while processing a request.", t);
       close(Result.Failure);
     }
   }
@@ -153,7 +165,7 @@ public class HTTPWorker implements Runnable {
       socket.shutdownOutput();
       socket.close();
     } catch (IOException e) {
-      throw new ConnectionClosedException(e);
+      logger.debug("Could not close the connection because the socket threw an exception.", e);
     }
   }
 

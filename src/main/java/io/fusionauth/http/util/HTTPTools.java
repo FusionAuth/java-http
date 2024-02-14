@@ -29,6 +29,7 @@ import java.util.List;
 import java.util.Map;
 import java.util.Map.Entry;
 
+import io.fusionauth.http.ConnectionClosedException;
 import io.fusionauth.http.HTTPMethod;
 import io.fusionauth.http.HTTPValues.ControlBytes;
 import io.fusionauth.http.HTTPValues.ProtocolBytes;
@@ -237,7 +238,7 @@ public final class HTTPTools {
     while (state != RequestPreambleState.Complete) {
       read = inputStream.read(buffer);
       if (read < 0) {
-        throw new IOException("Client closed the socket.");
+        throw new ConnectionClosedException();
       }
 
       for (index = 0; index < read && state != RequestPreambleState.Complete; index++) {

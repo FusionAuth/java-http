@@ -13,14 +13,16 @@
  * either express or implied. See the License for the specific
  * language governing permissions and limitations under the License.
  */
-package io.fusionauth.http.server;
+package io.fusionauth.http.server.io;
+
+import io.fusionauth.http.server.HTTPWorker;
 
 /**
  * This class allows the {@link HTTPWorker} to hook into other classes without passing around interfaces, loggers, and configuration.
  *
  * @author Brian Pontarelli
  */
-public class HTTPThroughput {
+public class Throughput {
   private long firstReadInstant;
 
   private long firstWroteInstant;
@@ -37,7 +39,7 @@ public class HTTPThroughput {
 
   private final long writeThroughputDelay;
 
-  public HTTPThroughput(long readThroughputDelay, long writeThroughputDelay) {
+  public Throughput(long readThroughputDelay, long writeThroughputDelay) {
     this.readThroughputDelay = readThroughputDelay;
     this.writeThroughputDelay = writeThroughputDelay;
   }

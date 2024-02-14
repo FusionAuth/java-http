@@ -22,7 +22,6 @@ import io.fusionauth.http.io.ChunkedInputStream;
 import io.fusionauth.http.log.Logger;
 import io.fusionauth.http.server.HTTPRequest;
 import io.fusionauth.http.server.HTTPServerConfiguration;
-import io.fusionauth.http.server.HTTPThroughput;
 import io.fusionauth.http.server.Instrumenter;
 
 public class HTTPInputStream extends InputStream {
@@ -32,8 +31,6 @@ public class HTTPInputStream extends InputStream {
 
   private final HTTPRequest request;
 
-  private final HTTPThroughput throughput;
-
   private byte[] bodyBytes;
 
   private int bodyBytesIndex;
@@ -42,14 +39,19 @@ public class HTTPInputStream extends InputStream {
 
   private InputStream delegate;
 
-  public HTTPInputStream(HTTPServerConfiguration configuration, HTTPThroughput throughput, HTTPRequest request, InputStream delegate,
-                         byte[] bodyBytes) {
+  private long bytesRemaining;
+
+  public HTTPInputStream(HTTPServerConfiguration configuration, HTTPRequest request, InputStream delegate, byte[] bodyBytes) {
     this.logger = configuration.getLoggerFactory().getLogger(HTTPInputStream.class);
     this.instrumenter = configuration.getInstrumenter();
     this.request = request;
     this.delegate = delegate;
     this.bodyBytes = bodyBytes;
-    this.throughput = throughput;
+
+    // Start the countdown
+    if (request.getContentLength() != null) {
+      this.bytesRemaining = request.getContentLength();
+    }
   }
 
   @Override
@@ -59,6 +61,11 @@ public class HTTPInputStream extends InputStream {
 
   @Override
   public int read() throws IOException {
+    // Signal end of the stream
+    if (bytesRemaining <= 0) {
+      return -1;
+    }
+
     if (!committed) {
       commit();
       committed = true;
@@ -75,17 +82,21 @@ public class HTTPInputStream extends InputStream {
       b = delegate.read();
     }
 
-    throughput.read(1);
-
     if (instrumenter != null) {
       instrumenter.readFromClient(1);
     }
 
+    bytesRemaining--;
     return b;
   }
 
   @Override
   public int read(byte[] buffer) throws IOException {
+    // Signal end of the stream
+    if (bytesRemaining <= 0) {
+      return -1;
+    }
+
     if (!committed) {
       commit();
       committed = true;
@@ -104,17 +115,21 @@ public class HTTPInputStream extends InputStream {
       read = delegate.read(buffer);
     }
 
-    throughput.read(read);
-
     if (instrumenter != null) {
       instrumenter.readFromClient(read);
     }
 
+    bytesRemaining -= read;
     return read;
   }
 
   @Override
   public int read(byte[] buffer, int offset, int length) throws IOException {
+    // Signal end of the stream
+    if (bytesRemaining <= 0) {
+      return -1;
+    }
+
     if (!committed) {
       commit();
       committed = true;
@@ -133,12 +148,11 @@ public class HTTPInputStream extends InputStream {
       read = delegate.read(buffer);
     }
 
-    throughput.read(read);
-
     if (instrumenter != null) {
       instrumenter.readFromClient(read);
     }
 
+    bytesRemaining -= read;
     return read;
   }
 

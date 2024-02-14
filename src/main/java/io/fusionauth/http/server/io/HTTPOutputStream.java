@@ -27,7 +27,6 @@ import io.fusionauth.http.io.ChunkedOutputStream;
 import io.fusionauth.http.server.HTTPRequest;
 import io.fusionauth.http.server.HTTPResponse;
 import io.fusionauth.http.server.HTTPServerConfiguration;
-import io.fusionauth.http.server.HTTPThroughput;
 import io.fusionauth.http.server.Instrumenter;
 import io.fusionauth.http.util.HTTPTools;
 
@@ -46,7 +45,7 @@ public class HTTPOutputStream extends OutputStream {
 
   private final HTTPResponse response;
 
-  private final HTTPThroughput throughput;
+  private final Throughput throughput;
 
   private boolean committed;
 
@@ -54,7 +53,7 @@ public class HTTPOutputStream extends OutputStream {
 
   private OutputStream delegate;
 
-  public HTTPOutputStream(HTTPServerConfiguration configuration, HTTPThroughput throughput, HTTPRequest request, HTTPResponse response,
+  public HTTPOutputStream(HTTPServerConfiguration configuration, Throughput throughput, HTTPRequest request, HTTPResponse response,
                           OutputStream delegate) {
     this.request = request;
     this.response = response;

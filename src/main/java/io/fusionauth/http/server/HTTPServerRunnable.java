@@ -27,6 +27,7 @@ import java.util.List;
 import java.util.Map;
 
 import io.fusionauth.http.log.Logger;
+import io.fusionauth.http.server.io.Throughput;
 
 /**
  * A thread that manages the Selection process for a single server socket. Since some server resources are shared, this separates the shared
@@ -85,7 +86,7 @@ public class HTTPServerRunnable implements Runnable {
           instrumenter.acceptedConnection();
         }
 
-        HTTPThroughput throughput = new HTTPThroughput(configuration.getReadThroughputCalculationDelay().toMillis(), configuration.getWriteThroughputCalculationDelay().toMillis());
+        Throughput throughput = new Throughput(configuration.getReadThroughputCalculationDelay().toMillis(), configuration.getWriteThroughputCalculationDelay().toMillis());
         HTTPWorker runnable = new HTTPWorker(clientSocket, configuration, instrumenter, listener, throughput);
         Thread client = Thread.ofVirtual()
                               .name("HTTP client [" + clientSocket.getRemoteSocketAddress() + "]")
@@ -122,7 +123,7 @@ public class HTTPServerRunnable implements Runnable {
       }
 
       long now = System.currentTimeMillis();
-      HTTPThroughput throughput = client.throughput();
+      Throughput throughput = client.throughput();
       HTTPWorker worker = client.runnable();
       WorkerState state = worker.state();
       long workerLastUsed = throughput.lastUsed();
@@ -182,6 +183,6 @@ public class HTTPServerRunnable implements Runnable {
     }
   }
 
-  record ClientInfo(Thread thread, HTTPWorker runnable, HTTPThroughput throughput) {
+  record ClientInfo(Thread thread, HTTPWorker runnable, Throughput throughput) {
   }
 }
