@@ -15,33 +15,49 @@
  */
 package io.fusionauth.http.server.io;
 
-import java.io.FilterOutputStream;
 import java.io.IOException;
 import java.io.OutputStream;
 
-public class ThroughputOutputStream extends FilterOutputStream {
+/**
+ * Intercepts each OutputStream method and sends the number of bytes to the Throughput object.
+ *
+ * @author Brian Pontarelli
+ */
+public class ThroughputOutputStream extends OutputStream {
+  private final OutputStream delegate;
+
   private final Throughput throughput;
 
-  public ThroughputOutputStream(OutputStream out, Throughput throughput) {
-    super(out);
+  public ThroughputOutputStream(OutputStream delegate, Throughput throughput) {
+    this.delegate = delegate;
     this.throughput = throughput;
   }
 
   @Override
+  public void close() throws IOException {
+    delegate.close();
+  }
+
+  @Override
+  public void flush() throws IOException {
+    delegate.flush();
+  }
+
+  @Override
   public void write(int b) throws IOException {
-    super.write(b);
+    delegate.write(b);
     throughput.wrote(1);
   }
 
   @Override
   public void write(byte[] b) throws IOException {
-    super.write(b);
+    delegate.write(b);
     throughput.wrote(b.length);
   }
 
   @Override
   public void write(byte[] b, int off, int len) throws IOException {
-    super.write(b, off, len);
+    delegate.write(b, off, len);
     throughput.wrote(len);
   }
 }

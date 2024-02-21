@@ -15,7 +15,6 @@
  */
 package io.fusionauth.http.server.io;
 
-import java.io.FilterInputStream;
 import java.io.IOException;
 import java.io.InputStream;
 
@@ -24,17 +23,39 @@ import java.io.InputStream;
  *
  * @author Brian Pontarelli
  */
-public class ThroughputInputStream extends FilterInputStream {
+public class ThroughputInputStream extends InputStream {
+  private final InputStream delegate;
+
   private final Throughput throughput;
 
-  public ThroughputInputStream(InputStream in, Throughput throughput) {
-    super(in);
+  public ThroughputInputStream(InputStream delegate, Throughput throughput) {
+    this.delegate = delegate;
     this.throughput = throughput;
   }
 
   @Override
+  public int available() throws IOException {
+    return delegate.available();
+  }
+
+  @Override
+  public void close() throws IOException {
+    delegate.close();
+  }
+
+  @Override
+  public void mark(int readlimit) {
+    delegate.mark(readlimit);
+  }
+
+  @Override
+  public boolean markSupported() {
+    return delegate.markSupported();
+  }
+
+  @Override
   public int read() throws IOException {
-    int read = super.read();
+    int read = delegate.read();
     if (read != -1) {
       throughput.read(read);
     }
@@ -43,7 +64,7 @@ public class ThroughputInputStream extends FilterInputStream {
 
   @Override
   public int read(byte[] b) throws IOException {
-    int read = super.read(b);
+    int read = delegate.read(b);
     if (read != -1) {
       throughput.read(read);
     }
@@ -52,7 +73,7 @@ public class ThroughputInputStream extends FilterInputStream {
 
   @Override
   public int read(byte[] b, int off, int len) throws IOException {
-    int read = super.read(b, off, len);
+    int read = delegate.read(b, off, len);
     if (read != -1) {
       throughput.read(read);
     }
@@ -60,8 +81,13 @@ public class ThroughputInputStream extends FilterInputStream {
   }
 
   @Override
+  public void reset() throws IOException {
+    delegate.reset();
+  }
+
+  @Override
   public long skip(long n) throws IOException {
-    long skipped = super.skip(n);
+    long skipped = delegate.skip(n);
     throughput.read(skipped);
     return skipped;
   }

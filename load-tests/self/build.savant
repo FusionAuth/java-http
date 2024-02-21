@@ -72,15 +72,15 @@ target(name: "jar", description: "Builds the project JARs", dependsOn: ["compile
 
 target(name: "app", description: "Builds the app", dependsOn: ["jar"]) {
   // Copy all compile dependencies to be able to run command line
-  dependency.copy(to: "build/lib") {
+  dependency.copy(to: "build/dist/lib") {
     dependencies(group: "compile", transitive: true, fetchSource: false)
   }
 
-  file.copy(to: "build/lib") {
+  file.copy(to: "build/dist/lib") {
     fileSet(dir: "build/jars")
   }
 
-  file.copy(to: "build") {
+  file.copy(to: "build/dist") {
     fileSet(dir: "src/main/script")
   }
 }

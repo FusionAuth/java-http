@@ -24,6 +24,7 @@ import io.fusionauth.http.HTTPValues.ContentEncodings;
 import io.fusionauth.http.HTTPValues.Headers;
 import io.fusionauth.http.HTTPValues.TransferEncodings;
 import io.fusionauth.http.io.ChunkedOutputStream;
+import io.fusionauth.http.io.FastByteArrayOutputStream;
 import io.fusionauth.http.server.HTTPRequest;
 import io.fusionauth.http.server.HTTPResponse;
 import io.fusionauth.http.server.HTTPServerConfiguration;
@@ -41,6 +42,8 @@ public class HTTPOutputStream extends OutputStream {
 
   private final int maxChunkSize;
 
+  private final FastByteArrayOutputStream premableStream;
+
   private final HTTPRequest request;
 
   private final HTTPResponse response;
@@ -54,10 +57,11 @@ public class HTTPOutputStream extends OutputStream {
   private OutputStream delegate;
 
   public HTTPOutputStream(HTTPServerConfiguration configuration, Throughput throughput, HTTPRequest request, HTTPResponse response,
-                          OutputStream delegate) {
+                          OutputStream delegate, FastByteArrayOutputStream premableStream) {
     this.request = request;
     this.response = response;
     this.throughput = throughput;
+    this.premableStream = premableStream;
     this.compress = configuration.isCompressByDefault();
     this.instrumenter = configuration.getInstrumenter();
     this.maxChunkSize = configuration.getRequestBufferSize();
@@ -200,7 +204,9 @@ public class HTTPOutputStream extends OutputStream {
     }
 
     // Write the response preamble directly to the Socket OutputStream (the original delegate)
-    HTTPTools.writeResponsePreamble(response, delegate);
+    HTTPTools.writeResponsePreamble(response, premableStream);
+    delegate.write(premableStream.bytes(), 0, premableStream.size());
+    premableStream.reset();
 
     // Next, change the delegate to account for compression and/or chunking and wrap it in an uncloseable stream
     delegate = finalDelegate;

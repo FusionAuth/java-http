@@ -26,6 +26,7 @@ import io.fusionauth.http.HTTPValues.Connections;
 import io.fusionauth.http.HTTPValues.Headers;
 import io.fusionauth.http.HTTPValues.Status;
 import io.fusionauth.http.ParseException;
+import io.fusionauth.http.io.FastByteArrayOutputStream;
 import io.fusionauth.http.log.Logger;
 import io.fusionauth.http.server.ExpectValidator;
 import io.fusionauth.http.server.HTTPHandler;
@@ -57,6 +58,8 @@ public class HTTPWorker implements Runnable {
 
   private final Logger logger;
 
+  private final FastByteArrayOutputStream preambleStream;
+
   private final Socket socket;
 
   private final Throughput throughput;
@@ -73,6 +76,7 @@ public class HTTPWorker implements Runnable {
     this.listener = listener;
     this.throughput = throughput;
     this.logger = configuration.getLoggerFactory().getLogger(HTTPWorker.class);
+    this.preambleStream = new FastByteArrayOutputStream(1024, 256); // We'll reuse this for Keep-Alive, so it belongs here rather than HTTPOutputStream
   }
 
   public Socket getSocket() {
@@ -94,7 +98,7 @@ public class HTTPWorker implements Runnable {
 
         var throughputOutputStream = new ThroughputOutputStream(socket.getOutputStream(), throughput);
         response = new HTTPResponse();
-        outputStream = new HTTPOutputStream(configuration, throughput, request, response, throughputOutputStream);
+        outputStream = new HTTPOutputStream(configuration, throughput, request, response, throughputOutputStream, preambleStream);
         response.setOutputStream(outputStream);
 
         // Handle the "expect" response
