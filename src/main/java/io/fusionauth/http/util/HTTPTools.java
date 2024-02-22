@@ -221,28 +221,28 @@ public final class HTTPTools {
   /**
    * Parses the request preamble directly from the given InputStream.
    *
-   * @param inputStream The input stream to read the preamble from.
-   * @param request     The HTTP request to populate.
+   * @param inputStream   The input stream to read the preamble from.
+   * @param request       The HTTP request to populate.
+   * @param requestBuffer A buffer used for reading to help reduce memory thrashing.
    * @return Any leftover body bytes from the last read from the InputStream.
    * @throws IOException If the read fails.
    */
-  public static byte[] parseRequestPreamble(InputStream inputStream, HTTPRequest request) throws IOException {
+  public static byte[] parseRequestPreamble(InputStream inputStream, HTTPRequest request, byte[] requestBuffer) throws IOException {
     RequestPreambleState state = RequestPreambleState.RequestMethod;
     StringBuilder builder = new StringBuilder();
     String headerName = null;
 
-    byte[] buffer = new byte[1024];
     int read = 0;
     int index = 0;
     while (state != RequestPreambleState.Complete) {
-      read = inputStream.read(buffer);
+      read = inputStream.read(requestBuffer);
       if (read < 0) {
         throw new ConnectionClosedException();
       }
 
       for (index = 0; index < read && state != RequestPreambleState.Complete; index++) {
         // If there is a state transition, store the value properly and reset the builder (if needed)
-        byte ch = buffer[index];
+        byte ch = requestBuffer[index];
         RequestPreambleState nextState = state.next(ch);
         if (nextState != state) {
           switch (state) {
@@ -269,7 +269,7 @@ public final class HTTPTools {
 
     byte[] leftover = null;
     if (index < read) {
-      leftover = Arrays.copyOfRange(buffer, index, read);
+      leftover = Arrays.copyOfRange(requestBuffer, index, read);
     }
 
     return leftover;

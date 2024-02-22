@@ -58,7 +58,9 @@ public class HTTPWorker implements Runnable {
 
   private final Logger logger;
 
-  private final FastByteArrayOutputStream preambleStream;
+  private final byte[] requestBuffer;
+
+  private final FastByteArrayOutputStream responsePreambleStream;
 
   private final Socket socket;
 
@@ -76,7 +78,8 @@ public class HTTPWorker implements Runnable {
     this.listener = listener;
     this.throughput = throughput;
     this.logger = configuration.getLoggerFactory().getLogger(HTTPWorker.class);
-    this.preambleStream = new FastByteArrayOutputStream(1024, 256); // We'll reuse this for Keep-Alive, so it belongs here rather than HTTPOutputStream
+    this.requestBuffer = new byte[16 * 1024];
+    this.responsePreambleStream = new FastByteArrayOutputStream(1024, 256); // We'll reuse this for Keep-Alive, so it belongs here rather than HTTPOutputStream
   }
 
   public Socket getSocket() {
@@ -92,13 +95,13 @@ public class HTTPWorker implements Runnable {
             listener.getCertificate() != null ? "https" : "http", listener.getPort(), socket.getInetAddress().getHostAddress());
 
         var inputStream = new ThroughputInputStream(socket.getInputStream(), throughput);
-        var bodyBytes = HTTPTools.parseRequestPreamble(inputStream, request);
+        var bodyBytes = HTTPTools.parseRequestPreamble(inputStream, request, requestBuffer);
         var httpInputStream = new HTTPInputStream(configuration, request, inputStream, bodyBytes);
         request.setInputStream(httpInputStream);
 
         var throughputOutputStream = new ThroughputOutputStream(socket.getOutputStream(), throughput);
         response = new HTTPResponse();
-        outputStream = new HTTPOutputStream(configuration, throughput, request, response, throughputOutputStream, preambleStream);
+        outputStream = new HTTPOutputStream(configuration, throughput, request, response, throughputOutputStream, responsePreambleStream);
         response.setOutputStream(outputStream);
 
         // Handle the "expect" response

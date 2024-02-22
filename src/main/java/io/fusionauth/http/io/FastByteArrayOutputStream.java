@@ -46,14 +46,23 @@ public class FastByteArrayOutputStream extends OutputStream {
   public void close() {
   }
 
+  /**
+   * Resets this output stream by setting the count to 0.
+   */
   public void reset() {
     count = 0;
   }
 
+  /**
+   * @return The number of bytes that have been written to the output stream.
+   */
   public int size() {
     return count;
   }
 
+  /**
+   * @return The byte array (directly without copying).
+   */
   public byte[] bytes() {
     return buffer;
   }

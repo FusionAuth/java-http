@@ -155,7 +155,6 @@ public class HTTPOutputStream extends OutputStream {
     write(b, 0, b.length);
   }
 
-
   /**
    * Initialize the actual OutputStream latent so that we can call setCompress more than once. The GZIPOutputStream writes bytes to the
    * OutputStream during construction which means we cannot build it more than once. This is why we must wait until we know for certain we

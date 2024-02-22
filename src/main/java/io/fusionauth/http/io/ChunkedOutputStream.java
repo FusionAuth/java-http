@@ -28,6 +28,8 @@ import io.fusionauth.http.HTTPValues.ControlBytes;
 public class ChunkedOutputStream extends OutputStream {
   private final byte[] buffer;
 
+  private final FastByteArrayOutputStream chunkOutputStream;
+
   private final OutputStream delegate;
 
   private int bufferIndex;
@@ -37,6 +39,7 @@ public class ChunkedOutputStream extends OutputStream {
   public ChunkedOutputStream(OutputStream delegate, int maxChunkSize) {
     this.delegate = delegate;
     this.buffer = new byte[maxChunkSize];
+    this.chunkOutputStream = new FastByteArrayOutputStream(maxChunkSize + 32, 32);
   }
 
   @Override
@@ -59,9 +62,11 @@ public class ChunkedOutputStream extends OutputStream {
 
     if (bufferIndex > 0) {
       String header = Integer.toHexString(bufferIndex) + "\r\n";
-      delegate.write(header.getBytes());
-      delegate.write(buffer, 0, bufferIndex);
-      delegate.write(ControlBytes.CRLF);
+      chunkOutputStream.write(header.getBytes());
+      chunkOutputStream.write(buffer, 0, bufferIndex);
+      chunkOutputStream.write(ControlBytes.CRLF);
+      delegate.write(chunkOutputStream.bytes(), 0, chunkOutputStream.size());
+      chunkOutputStream.reset();
       bufferIndex = 0;
     }
 
