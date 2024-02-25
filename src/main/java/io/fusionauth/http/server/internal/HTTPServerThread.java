@@ -41,7 +41,7 @@ import io.fusionauth.http.server.io.Throughput;
  *
  * @author Brian Pontarelli
  */
-public class HTTPServerRunnable implements Runnable {
+public class HTTPServerThread extends Thread {
   private final Duration clientTimeout;
 
   private final List<ClientInfo> clients = new ArrayList<>();
@@ -62,13 +62,15 @@ public class HTTPServerRunnable implements Runnable {
 
   private volatile boolean running;
 
-  public HTTPServerRunnable(HTTPServerConfiguration configuration, HTTPListenerConfiguration listener)
+  public HTTPServerThread(HTTPServerConfiguration configuration, HTTPListenerConfiguration listener)
       throws IOException, GeneralSecurityException {
+    super("HTTP server [" + listener.getBindAddress().toString() + ":" + listener.getPort() + "]");
+
     this.configuration = configuration;
     this.listener = listener;
     this.clientTimeout = configuration.getClientTimeoutDuration();
     this.instrumenter = configuration.getInstrumenter();
-    this.logger = configuration.getLoggerFactory().getLogger(HTTPServerRunnable.class);
+    this.logger = configuration.getLoggerFactory().getLogger(HTTPServerThread.class);
     this.minimumReadThroughput = configuration.getMinimumReadThroughput();
     this.minimumWriteThroughput = configuration.getMinimumWriteThroughput();
 
@@ -79,7 +81,7 @@ public class HTTPServerRunnable implements Runnable {
       this.socket = new ServerSocket(listener.getPort(), -1, listener.getBindAddress());
     }
 
-    this.socket.setSoTimeout(1_000); // Allows us to clean up periodically
+    socket.setSoTimeout(1_000); // Allows us to clean up periodically
 
     if (instrumenter != null) {
       instrumenter.serverStarted();
@@ -109,8 +111,10 @@ public class HTTPServerRunnable implements Runnable {
         // Completely smother since this is expected with the SO_TIMEOUT setting in the constructor
       } catch (SocketException e) {
         // This should only happen when the server is shutdown
-        if (Thread.currentThread().isInterrupted()) {
+        if (socket.isClosed()) {
           running = false;
+        } else {
+          logger.error("An exception was thrown while accepting incoming connections.", e);
         }
       } catch (Throwable t) {
         logger.error("An exception was thrown during server processing. This is a fatal issue and we need to shutdown the server.", t);
@@ -120,20 +124,26 @@ public class HTTPServerRunnable implements Runnable {
       }
     }
 
-    try {
-      // Close all the client connections as cleanly as possible
-      for (ClientInfo client : clients) {
-        client.thread().interrupt();
-      }
+    // Close all the client connections as cleanly as possible
+    for (ClientInfo client : clients) {
+      client.thread().interrupt();
+    }
+  }
 
-      // Close the server socket
+  public void shutdown() {
+    running = false;
+    try {
       socket.close();
-    } catch (IOException e) {
-      throw new RuntimeException(e);
+    } catch (IOException ignore) {
+      // Ignorable since we are shutting down regardless
     }
   }
 
   private void cleanup() {
+    if (!running) {
+      return;
+    }
+
     Iterator<ClientInfo> iterator = clients.iterator();
     while (iterator.hasNext()) {
       ClientInfo client = iterator.next();
@@ -190,8 +200,6 @@ public class HTTPServerRunnable implements Runnable {
 
       try {
         var socket = worker.getSocket();
-        socket.shutdownInput();
-        socket.shutdownOutput();
         socket.close();
         iterator.remove();
 

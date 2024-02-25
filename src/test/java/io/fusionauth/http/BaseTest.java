@@ -60,6 +60,7 @@ import io.fusionauth.http.server.Instrumenter;
 import org.testng.ITestListener;
 import org.testng.ITestResult;
 import org.testng.annotations.AfterSuite;
+import org.testng.annotations.BeforeSuite;
 import org.testng.annotations.DataProvider;
 import sun.security.util.KnownOIDs;
 import sun.security.util.ObjectIdentifier;
@@ -91,13 +92,13 @@ public abstract class BaseTest {
    * This timeout is used for the HttpClient during each test. If you are in a debugger, you will need to change this timeout to be much
    * larger, otherwise, the client might truncate the request to the server.
    */
-  public static final Duration ClientTimeout = Duration.ofSeconds(2_000);
+  public static final Duration ClientTimeout = Duration.ofSeconds(2);
 
   /**
    * This timeout is used for the HTTPServer during each test. If you are in a debugger, you will need to change this timeout to be much
    * larger, otherwise, the server will toss out the request.
    */
-  public static final Duration ServerTimeout = Duration.ofSeconds(2_000);
+  public static final Duration ServerTimeout = Duration.ofSeconds(2);
 
   private static final ZonedDateTime TestStarted = ZonedDateTime.now();
 
@@ -152,8 +153,6 @@ public abstract class BaseTest {
     boolean tls = scheme.equals("https");
     HTTPListenerConfiguration listenerConfiguration;
     if (tls) {
-      setupCertificates();
-
       var certChain = new Certificate[]{certificate, intermediateCertificate};
       listenerConfiguration = new HTTPListenerConfiguration(4242, certChain, keyPair.getPrivate());
     } else {
@@ -263,7 +262,8 @@ public abstract class BaseTest {
   /**
    * Generates keypairs and certificates for Root CA -> Intermediate -> Server Certificate.
    */
-  protected void setupCertificates() {
+  @BeforeSuite
+  public void setupCertificates() {
     rootKeyPair = generateNewRSAKeyPair();
     intermediateKeyPair = generateNewRSAKeyPair();
     keyPair = generateNewRSAKeyPair();

@@ -180,7 +180,7 @@ public class HTTPOutputStream extends OutputStream {
       for (String encoding : request.getAcceptEncodings()) {
         if (encoding.equalsIgnoreCase(ContentEncodings.Gzip)) {
           try {
-            finalDelegate = new GZIPOutputStream(finalDelegate);
+            finalDelegate = new GZIPOutputStream(finalDelegate, true);
             response.setHeader(Headers.ContentEncoding, ContentEncodings.Gzip);
             response.setHeader(Headers.Vary, Headers.AcceptEncoding);
             break;

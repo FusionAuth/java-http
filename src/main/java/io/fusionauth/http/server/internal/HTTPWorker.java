@@ -190,8 +190,6 @@ public class HTTPWorker implements Runnable {
     }
 
     try {
-      socket.shutdownInput();
-      socket.shutdownOutput();
       socket.close();
     } catch (IOException e) {
       logger.debug("Could not close the connection because the socket threw an exception.", e);

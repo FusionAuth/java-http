@@ -20,7 +20,7 @@ import java.util.ArrayList;
 import java.util.List;
 
 import io.fusionauth.http.log.Logger;
-import io.fusionauth.http.server.internal.HTTPServerRunnable;
+import io.fusionauth.http.server.internal.HTTPServerThread;
 
 /**
  * The server bro!
@@ -28,7 +28,7 @@ import io.fusionauth.http.server.internal.HTTPServerRunnable;
  * @author Brian Pontarelli
  */
 public class HTTPServer implements Closeable, Configurable<HTTPServer> {
-  private final List<Thread> servers = new ArrayList<>();
+  private final List<HTTPServerThread> servers = new ArrayList<>();
 
   private HTTPServerConfiguration configuration = new HTTPServerConfiguration();
 
@@ -43,9 +43,9 @@ public class HTTPServer implements Closeable, Configurable<HTTPServer> {
     long start = System.currentTimeMillis();
     long shutdownDuration = configuration.getShutdownDuration().toMillis();
 
-    // First, interrupt all the threads
-    for (Thread thread : servers) {
-      thread.interrupt();
+    // First, shutdown all the threads
+    for (HTTPServerThread thread : servers) {
+      thread.shutdown();
     }
 
     // Next, try joining on them
@@ -89,12 +89,13 @@ public class HTTPServer implements Closeable, Configurable<HTTPServer> {
 
     try {
       for (HTTPListenerConfiguration listener : configuration.getListeners()) {
-        HTTPServerRunnable server = new HTTPServerRunnable(configuration, listener);
-        Thread thread = Thread.ofVirtual()
-                              .name("HTTP server [" + listener.getBindAddress().toString() + ":" + listener.getPort() + "]")
-                              .start(server);
-        servers.add(thread);
-
+        HTTPServerThread server = new HTTPServerThread(configuration, listener);
+//        Thread thread = Thread.ofPlatform()
+//                              .daemon()
+//                              .name("HTTP server [" + listener.getBindAddress().toString() + ":" + listener.getPort() + "]")
+//                              .start(server);
+        servers.add(server);
+        server.start();
         logger.info("HTTP server listening on port [{}]", listener.getPort());
       }
 
