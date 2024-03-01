@@ -77,7 +77,6 @@ public class HTTPInputStream extends InputStream {
 
     if (!committed) {
       commit();
-      committed = true;
     }
 
     int b;
@@ -101,14 +100,13 @@ public class HTTPInputStream extends InputStream {
 
   @Override
   public int read(byte[] buffer) throws IOException {
-    // Signal end of the stream
-    if (bytesRemaining <= 0) {
+    // Signal end of the stream if there is no more to read and the request isn't chunked
+    if (bytesRemaining <= 0 && !request.isChunked()) {
       return -1;
     }
 
     if (!committed) {
       commit();
-      committed = true;
     }
 
     int read;
@@ -134,14 +132,13 @@ public class HTTPInputStream extends InputStream {
 
   @Override
   public int read(byte[] buffer, int offset, int length) throws IOException {
-    // Signal end of the stream
-    if (bytesRemaining <= 0) {
+    // Signal end of the stream if there is no more to read and the request isn't chunked
+    if (bytesRemaining <= 0 && !request.isChunked()) {
       return -1;
     }
 
     if (!committed) {
       commit();
-      committed = true;
     }
 
     int read;
@@ -166,6 +163,8 @@ public class HTTPInputStream extends InputStream {
   }
 
   private void commit() {
+    committed = true;
+
     Long contentLength = request.getContentLength();
     boolean hasBody = (contentLength != null && contentLength > 0) || request.isChunked();
     if (!hasBody) {
@@ -174,7 +173,8 @@ public class HTTPInputStream extends InputStream {
       logger.trace("Client indicated it was sending an entity-body in the request. Handling body using Content-Length header {}.", contentLength);
     } else if (request.isChunked()) {
       logger.trace("Client indicated it was sending an entity-body in the request. Handling body using chunked encoding.");
-      delegate = new ChunkedInputStream(delegate, 1024);
+      delegate = new ChunkedInputStream(delegate, 1024, bodyBytes);
+      bodyBytes = null;
 
       if (instrumenter != null) {
         instrumenter.chunkedRequest();

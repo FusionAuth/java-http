@@ -37,7 +37,7 @@ public class ChunkBodyInputStreamTest {
         \r
         """.getBytes()
     );
-    var inputStream = new ChunkedInputStream(bais, 1024);
+    var inputStream = new ChunkedInputStream(bais, 1024, null);
     var result = new String(inputStream.readAllBytes());
     assertEquals(result, "123456789012345678901234567890123456789012345678901234567890");
     assertEquals(inputStream.read(), -1);
@@ -58,7 +58,7 @@ public class ChunkBodyInputStreamTest {
             \r
             """);
     var buf = new byte[1024];
-    var inputStream = new ChunkedInputStream(pmis, 1024);
+    var inputStream = new ChunkedInputStream(pmis, 1024, null);
     assertEquals(inputStream.read(buf), 8);
     var result = new String(buf, 0, 8);
     assertEquals(result, "12345678");
@@ -91,7 +91,7 @@ public class ChunkBodyInputStreamTest {
             \r
             """);
     var buf = new byte[1024];
-    var inputStream = new ChunkedInputStream(pmis, 1024);
+    var inputStream = new ChunkedInputStream(pmis, 1024, null);
     assertEquals(inputStream.read(buf), 10);
     var result = new String(buf, 0, 10);
     assertEquals(result, "1234567890");

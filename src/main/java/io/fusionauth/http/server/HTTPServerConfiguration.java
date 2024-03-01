@@ -34,8 +34,6 @@ public class HTTPServerConfiguration implements Configurable<HTTPServerConfigura
 
   private Path baseDir = Path.of("");
 
-  private Duration clientTimeoutDuration = Duration.ofSeconds(20);
-
   private boolean compressByDefault = true;
 
   private String contextPath = "";
@@ -44,15 +42,23 @@ public class HTTPServerConfiguration implements Configurable<HTTPServerConfigura
 
   private HTTPHandler handler;
 
+  private Duration initialReadTimeoutDuration = Duration.ofSeconds(2);
+
   private Instrumenter instrumenter;
+
+  private Duration keepAliveTimeoutDuration = Duration.ofSeconds(20);
 
   private LoggerFactory loggerFactory = SystemOutLoggerFactory.FACTORY;
 
-  private long minimumReadThroughput = 16 * 1024; // Per second
+  private int maxResponseChunkSize = 16 * 1024; // 16k bytes
 
-  private long minimumWriteThroughput = 16 * 1024; // Per second
+  private long minimumReadThroughput = 16 * 1024; // 16k/second
 
-  private int multipartBufferSize = 16 * 1024;
+  private long minimumWriteThroughput = 16 * 1024; // 16k/second
+
+  private int multipartBufferSize = 16 * 1024; // 16k bytes
+
+  private Duration processingTimeoutDuration = Duration.ofSeconds(10);
 
   private Duration readThroughputCalculationDelayDuration = Duration.ofSeconds(5);
 
@@ -70,36 +76,76 @@ public class HTTPServerConfiguration implements Configurable<HTTPServerConfigura
     return this;
   }
 
+  /**
+   * @return The base dir for the entire server. This can be used to calculate files from as needed.
+   */
   public Path getBaseDir() {
     return baseDir;
   }
 
-  public Duration getClientTimeoutDuration() {
-    return clientTimeoutDuration;
-  }
-
+  /**
+   * @return The context page that the entire server serves requests under or null.
+   */
   public String getContextPath() {
     return contextPath;
   }
 
+  /**
+   * @return The expect validator or null.
+   */
   public ExpectValidator getExpectValidator() {
     return expectValidator;
   }
 
+  /**
+   * @return The HTTP handler for this server. Cannot be null and is required.
+   */
   public HTTPHandler getHandler() {
     return handler;
   }
 
+  /**
+   * @return The timeout between a socket being accepted by the server and the first byte being read. This is distinct and separate from the
+   *     timeout for subsequent reads after the connection has been "kept alive".
+   */
+  public Duration getInitialReadTimeoutDuration() {
+    return initialReadTimeoutDuration;
+  }
+
+  /**
+   * @return The instrumenter or null.
+   */
   public Instrumenter getInstrumenter() {
     return instrumenter;
   }
 
+  /**
+   * @return The timeout between requests when the server is in Keep-Alive mode. This is the maximum value to prevent DoS attacks that use
+   *     the HTTP headers to set extremely long timeouts.
+   */
+  public Duration getKeepAliveTimeoutDuration() {
+    return keepAliveTimeoutDuration;
+  }
+
+  /**
+   * @return All configured listeners (if any) or an empty list.
+   */
   public List<HTTPListenerConfiguration> getListeners() {
     return listeners;
   }
 
+  /**
+   * @return The logger factory.
+   */
   public LoggerFactory getLoggerFactory() {
     return loggerFactory;
+  }
+
+  /**
+   * @return The max chunk size in the response. Defaults to 16k bytes.
+   */
+  public int getMaxResponseChunkSize() {
+    return maxResponseChunkSize;
   }
 
   /**
@@ -122,8 +168,21 @@ public class HTTPServerConfiguration implements Configurable<HTTPServerConfigura
     return minimumWriteThroughput;
   }
 
+  /**
+   * @return The multipart buffer size in bytes. This is primary used for parsing multipart requests by the {@link HTTPRequest} class.
+   *     Defaults to 16k bytes.
+   */
   public int getMultipartBufferSize() {
     return multipartBufferSize;
+  }
+
+  /**
+   * @return The timeout between when the request has been fully read and the first byte is written. This provides the worker thread to
+   *     perform work before it begins to write. This timeout should be relatively short depending on how long you want the browser/client
+   *     to wait before the response comes back. Defaults to 10 seconds.
+   */
+  public Duration getProcessingTimeoutDuration() {
+    return processingTimeoutDuration;
   }
 
   /**
@@ -133,10 +192,17 @@ public class HTTPServerConfiguration implements Configurable<HTTPServerConfigura
     return readThroughputCalculationDelayDuration;
   }
 
+  /**
+   * @return The size of the buffer used to read the request. This defaults to 16k bytes.
+   */
   public int getRequestBufferSize() {
     return requestBufferSize;
   }
 
+  /**
+   * @return The duration that the server will wait while worker threads complete before forcibly shutting itself down. Defaults to 10
+   *     seconds.
+   */
   public Duration getShutdownDuration() {
     return shutdownDuration;
   }
@@ -148,6 +214,9 @@ public class HTTPServerConfiguration implements Configurable<HTTPServerConfigura
     return writeThroughputCalculationDelayDuration;
   }
 
+  /**
+   * @return Whether all responses are compressed by default. Defaults to true.
+   */
   public boolean isCompressByDefault() {
     return compressByDefault;
   }
@@ -158,21 +227,6 @@ public class HTTPServerConfiguration implements Configurable<HTTPServerConfigura
   @Override
   public HTTPServerConfiguration withBaseDir(Path baseDir) {
     this.baseDir = baseDir;
-    return this;
-  }
-
-  /**
-   * {@inheritDoc}
-   */
-  @Override
-  public HTTPServerConfiguration withClientTimeout(Duration duration) {
-    Objects.requireNonNull(duration, "You cannot set the client timeout to null");
-    if (duration.isZero() || duration.isNegative()) {
-      throw new IllegalArgumentException("The client timeout duration must be greater than 0");
-    }
-
-
-    this.clientTimeoutDuration = duration;
     return this;
   }
 
@@ -217,8 +271,38 @@ public class HTTPServerConfiguration implements Configurable<HTTPServerConfigura
    * {@inheritDoc}
    */
   @Override
+  public HTTPServerConfiguration withInitialReadTimeout(Duration duration) {
+    Objects.requireNonNull(duration, "You cannot set the client timeout to null");
+    if (duration.isZero() || duration.isNegative()) {
+      throw new IllegalArgumentException("The client timeout duration must be greater than 0");
+    }
+
+
+    this.initialReadTimeoutDuration = duration;
+    return this;
+  }
+
+  /**
+   * {@inheritDoc}
+   */
+  @Override
   public HTTPServerConfiguration withInstrumenter(Instrumenter instrumenter) {
     this.instrumenter = instrumenter;
+    return this;
+  }
+
+  /**
+   * {@inheritDoc}
+   */
+  @Override
+  public HTTPServerConfiguration withKeepAliveTimeoutDuration(Duration duration) {
+    Objects.requireNonNull(duration, "You cannot set the keep-alive timeout duration to null");
+
+    if (duration.isZero() || duration.isNegative()) {
+      throw new IllegalArgumentException("The keep-alive timeout duration must be grater than 0");
+    }
+
+    this.keepAliveTimeoutDuration = duration;
     return this;
   }
 
@@ -239,6 +323,15 @@ public class HTTPServerConfiguration implements Configurable<HTTPServerConfigura
   public HTTPServerConfiguration withLoggerFactory(LoggerFactory loggerFactory) {
     Objects.requireNonNull(loggerFactory, "You cannot set LoggerFactory to null");
     this.loggerFactory = loggerFactory;
+    return this;
+  }
+
+  /**
+   * {@inheritDoc}
+   */
+  @Override
+  public HTTPServerConfiguration withMaxResponseChunkSize(int size) {
+    this.maxResponseChunkSize = size;
     return this;
   }
 
@@ -285,6 +378,21 @@ public class HTTPServerConfiguration implements Configurable<HTTPServerConfigura
     }
 
     this.multipartBufferSize = multipartBufferSize;
+    return this;
+  }
+
+  /**
+   * {@inheritDoc}
+   */
+  @Override
+  public HTTPServerConfiguration withProcessingTimeoutDuration(Duration duration) {
+    Objects.requireNonNull(duration, "You cannot set the processing timeout duration to null");
+
+    if (duration.isZero() || duration.isNegative()) {
+      throw new IllegalArgumentException("The processing timeout duration must be grater than 0");
+    }
+
+    this.processingTimeoutDuration = duration;
     return this;
   }
 

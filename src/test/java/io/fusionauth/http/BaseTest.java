@@ -109,17 +109,17 @@ public abstract class BaseTest {
   /*
    * Keypairs and certificates for a 3-level CA chain (root->intermediate->server).
    */
-  public Certificate certificate;
+  public static Certificate certificate;
 
-  public Certificate intermediateCertificate;
+  public static Certificate intermediateCertificate;
 
-  public KeyPair intermediateKeyPair;
+  public static KeyPair intermediateKeyPair;
 
-  public KeyPair keyPair;
+  public static KeyPair keyPair;
 
-  public Certificate rootCertificate;
+  public static Certificate rootCertificate;
 
-  public KeyPair rootKeyPair;
+  public static KeyPair rootKeyPair;
 
   static {
     logger.setLevel(Level.Trace);
@@ -160,7 +160,9 @@ public abstract class BaseTest {
     }
 
     return new HTTPServer().withHandler(handler)
-                           .withClientTimeout(ServerTimeout)
+                           .withKeepAliveTimeoutDuration(ServerTimeout)
+                           .withInitialReadTimeout(ServerTimeout)
+                           .withProcessingTimeoutDuration(ServerTimeout)
                            .withExpectValidator(expectValidator)
                            .withInstrumenter(instrumenter)
                            .withLoggerFactory(SystemOutLoggerFactory.FACTORY)
@@ -178,11 +180,6 @@ public abstract class BaseTest {
 
     return URI.create("http://localhost:4242/api/system/version" + params);
   }
-
-//  @BeforeMethod
-//  public void resetLogger() {
-//    logger.reset();
-//  }
 
   /**
    * @return The possible schemes - {@code http} and {@code https}.
@@ -216,7 +213,7 @@ public abstract class BaseTest {
     System.out.println("Total test time in minutes : " + Duration.between(TestStarted, ZonedDateTime.now()).toMinutes());
   }
 
-  protected X509CertInfo generateCertInfo(PublicKey publicKey, String commonName) {
+  protected static X509CertInfo generateCertInfo(PublicKey publicKey, String commonName) {
     try {
       X509CertInfo certInfo = new X509CertInfo();
       CertificateX509Key certKey = new CertificateX509Key(publicKey);
@@ -234,7 +231,7 @@ public abstract class BaseTest {
     }
   }
 
-  protected KeyPair generateNewRSAKeyPair() {
+  protected static KeyPair generateNewRSAKeyPair() {
     try {
       KeyPairGenerator keyPairGenerator = KeyPairGenerator.getInstance("RSA");
       keyPairGenerator.initialize(4096);
@@ -244,7 +241,7 @@ public abstract class BaseTest {
     }
   }
 
-  protected Certificate generateRootCA(PublicKey publicKey, PrivateKey privateKey)
+  protected static Certificate generateRootCA(PublicKey publicKey, PrivateKey privateKey)
       throws IllegalArgumentException {
     try {
       // Generate the standard CertInfo, but set Issuer and Subject to the same value.
@@ -263,7 +260,7 @@ public abstract class BaseTest {
    * Generates keypairs and certificates for Root CA -> Intermediate -> Server Certificate.
    */
   @BeforeSuite
-  public void setupCertificates() {
+  public static void setupCertificates() {
     rootKeyPair = generateNewRSAKeyPair();
     intermediateKeyPair = generateNewRSAKeyPair();
     keyPair = generateNewRSAKeyPair();
@@ -278,7 +275,7 @@ public abstract class BaseTest {
     certificate = signCertificate((X509Certificate) intermediateCertificate, intermediateKeyPair.getPrivate(), serverCertInfo, false);
   }
 
-  protected X509Certificate signCertificate(X509Certificate issuer, PrivateKey issuerPrivateKey, X509CertInfo signingRequest, boolean isCa)
+  protected static X509Certificate signCertificate(X509Certificate issuer, PrivateKey issuerPrivateKey, X509CertInfo signingRequest, boolean isCa)
       throws IllegalArgumentException {
 
     try {

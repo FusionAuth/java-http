@@ -267,6 +267,13 @@ public final class HTTPValues {
     }
   }
 
+  public static final class HeaderBytes {
+    public static final byte[] SetCookie = Headers.SetCookie.getBytes();
+
+    private HeaderBytes() {
+    }
+  }
+
   public static final class Methods {
     public static final String CONNECT = "CONNECT";
 

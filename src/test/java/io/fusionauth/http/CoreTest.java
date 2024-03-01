@@ -50,7 +50,6 @@ import io.fusionauth.http.server.HTTPListenerConfiguration;
 import io.fusionauth.http.server.HTTPServer;
 import org.testng.annotations.Test;
 import static org.testng.Assert.assertEquals;
-import static org.testng.Assert.assertNotEquals;
 import static org.testng.Assert.assertNull;
 import static org.testng.Assert.assertTrue;
 import static org.testng.Assert.fail;
@@ -139,44 +138,6 @@ public class CoreTest extends BaseTest {
 
       // Verify that we received all intermediates, and can verify the chain all the way up to rootCertificate.
       validateCertPath(rootCertificate, peerCerts);
-    }
-  }
-
-  @Test
-  public void clientTimeout() throws Exception {
-    // This test simulates if the client is slow at reading. This is not simple to test, but we can simulate this by overflowing the operating
-    // systems I/O buffer (hence why we are writing the LongString 100 times). This forces the client to read some bytes before the operating
-    // system can get more data from the server
-    HTTPHandler handler = (req, res) -> {
-      System.out.println("Handling");
-      res.setStatus(200);
-      res.setContentLength(LongString.length() * 100L);
-      for (int i = 0; i < 100; i++) {
-        res.getOutputStream().write(LongString.getBytes());
-      }
-      res.getOutputStream().close();
-      System.out.println("Closed");
-    };
-
-    var instrumenter = new CountingInstrumenter();
-    try (var ignore = makeServer("http", handler, instrumenter).withClientTimeout(Duration.ofSeconds(1)).start(); var socket = new Socket("127.0.0.1", 4242)) {
-      var out = socket.getOutputStream();
-      socket.setReceiveBufferSize(512);
-      socket.setSendBufferSize(512);
-      out.write("""
-          GET / HTTP/1.1\r
-          Connection: close\r
-          Content-Length: 4\r
-          \r
-          body
-          """.getBytes());
-      out.flush();
-      sleep(3_000L);
-
-      var in = socket.getInputStream();
-      var body = in.readAllBytes();
-      assertNotEquals(body.length, LongString.length() * 100);
-      assertEquals(instrumenter.getClosedConnections(), 1);
     }
   }
 
@@ -293,19 +254,50 @@ public class CoreTest extends BaseTest {
   }
 
   @Test
+  public void initialReadTimeout() {
+    // This test simulates if the client doesn't send bytes for the initial timeout
+    HTTPHandler handler = (req, res) -> {
+      fail("Should not be called");
+    };
+
+    var instrumenter = new CountingInstrumenter();
+    try (var ignore = makeServer("http", handler, instrumenter).withInitialReadTimeout(Duration.ofSeconds(1)).start(); var socket = new Socket("127.0.0.1", 4242)) {
+      var out = socket.getOutputStream();
+      sleep(1_500);
+      out.write("""
+          GET / HTTP/1.1\r
+          Connection: close\r
+          Content-Length: 4\r
+          \r
+          body
+          """.getBytes());
+      out.flush();
+      var in = socket.getInputStream();
+      in.readAllBytes();
+      fail("Should have failed");
+    } catch (Exception ignore) {
+      // Expected
+    }
+
+    assertEquals(instrumenter.getClosedConnections(), 1);
+  }
+
+  @Test
   public void keepAliveTimeout() {
+    // This test only works with GET and the URLConnection because this setup will re-submit the same request if the Keep-Alive connection
+    // is terminated by the server
     HTTPHandler handler = (req, res) -> {
       assertNull(req.getContentType());
       res.setStatus(200);
     };
 
-    try (var ignore = makeServer("http", handler).start()) {
+    try (var ignore = makeServer("http", handler).withKeepAliveTimeoutDuration(Duration.ofSeconds(1)).start()) {
       URI uri = makeURI("http", "");
       var response = new RESTClient<>(Void.TYPE, Void.TYPE)
           .url(uri.toString())
           .connectTimeout(0)
           .readTimeout(0)
-          .post()
+          .get()
           .go();
 
       if (response.status != 200) {
@@ -314,13 +306,13 @@ public class CoreTest extends BaseTest {
       assertEquals(response.status, 200);
 
       // This will cause the keep-alive on the server to expire and that means the socket will be dead but the client should receover
-      sleep(3_000L);
+      sleep(2_000L);
 
       response = new RESTClient<>(Void.TYPE, Void.TYPE)
           .url(uri.toString())
           .connectTimeout(0)
           .readTimeout(0)
-          .post()
+          .get()
           .go();
 
       if (response.status != 200) {
@@ -504,7 +496,7 @@ public class CoreTest extends BaseTest {
     };
 
     var instrumenter = new CountingInstrumenter();
-    try (var ignore = makeServer("http", handler, instrumenter).withClientTimeout(Duration.ofSeconds(1)).start(); Socket socket = new Socket("127.0.0.1", 4242)) {
+    try (var ignore = makeServer("http", handler, instrumenter).withInitialReadTimeout(Duration.ofSeconds(1)).start(); Socket socket = new Socket("127.0.0.1", 4242)) {
       var out = socket.getOutputStream();
       out.write("""
           GET / HTTP/1.1\r

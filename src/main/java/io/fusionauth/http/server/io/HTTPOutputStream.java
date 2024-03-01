@@ -24,11 +24,11 @@ import io.fusionauth.http.HTTPValues.ContentEncodings;
 import io.fusionauth.http.HTTPValues.Headers;
 import io.fusionauth.http.HTTPValues.TransferEncodings;
 import io.fusionauth.http.io.ChunkedOutputStream;
-import io.fusionauth.http.io.FastByteArrayOutputStream;
 import io.fusionauth.http.server.HTTPRequest;
 import io.fusionauth.http.server.HTTPResponse;
 import io.fusionauth.http.server.HTTPServerConfiguration;
 import io.fusionauth.http.server.Instrumenter;
+import io.fusionauth.http.server.internal.HTTPBuffers;
 import io.fusionauth.http.util.HTTPTools;
 
 /**
@@ -38,17 +38,15 @@ import io.fusionauth.http.util.HTTPTools;
  * @author Brian Pontarelli
  */
 public class HTTPOutputStream extends OutputStream {
+  private final HTTPBuffers buffers;
+
   private final Instrumenter instrumenter;
-
-  private final int maxChunkSize;
-
-  private final FastByteArrayOutputStream premableStream;
 
   private final HTTPRequest request;
 
   private final HTTPResponse response;
 
-  private final Throughput throughput;
+  private final Runnable writeObserver;
 
   private boolean committed;
 
@@ -56,15 +54,14 @@ public class HTTPOutputStream extends OutputStream {
 
   private OutputStream delegate;
 
-  public HTTPOutputStream(HTTPServerConfiguration configuration, Throughput throughput, HTTPRequest request, HTTPResponse response,
-                          OutputStream delegate, FastByteArrayOutputStream premableStream) {
+  public HTTPOutputStream(HTTPServerConfiguration configuration, HTTPRequest request, HTTPResponse response, OutputStream delegate,
+                          HTTPBuffers buffers, Runnable writeObserver) {
     this.request = request;
     this.response = response;
-    this.throughput = throughput;
-    this.premableStream = premableStream;
+    this.buffers = buffers;
+    this.writeObserver = writeObserver;
     this.compress = configuration.isCompressByDefault();
     this.instrumenter = configuration.getInstrumenter();
-    this.maxChunkSize = configuration.getRequestBufferSize();
 
     // Always make the main output stream uncloseable because this is likely the SocketOutputStream. We handle Keep-Alive and Close in the
     // HTTPWorker
@@ -129,7 +126,6 @@ public class HTTPOutputStream extends OutputStream {
     }
 
     delegate.write(buffer, offset, length);
-    throughput.writeThroughput(length);
 
     if (instrumenter != null) {
       instrumenter.wroteToClient(length);
@@ -143,7 +139,6 @@ public class HTTPOutputStream extends OutputStream {
     }
 
     delegate.write(b);
-    throughput.wrote(1);
 
     if (instrumenter != null) {
       instrumenter.wroteToClient(1);
@@ -163,37 +158,11 @@ public class HTTPOutputStream extends OutputStream {
   private void commit(boolean closing) throws IOException {
     committed = true;
 
-    // Determine the encoding based on the Content-Length header. This should be before the encoding OutputStream so that the chunked parts
-    // are the compressed body.
-    OutputStream finalDelegate = delegate;
+    // +++++++++++ Step 1: Determine the extra headers first and add them +++++++++++
+    boolean chunked = false;
     if (response.getContentLength() == null) {
-      finalDelegate = new ChunkedOutputStream(finalDelegate, maxChunkSize);
       response.setHeader(Headers.TransferEncoding, TransferEncodings.Chunked);
-
-      if (instrumenter != null) {
-        instrumenter.chunkedResponse();
-      }
-    }
-
-    // Attempt to honor the requested encoding(s) in order, taking the first match. If a match is not found, we don't compress the response.
-    if (compress) {
-      for (String encoding : request.getAcceptEncodings()) {
-        if (encoding.equalsIgnoreCase(ContentEncodings.Gzip)) {
-          try {
-            finalDelegate = new GZIPOutputStream(finalDelegate, true);
-            response.setHeader(Headers.ContentEncoding, ContentEncodings.Gzip);
-            response.setHeader(Headers.Vary, Headers.AcceptEncoding);
-            break;
-          } catch (IOException e) {
-            throw new RuntimeException(e);
-          }
-        } else if (encoding.equalsIgnoreCase(ContentEncodings.Deflate)) {
-          finalDelegate = new DeflaterOutputStream(finalDelegate, true);
-          response.setHeader(Headers.ContentEncoding, ContentEncodings.Deflate);
-          response.setHeader(Headers.Vary, Headers.AcceptEncoding);
-          break;
-        }
-      }
+      chunked = true;
     }
 
     // If the output stream is closing, but nothing has been written yet, we can safely set the Content-Length header to 0 to let the client
@@ -202,13 +171,51 @@ public class HTTPOutputStream extends OutputStream {
       response.setContentLength(0L);
     }
 
-    // Write the response preamble directly to the Socket OutputStream (the original delegate)
+    boolean gzip = false;
+    boolean deflate = false;
+    if (compress) {
+      for (String encoding : request.getAcceptEncodings()) {
+        if (encoding.equalsIgnoreCase(ContentEncodings.Gzip)) {
+          response.setHeader(Headers.ContentEncoding, ContentEncodings.Gzip);
+          response.setHeader(Headers.Vary, Headers.AcceptEncoding);
+          gzip = true;
+          break;
+        } else if (encoding.equalsIgnoreCase(ContentEncodings.Deflate)) {
+          response.setHeader(Headers.ContentEncoding, ContentEncodings.Deflate);
+          response.setHeader(Headers.Vary, Headers.AcceptEncoding);
+          deflate = true;
+          break;
+        }
+      }
+    }
+
+    // +++++++++++ Step 2: Write the preamble. This must be first without any other output stream interference +++++++++++
+    var premableStream = buffers.preambleOutputStream();
+    writeObserver.run();
+    premableStream.reset();
     HTTPTools.writeResponsePreamble(response, premableStream);
     delegate.write(premableStream.bytes(), 0, premableStream.size());
-    premableStream.reset();
+    delegate.flush();
 
-    // Next, change the delegate to account for compression and/or chunking and wrap it in an uncloseable stream
-    delegate = finalDelegate;
+    // +++++++++++ Step 3: Set up the delegates +++++++++++
+    if (chunked) {
+      delegate = new ChunkedOutputStream(delegate, buffers.chunkBuffer(), buffers.chuckedOutputStream());
+      if (instrumenter != null) {
+        instrumenter.chunkedResponse();
+      }
+    }
+
+    if (gzip) {
+      try {
+        delegate = new GZIPOutputStream(delegate, true);
+        response.setHeader(Headers.ContentEncoding, ContentEncodings.Gzip);
+        response.setHeader(Headers.Vary, Headers.AcceptEncoding);
+      } catch (IOException e) {
+        throw new RuntimeException(e);
+      }
+    } else if (deflate) {
+      delegate = new DeflaterOutputStream(delegate, true);
+    }
   }
 
   /**

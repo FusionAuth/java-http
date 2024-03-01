@@ -19,6 +19,7 @@ import java.io.IOException;
 import java.io.InputStream;
 import java.io.OutputStream;
 import java.net.URLDecoder;
+import java.net.URLEncoder;
 import java.nio.charset.Charset;
 import java.nio.charset.IllegalCharsetNameException;
 import java.nio.charset.StandardCharsets;
@@ -27,11 +28,12 @@ import java.util.HashMap;
 import java.util.LinkedList;
 import java.util.List;
 import java.util.Map;
-import java.util.Map.Entry;
+import java.util.Objects;
 
 import io.fusionauth.http.ConnectionClosedException;
 import io.fusionauth.http.HTTPMethod;
 import io.fusionauth.http.HTTPValues.ControlBytes;
+import io.fusionauth.http.HTTPValues.HeaderBytes;
 import io.fusionauth.http.HTTPValues.ProtocolBytes;
 import io.fusionauth.http.ParseException;
 import io.fusionauth.http.server.HTTPRequest;
@@ -61,7 +63,7 @@ public final class HTTPTools {
   /**
    * Determines if the given character (byte) is an allowed HTTP token character (header field names, methods, etc).
    * <p>
-   * Covered by https://www.rfc-editor.org/rfc/rfc9110.html#name-fields
+   * Covered by <a href="https://www.rfc-editor.org/rfc/rfc9110.html#name-fields">https://www.rfc-editor.org/rfc/rfc9110.html#name-fields</a>
    *
    * @param ch The character as a byte since HTTP is ASCII.
    * @return True if the character is a token character.
@@ -207,6 +209,7 @@ public final class HTTPTools {
       }
     }
 
+    // TODO : Is this really always false?
     if (headerValue == null) {
       throw new ParseException("Unable to parse a parameterized HTTP header [" + value + "]");
     }
@@ -224,10 +227,12 @@ public final class HTTPTools {
    * @param inputStream   The input stream to read the preamble from.
    * @param request       The HTTP request to populate.
    * @param requestBuffer A buffer used for reading to help reduce memory thrashing.
+   * @param readObserver  An observer that is called once one byte has been read.
    * @return Any leftover body bytes from the last read from the InputStream.
    * @throws IOException If the read fails.
    */
-  public static byte[] parseRequestPreamble(InputStream inputStream, HTTPRequest request, byte[] requestBuffer) throws IOException {
+  public static byte[] parseRequestPreamble(InputStream inputStream, HTTPRequest request, byte[] requestBuffer, Runnable readObserver)
+      throws IOException {
     RequestPreambleState state = RequestPreambleState.RequestMethod;
     StringBuilder builder = new StringBuilder();
     String headerName = null;
@@ -239,6 +244,9 @@ public final class HTTPTools {
       if (read < 0) {
         throw new ConnectionClosedException();
       }
+
+      // Tell the callback that we've read at least one byte
+      readObserver.run();
 
       for (index = 0; index < read && state != RequestPreambleState.Complete; index++) {
         // If there is a state transition, store the value properly and reset the builder (if needed)
@@ -282,36 +290,31 @@ public final class HTTPTools {
    * @param outputStream The output stream to write the preamble to.
    * @throws IOException If the stream threw an exception.
    */
-  public static void writeExpectResponsePreamble(HTTPResponse response, OutputStream outputStream) throws IOException {
-    writeStatusLine(response, outputStream);
-    if (response.getStatus() != 100) {
-      outputStream.write("Content-Length: 0".getBytes());
-      outputStream.write(ControlBytes.CRLF);
-      outputStream.write("Connection: close".getBytes());
-      outputStream.write(ControlBytes.CRLF);
-    }
-    outputStream.write(ControlBytes.CRLF);
-  }
-
-  /**
-   * Writes the HTTP response head section (status line, headers, etc).
-   *
-   * @param response     The response.
-   * @param outputStream The output stream to write the preamble to.
-   * @throws IOException If the stream threw an exception.
-   */
   public static void writeResponsePreamble(HTTPResponse response, OutputStream outputStream) throws IOException {
     writeStatusLine(response, outputStream);
-    for (Entry<String, List<String>> headers : response.getHeadersMap().entrySet()) {
+
+    // Write the headers (minus the cookies)
+    Charset charset = response.getCharset();
+    for (var headers : response.getHeadersMap().entrySet()) {
       String name = headers.getKey();
       for (String value : headers.getValue()) {
-        outputStream.write(name.getBytes());
+        outputStream.write(URLEncoder.encode(name, charset).getBytes());
         outputStream.write(':');
         outputStream.write(' ');
-        outputStream.write(value.getBytes());
+        outputStream.write(URLEncoder.encode(value, charset).getBytes());
         outputStream.write(ControlBytes.CRLF);
       }
     }
+
+    // Write the cookies
+    for (var cookie : response.getCookies()) {
+      outputStream.write(HeaderBytes.SetCookie);
+      outputStream.write(':');
+      outputStream.write(' ');
+      outputStream.write(cookie.toResponseHeader(charset).getBytes());
+      outputStream.write(ControlBytes.CRLF);
+    }
+
     outputStream.write(ControlBytes.CRLF);
   }
 
@@ -358,12 +361,7 @@ public final class HTTPTools {
     }
 
     String encodedValue = new String(chars, start, end - start);
-    String value;
-    if (charset != null) {
-      value = URLDecoder.decode(encodedValue, charset);
-    } else {
-      value = URLDecoder.decode(encodedValue, StandardCharsets.UTF_8);
-    }
+    String value = URLDecoder.decode(encodedValue, Objects.requireNonNullElse(charset, StandardCharsets.UTF_8));
 
     if (name == null) {
       name = value;

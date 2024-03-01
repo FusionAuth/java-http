@@ -22,7 +22,6 @@ import java.net.Socket;
 import java.net.SocketException;
 import java.net.SocketTimeoutException;
 import java.security.GeneralSecurityException;
-import java.time.Duration;
 import java.util.ArrayList;
 import java.util.Iterator;
 import java.util.List;
@@ -42,8 +41,6 @@ import io.fusionauth.http.server.io.Throughput;
  * @author Brian Pontarelli
  */
 public class HTTPServerThread extends Thread {
-  private final Duration clientTimeout;
-
   private final List<ClientInfo> clients = new ArrayList<>();
 
   private final HTTPServerConfiguration configuration;
@@ -68,7 +65,6 @@ public class HTTPServerThread extends Thread {
 
     this.configuration = configuration;
     this.listener = listener;
-    this.clientTimeout = configuration.getClientTimeoutDuration();
     this.instrumenter = configuration.getInstrumenter();
     this.logger = configuration.getLoggerFactory().getLogger(HTTPServerThread.class);
     this.minimumReadThroughput = configuration.getMinimumReadThroughput();
@@ -94,7 +90,7 @@ public class HTTPServerThread extends Thread {
     while (running) {
       try {
         Socket clientSocket = socket.accept();
-        clientSocket.setSoTimeout((int) configuration.getClientTimeoutDuration().toMillis());
+        clientSocket.setSoTimeout((int) configuration.getInitialReadTimeoutDuration().toMillis());
         logger.info("Accepted inbound connection with [{}] existing connections", clients.size());
 
         if (instrumenter != null) {
@@ -157,12 +153,27 @@ public class HTTPServerThread extends Thread {
       long now = System.currentTimeMillis();
       Throughput throughput = client.throughput();
       HTTPWorker worker = client.runnable();
-      WorkerState state = worker.state();
+      HTTPWorker.State state = worker.state();
       long workerLastUsed = throughput.lastUsed();
-      boolean readingSlow = state == WorkerState.Read && throughput.readThroughput(now) < minimumReadThroughput;
-      boolean writingSlow = state == WorkerState.Write && throughput.writeThroughput(now) < minimumWriteThroughput;
-      boolean timedOut = workerLastUsed < now - clientTimeout.toMillis();
-      boolean badClient = readingSlow || writingSlow || timedOut;
+      boolean readingSlow = false;
+      boolean writingSlow = false;
+      boolean timedOut = false;
+      boolean badClient = false;
+
+      if (state == HTTPWorker.State.Read) {
+        // Here the SO_TIMEOUT set above or the Keep-Alive timeout in HTTPWorker will dictate if the socket has timed out. This prevents slow readers
+        // or network issues where the client reads 1 byte per timeout value (i.e. 1 byte per 2 seconds or something like that)
+        badClient = throughput.readThroughput(now) < minimumReadThroughput;
+        readingSlow = badClient;
+      } else if (state == HTTPWorker.State.Write) {
+        // Check for slow clients when writing (or network issues)
+        badClient = throughput.writeThroughput(now) < minimumWriteThroughput;
+        writingSlow = badClient;
+      } else if (state == HTTPWorker.State.Process) {
+        // Here lastUsed was the instant the last byte was read, so we calculate distance between that and now to see if it is beyond the timeout
+        badClient = now - workerLastUsed > configuration.getProcessingTimeoutDuration().toMillis();
+        timedOut = badClient;
+      }
 
       if (!badClient) {
         continue;
@@ -180,7 +191,7 @@ public class HTTPServerThread extends Thread {
         }
 
         if (timedOut) {
-          message += String.format(" Connection timed out. Last used [%s]ms ago. Configured client timeout [%s]ms.", (now - workerLastUsed), clientTimeout.toMillis());
+          message += String.format(" Connection timed out while processing. Last used [%s]ms ago. Configured client timeout [%s]ms.", (now - workerLastUsed), configuration.getProcessingTimeoutDuration().toMillis());
         }
 
         logger.debug("Closing connection readingSlow=[{}] writingSlow=[{}] timedOut=[{}] {}", readingSlow, writingSlow, timedOut, message);

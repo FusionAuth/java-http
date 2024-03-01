@@ -78,9 +78,8 @@ public class ChunkedTest extends BaseTest {
     };
 
     CountingInstrumenter instrumenter = new CountingInstrumenter();
-    try (HTTPServer ignore = makeServer(scheme, handler, instrumenter).start()) {
+    try (var client = makeClient(scheme, null); HTTPServer ignore = makeServer(scheme, handler, instrumenter).start()) {
       URI uri = makeURI(scheme, "");
-      var client = makeClient(scheme, null);
       Supplier<InputStream> supplier = () -> new ByteArrayInputStream(RequestBody.getBytes());
       var response = client.send(
           HttpRequest.newBuilder().uri(uri).header(Headers.ContentType, "application/json").POST(BodyPublishers.ofInputStream(supplier)).build(),

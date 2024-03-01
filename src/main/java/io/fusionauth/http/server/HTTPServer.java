@@ -27,6 +27,7 @@ import io.fusionauth.http.server.internal.HTTPServerThread;
  *
  * @author Brian Pontarelli
  */
+@SuppressWarnings("unused")
 public class HTTPServer implements Closeable, Configurable<HTTPServer> {
   private final List<HTTPServerThread> servers = new ArrayList<>();
 
@@ -90,10 +91,6 @@ public class HTTPServer implements Closeable, Configurable<HTTPServer> {
     try {
       for (HTTPListenerConfiguration listener : configuration.getListeners()) {
         HTTPServerThread server = new HTTPServerThread(configuration, listener);
-//        Thread thread = Thread.ofPlatform()
-//                              .daemon()
-//                              .name("HTTP server [" + listener.getBindAddress().toString() + ":" + listener.getPort() + "]")
-//                              .start(server);
         servers.add(server);
         server.start();
         logger.info("HTTP server listening on port [{}]", listener.getPort());

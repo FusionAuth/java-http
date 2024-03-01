@@ -15,14 +15,32 @@
  */
 package io.fusionauth.http;
 
+import java.net.URLEncoder;
+import java.nio.charset.Charset;
 import java.time.ZonedDateTime;
 import java.util.ArrayList;
 import java.util.List;
 import java.util.Objects;
 
+import io.fusionauth.http.HTTPValues.CookieAttributes;
 import io.fusionauth.http.util.DateTools;
 
+@SuppressWarnings("unused")
 public class Cookie implements Buildable<Cookie> {
+  public static final String DomainPrefix = "; " + CookieAttributes.Domain + "=";
+
+  public static final String ExpiresPrefix = "; " + CookieAttributes.Expires + "=";
+
+  public static final String HTTPOnlyPrefix = "; " + CookieAttributes.HttpOnly;
+
+  public static final String MaxAgePrefix = "; " + CookieAttributes.MaxAge + "=";
+
+  public static final String PathPrefix = "; " + CookieAttributes.Path + "=";
+
+  public static final String SameSitePrefix = "; " + CookieAttributes.SameSite + "=";
+
+  public static final String SecurePrefix = "; " + CookieAttributes.Secure;
+
   public String domain;
 
   public ZonedDateTime expires;
@@ -93,7 +111,7 @@ public class Cookie implements Buildable<Cookie> {
         start = i + 1;
       } else if (c == ';' && inValue) {
         value = new String(chars, start, i - start);
-        if (name.trim().length() > 0 && value.trim().length() > 0) {
+        if (!name.trim().isEmpty() && !value.trim().isEmpty()) {
           cookies.add(new Cookie(name, value));
         }
 
@@ -116,7 +134,7 @@ public class Cookie implements Buildable<Cookie> {
       value = header.substring(start);
     }
 
-    if (name != null && value != null && name.trim().length() > 0 && value.trim().length() > 0) {
+    if (name != null && value != null && !name.trim().isEmpty() && !value.trim().isEmpty()) {
       cookies.add(new Cookie(name, value));
     }
 
@@ -145,7 +163,7 @@ public class Cookie implements Buildable<Cookie> {
 
       if (c == '=' && inName) {
         name = header.substring(start, i);
-        if (!inAttributes && name.trim().length() == 0) {
+        if (!inAttributes && name.trim().isEmpty()) {
           return null;
         }
 
@@ -197,7 +215,7 @@ public class Cookie implements Buildable<Cookie> {
     if (inAttributes) {
       cookie.addAttribute(name, value);
     } else {
-      if (name == null || value == null || name.trim().length() == 0) {
+      if (name == null || value == null || name.trim().isEmpty()) {
         return null;
       }
 
@@ -246,10 +264,9 @@ public class Cookie implements Buildable<Cookie> {
     if (this == o) {
       return true;
     }
-    if (!(o instanceof Cookie)) {
+    if (!(o instanceof Cookie cookie)) {
       return false;
     }
-    Cookie cookie = (Cookie) o;
     return httpOnly == cookie.httpOnly &&
         secure == cookie.secure &&
         Objects.equals(domain, cookie.domain) &&
@@ -341,15 +358,32 @@ public class Cookie implements Buildable<Cookie> {
     return name + "=" + value;
   }
 
-  public String toResponseHeader() {
-    return name + "=" + value
-        + (domain != null ? ("; " + HTTPValues.CookieAttributes.Domain + "=" + domain) : "")
-        + (expires != null ? ("; " + HTTPValues.CookieAttributes.Expires + "=" + DateTools.format(expires)) : "")
-        + (httpOnly ? ("; " + HTTPValues.CookieAttributes.HttpOnly) : "")
-        + (maxAge != null ? ("; " + HTTPValues.CookieAttributes.MaxAge + "=" + maxAge) : "")
-        + (path != null ? ("; " + HTTPValues.CookieAttributes.Path + "=" + path) : "")
-        + (sameSite != null ? ("; " + HTTPValues.CookieAttributes.SameSite + "=" + sameSite.name()) : "")
-        + (secure ? ("; " + HTTPValues.CookieAttributes.Secure) : "");
+  public String toResponseHeader(Charset charset) {
+    var build = new StringBuilder();
+    build.append(URLEncoder.encode(name, charset)).append("=").append(URLEncoder.encode(value, charset));
+    if (domain != null) {
+      build.append(DomainPrefix).append(domain);
+    }
+    if (expires != null) {
+      build.append(ExpiresPrefix).append(DateTools.format(expires));
+    }
+    if (httpOnly) {
+      build.append(HTTPOnlyPrefix);
+    }
+    if (maxAge != null) {
+      build.append(MaxAgePrefix).append(maxAge);
+    }
+    if (path != null) {
+      build.append(PathPrefix).append(path);
+    }
+    if (sameSite != null) {
+      build.append(SameSitePrefix).append(sameSite.name());
+    }
+    if (secure) {
+      build.append(SecurePrefix);
+    }
+
+    return build.toString();
   }
 
   public enum SameSite {

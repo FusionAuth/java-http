@@ -22,11 +22,10 @@ import java.net.SocketException;
 import java.net.SocketTimeoutException;
 
 import io.fusionauth.http.ConnectionClosedException;
+import io.fusionauth.http.HTTPValues;
 import io.fusionauth.http.HTTPValues.Connections;
 import io.fusionauth.http.HTTPValues.Headers;
-import io.fusionauth.http.HTTPValues.Status;
 import io.fusionauth.http.ParseException;
-import io.fusionauth.http.io.FastByteArrayOutputStream;
 import io.fusionauth.http.log.Logger;
 import io.fusionauth.http.server.ExpectValidator;
 import io.fusionauth.http.server.HTTPHandler;
@@ -50,6 +49,8 @@ import io.fusionauth.http.util.ThreadPool;
  * @author Brian Pontarelli
  */
 public class HTTPWorker implements Runnable {
+  private final HTTPBuffers buffers;
+
   private final HTTPServerConfiguration configuration;
 
   private final Instrumenter instrumenter;
@@ -58,17 +59,15 @@ public class HTTPWorker implements Runnable {
 
   private final Logger logger;
 
-  private final byte[] requestBuffer;
-
-  private final FastByteArrayOutputStream responsePreambleStream;
-
   private final Socket socket;
 
   private final Throughput throughput;
 
-  private volatile HTTPOutputStream outputStream;
+  private HTTPOutputStream outputStream;
 
   private HTTPResponse response;
+
+  private volatile State state;
 
   public HTTPWorker(Socket socket, HTTPServerConfiguration configuration, Instrumenter instrumenter, HTTPListenerConfiguration listener,
                     Throughput throughput) {
@@ -77,9 +76,9 @@ public class HTTPWorker implements Runnable {
     this.instrumenter = instrumenter;
     this.listener = listener;
     this.throughput = throughput;
+    this.buffers = new HTTPBuffers(configuration);
     this.logger = configuration.getLoggerFactory().getLogger(HTTPWorker.class);
-    this.requestBuffer = new byte[16 * 1024];
-    this.responsePreambleStream = new FastByteArrayOutputStream(1024, 256); // We'll reuse this for Keep-Alive, so it belongs here rather than HTTPOutputStream
+    this.state = State.Read;
   }
 
   public Socket getSocket() {
@@ -95,23 +94,28 @@ public class HTTPWorker implements Runnable {
             listener.getCertificate() != null ? "https" : "http", listener.getPort(), socket.getInetAddress().getHostAddress());
 
         var inputStream = new ThroughputInputStream(socket.getInputStream(), throughput);
-        var bodyBytes = HTTPTools.parseRequestPreamble(inputStream, request, requestBuffer);
+        var bodyBytes = HTTPTools.parseRequestPreamble(inputStream, request, buffers.requestBuffer(), () -> state = State.Read);
         var httpInputStream = new HTTPInputStream(configuration, request, inputStream, bodyBytes);
         request.setInputStream(httpInputStream);
 
         var throughputOutputStream = new ThroughputOutputStream(socket.getOutputStream(), throughput);
         response = new HTTPResponse();
-        outputStream = new HTTPOutputStream(configuration, throughput, request, response, throughputOutputStream, responsePreambleStream);
+        outputStream = new HTTPOutputStream(configuration, request, response, throughputOutputStream, buffers, () -> state = State.Write);
         response.setOutputStream(outputStream);
 
         // Handle the "expect" response
         String expect = request.getHeader(Headers.Expect);
-        if (expect != null && expect.equalsIgnoreCase(Status.ContinueRequest)) {
+        if (expect != null && expect.equalsIgnoreCase(HTTPValues.Status.ContinueRequest)) {
+          state = State.Write;
+
           // If the "expect" wasn't accepted, close the socket and exit
           if (!expectContinue(request)) {
             close(Result.Success);
             return;
           }
+
+          // Otherwise, transition the state to Read
+          state = State.Read;
         }
 
         var connection = request.getHeader(Headers.Connection);
@@ -124,6 +128,7 @@ public class HTTPWorker implements Runnable {
         }
 
         var handler = configuration.getHandler();
+        state = State.Process; // Transition to processing
         handler.handle(request, response);
         response.close();
         outputStream = null;
@@ -132,6 +137,9 @@ public class HTTPWorker implements Runnable {
           logger.debug("Closing because no Keep-Alive.");
           close(Result.Success);
           break;
+        } else {
+          state = State.KeepAlive; // Transition to Keep-Alive
+          socket.setSoTimeout((int) configuration.getKeepAliveTimeoutDuration().toSeconds());
         }
 
         // Purge the extra bytes in case the handler didn't read everything
@@ -168,8 +176,8 @@ public class HTTPWorker implements Runnable {
     }
   }
 
-  public WorkerState state() {
-    return outputStream != null && outputStream.isCommitted() ? WorkerState.Write : WorkerState.Read;
+  public State state() {
+    return state;
   }
 
   private void close(Result result) {
@@ -214,5 +222,12 @@ public class HTTPWorker implements Runnable {
   private enum Result {
     Failure,
     Success
+  }
+
+  public enum State {
+    Read,
+    Process,
+    Write,
+    KeepAlive
   }
 }

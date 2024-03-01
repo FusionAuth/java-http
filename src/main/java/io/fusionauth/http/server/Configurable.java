@@ -27,7 +27,7 @@ import io.fusionauth.http.log.SystemOutLoggerFactory;
  *
  * @param <T> The type of configurable for casting.
  */
-@SuppressWarnings("unchecked")
+@SuppressWarnings({"unchecked", "UnusedReturnValue", "unused"})
 public interface Configurable<T extends Configurable<T>> {
   /**
    * @return The configuration object.
@@ -43,18 +43,6 @@ public interface Configurable<T extends Configurable<T>> {
    */
   default T withBaseDir(Path baseDir) {
     configuration().withBaseDir(baseDir);
-    return (T) this;
-  }
-
-  /**
-   * Sets the duration that the server will allow client connections to remain open. This includes Keep-Alive as well as read timeout.
-   * Defaults to 20 seconds.
-   *
-   * @param duration The duration.
-   * @return This.
-   */
-  default T withClientTimeout(Duration duration) {
-    configuration().withClientTimeout(duration);
     return (T) this;
   }
 
@@ -106,6 +94,18 @@ public interface Configurable<T extends Configurable<T>> {
   }
 
   /**
+   * Sets the duration that the server will attempt to read the first byte from a client. This is the very first byte after the socket
+   * connection has been accepted by the server. Defaults to 2 seconds.
+   *
+   * @param duration The duration.
+   * @return This.
+   */
+  default T withInitialReadTimeout(Duration duration) {
+    configuration().withInitialReadTimeout(duration);
+    return (T) this;
+  }
+
+  /**
    * Sets an instrumenter that the server will notify when events and conditions happen.
    *
    * @param instrumenter The instrumenter.
@@ -113,6 +113,18 @@ public interface Configurable<T extends Configurable<T>> {
    */
   default T withInstrumenter(Instrumenter instrumenter) {
     configuration().withInstrumenter(instrumenter);
+    return (T) this;
+  }
+
+  /**
+   * Sets the duration that the server will allow client connections to remain open and idle after each request has been processed. This is
+   * the Keep-Alive state before the first byte of the next request is read. Defaults to 20 seconds.
+   *
+   * @param duration The duration.
+   * @return This.
+   */
+  default T withKeepAliveTimeoutDuration(Duration duration) {
+    configuration().withKeepAliveTimeoutDuration(duration);
     return (T) this;
   }
 
@@ -137,6 +149,17 @@ public interface Configurable<T extends Configurable<T>> {
    */
   default T withLoggerFactory(LoggerFactory loggerFactory) {
     configuration().withLoggerFactory(loggerFactory);
+    return (T) this;
+  }
+
+  /**
+   * This configures the maximum size of a chunk in the response when the server is using chunked response encoding. Defaults to 16k.
+   *
+   * @param size The size in bytes.
+   * @return This.
+   */
+  default T withMaxResponseChunkSize(int size) {
+    configuration().withMaxResponseChunkSize(size);
     return (T) this;
   }
 
@@ -172,6 +195,18 @@ public interface Configurable<T extends Configurable<T>> {
    */
   default T withMultipartBufferSize(int multipartBufferSize) {
     configuration().withMultipartBufferSize(multipartBufferSize);
+    return (T) this;
+  }
+
+  /**
+   * Sets the duration that the server will allow worker threads to run after the final request byte is read and before the first response
+   * byte is written. Defaults to 10 seconds.
+   *
+   * @param duration The duration.
+   * @return This.
+   */
+  default T withProcessingTimeoutDuration(Duration duration) {
+    configuration().withProcessingTimeoutDuration(duration);
     return (T) this;
   }
 

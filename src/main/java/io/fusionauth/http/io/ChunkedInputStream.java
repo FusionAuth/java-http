@@ -45,9 +45,16 @@ public class ChunkedInputStream extends InputStream {
 
   private ChunkedBodyState state = ChunkedBodyState.ChunkSize;
 
-  public ChunkedInputStream(InputStream delegate, int bufferSize) {
+  public ChunkedInputStream(InputStream delegate, int bufferSize, byte[] bodyBytes) {
     this.delegate = delegate;
-    this.buffer = new byte[bufferSize];
+
+    if (bodyBytes == null) {
+      this.buffer = new byte[bufferSize];
+    } else {
+      this.bufferLength = bodyBytes.length;
+      this.buffer = new byte[Math.max(bufferSize, bufferLength)];
+      System.arraycopy(bodyBytes, 0, buffer, 0, bufferLength);
+    }
   }
 
   @Override
@@ -70,10 +77,6 @@ public class ChunkedInputStream extends InputStream {
     if (bufferIndex >= bufferLength) {
       bufferIndex = 0;
       bufferLength = delegate.read(buffer);
-    }
-
-    if (bufferLength == 0) {
-      return 0;
     }
 
     for (; bufferIndex < bufferLength; bufferIndex++) {

@@ -104,7 +104,7 @@ public class HTTPResponse {
 
   public boolean containsHeader(String name) {
     String key = name.toLowerCase();
-    return headers.containsKey(key) && headers.get(key).size() > 0;
+    return headers.containsKey(key) && !headers.get(key).isEmpty();
   }
 
   public boolean failure() {

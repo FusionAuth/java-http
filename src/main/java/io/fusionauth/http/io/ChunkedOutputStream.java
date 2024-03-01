@@ -36,10 +36,10 @@ public class ChunkedOutputStream extends OutputStream {
 
   private boolean closed;
 
-  public ChunkedOutputStream(OutputStream delegate, int maxChunkSize) {
+  public ChunkedOutputStream(OutputStream delegate, byte[] buffer, FastByteArrayOutputStream chuckOutputStream) {
     this.delegate = delegate;
-    this.buffer = new byte[maxChunkSize];
-    this.chunkOutputStream = new FastByteArrayOutputStream(maxChunkSize + 32, 32);
+    this.buffer = buffer;
+    this.chunkOutputStream = chuckOutputStream;
   }
 
   @Override
