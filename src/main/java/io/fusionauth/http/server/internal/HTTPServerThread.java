@@ -17,15 +17,16 @@ package io.fusionauth.http.server.internal;
 
 import javax.net.ssl.SSLContext;
 import java.io.IOException;
+import java.net.InetSocketAddress;
 import java.net.ServerSocket;
 import java.net.Socket;
 import java.net.SocketException;
 import java.net.SocketTimeoutException;
 import java.security.GeneralSecurityException;
-import java.util.ArrayList;
+import java.util.Deque;
 import java.util.Iterator;
-import java.util.List;
 import java.util.Map;
+import java.util.concurrent.ConcurrentLinkedDeque;
 
 import io.fusionauth.http.log.Logger;
 import io.fusionauth.http.security.SecurityTools;
@@ -41,7 +42,9 @@ import io.fusionauth.http.server.io.Throughput;
  * @author Brian Pontarelli
  */
 public class HTTPServerThread extends Thread {
-  private final List<ClientInfo> clients = new ArrayList<>();
+  private final HTTPServerCleanerThread cleaner;
+
+  private final Deque<ClientInfo> clients = new ConcurrentLinkedDeque<>();
 
   private final HTTPServerConfiguration configuration;
 
@@ -69,15 +72,17 @@ public class HTTPServerThread extends Thread {
     this.logger = configuration.getLoggerFactory().getLogger(HTTPServerThread.class);
     this.minimumReadThroughput = configuration.getMinimumReadThroughput();
     this.minimumWriteThroughput = configuration.getMinimumWriteThroughput();
+    this.cleaner = new HTTPServerCleanerThread();
 
     if (listener.isTLS()) {
       SSLContext context = SecurityTools.serverContext(listener.getCertificateChain(), listener.getPrivateKey());
-      this.socket = context.getServerSocketFactory().createServerSocket(listener.getPort(), -1, listener.getBindAddress());
+      this.socket = context.getServerSocketFactory().createServerSocket();
     } else {
-      this.socket = new ServerSocket(listener.getPort(), -1, listener.getBindAddress());
+      this.socket = new ServerSocket();
     }
 
-    socket.setSoTimeout(1_000); // Allows us to clean up periodically
+    socket.setSoTimeout(0); // Always block
+    socket.bind(new InetSocketAddress(listener.getBindAddress(), listener.getPort()));
 
     if (instrumenter != null) {
       instrumenter.serverStarted();
@@ -87,11 +92,14 @@ public class HTTPServerThread extends Thread {
   @Override
   public void run() {
     running = true;
+    cleaner.start();
+
     while (running) {
       try {
         Socket clientSocket = socket.accept();
         clientSocket.setSoTimeout((int) configuration.getInitialReadTimeoutDuration().toMillis());
-        logger.info("Accepted inbound connection with [{}] existing connections", clients.size());
+        logger.debug("Accepted inbound connection with [{}] existing connections and initial read timeout of [{}]", clients.size(),
+            configuration.getInitialReadTimeoutDuration().toMillis());
 
         if (instrumenter != null) {
           instrumenter.acceptedConnection();
@@ -105,18 +113,18 @@ public class HTTPServerThread extends Thread {
         clients.add(new ClientInfo(client, runnable, throughput));
       } catch (SocketTimeoutException ignore) {
         // Completely smother since this is expected with the SO_TIMEOUT setting in the constructor
+        logger.trace("Nothing accepted. Cleaning up existing connections.");
       } catch (SocketException e) {
         // This should only happen when the server is shutdown
         if (socket.isClosed()) {
           running = false;
+          logger.debug("The server socket was closed. Shutting down the server.", e);
         } else {
           logger.error("An exception was thrown while accepting incoming connections.", e);
         }
       } catch (Throwable t) {
         logger.error("An exception was thrown during server processing. This is a fatal issue and we need to shutdown the server.", t);
         break;
-      } finally {
-        cleanup();
       }
     }
 
@@ -129,101 +137,117 @@ public class HTTPServerThread extends Thread {
   public void shutdown() {
     running = false;
     try {
+      cleaner.interrupt();
       socket.close();
     } catch (IOException ignore) {
       // Ignorable since we are shutting down regardless
     }
   }
 
-  private void cleanup() {
-    if (!running) {
-      return;
-    }
-
-    Iterator<ClientInfo> iterator = clients.iterator();
-    while (iterator.hasNext()) {
-      ClientInfo client = iterator.next();
-      Thread thread = client.thread();
-      if (!thread.isAlive()) {
-        logger.info("Thread is dead. Removing.");
-        iterator.remove();
-        continue;
-      }
-
-      long now = System.currentTimeMillis();
-      Throughput throughput = client.throughput();
-      HTTPWorker worker = client.runnable();
-      HTTPWorker.State state = worker.state();
-      long workerLastUsed = throughput.lastUsed();
-      boolean readingSlow = false;
-      boolean writingSlow = false;
-      boolean timedOut = false;
-      boolean badClient = false;
-
-      if (state == HTTPWorker.State.Read) {
-        // Here the SO_TIMEOUT set above or the Keep-Alive timeout in HTTPWorker will dictate if the socket has timed out. This prevents slow readers
-        // or network issues where the client reads 1 byte per timeout value (i.e. 1 byte per 2 seconds or something like that)
-        badClient = throughput.readThroughput(now) < minimumReadThroughput;
-        readingSlow = badClient;
-      } else if (state == HTTPWorker.State.Write) {
-        // Check for slow clients when writing (or network issues)
-        badClient = throughput.writeThroughput(now) < minimumWriteThroughput;
-        writingSlow = badClient;
-      } else if (state == HTTPWorker.State.Process) {
-        // Here lastUsed was the instant the last byte was read, so we calculate distance between that and now to see if it is beyond the timeout
-        badClient = now - workerLastUsed > configuration.getProcessingTimeoutDuration().toMillis();
-        timedOut = badClient;
-      }
-
-      if (!badClient) {
-        continue;
-      }
-
-      if (logger.isDebugEnabled()) {
-        String message = "";
-
-        if (readingSlow) {
-          message += String.format(" Min read throughput [%s], actual throughput [%s].", minimumReadThroughput, throughput.readThroughput(now));
-        }
-
-        if (writingSlow) {
-          message += String.format(" Min write throughput [%s], actual throughput [%s].", minimumWriteThroughput, throughput.writeThroughput(now));
-        }
-
-        if (timedOut) {
-          message += String.format(" Connection timed out while processing. Last used [%s]ms ago. Configured client timeout [%s]ms.", (now - workerLastUsed), configuration.getProcessingTimeoutDuration().toMillis());
-        }
-
-        logger.debug("Closing connection readingSlow=[{}] writingSlow=[{}] timedOut=[{}] {}", readingSlow, writingSlow, timedOut, message);
-        logger.debug("Closing client connection [{}] due to inactivity", worker.getSocket().getRemoteSocketAddress());
-
-        StringBuilder threadDump = new StringBuilder();
-        for (Map.Entry<Thread, StackTraceElement[]> entry : Thread.getAllStackTraces().entrySet()) {
-          threadDump.append(entry.getKey()).append(" ").append(entry.getKey().getState()).append("\n");
-          for (StackTraceElement ste : entry.getValue()) {
-            threadDump.append("\tat ").append(ste).append("\n");
-          }
-          threadDump.append("\n");
-        }
-
-        logger.debug("Thread dump from server side.\n" + threadDump);
-      }
-
-      try {
-        var socket = worker.getSocket();
-        socket.close();
-        iterator.remove();
-
-        if (instrumenter != null) {
-          instrumenter.connectionClosed();
-        }
-      } catch (IOException e) {
-        // Log but ignore
-        logger.debug("Unable to close connection to client. [{}]", e);
-      }
-    }
+  record ClientInfo(Thread thread, HTTPWorker runnable, Throughput throughput) {
   }
 
-  record ClientInfo(Thread thread, HTTPWorker runnable, Throughput throughput) {
+  private class HTTPServerCleanerThread extends Thread {
+    public HTTPServerCleanerThread() {
+      super("Cleaner for HTTP server [" + listener.getBindAddress().toString() + ":" + listener.getPort() + "]");
+    }
+
+    public void run() {
+      while (running) {
+        logger.debug("Cleaning things up");
+
+        Iterator<ClientInfo> iterator = clients.iterator();
+        while (iterator.hasNext()) {
+          ClientInfo client = iterator.next();
+          Thread thread = client.thread();
+          if (!thread.isAlive()) {
+            logger.info("Thread is dead. Removing.");
+            iterator.remove();
+            continue;
+          }
+
+          long now = System.currentTimeMillis();
+          Throughput throughput = client.throughput();
+          HTTPWorker worker = client.runnable();
+          HTTPWorker.State state = worker.state();
+          long workerLastUsed = throughput.lastUsed();
+          boolean readingSlow = false;
+          boolean writingSlow = false;
+          boolean timedOut = false;
+          boolean badClient = false;
+
+          if (state == HTTPWorker.State.Read) {
+            // Here the SO_TIMEOUT set above or the Keep-Alive timeout in HTTPWorker will dictate if the socket has timed out. This prevents slow readers
+            // or network issues where the client reads 1 byte per timeout value (i.e. 1 byte per 2 seconds or something like that)
+            badClient = throughput.readThroughput(now) < minimumReadThroughput;
+            readingSlow = badClient;
+          } else if (state == HTTPWorker.State.Write) {
+            // Check for slow clients when writing (or network issues)
+            badClient = throughput.writeThroughput(now) < minimumWriteThroughput;
+            writingSlow = badClient;
+          } else if (state == HTTPWorker.State.Process) {
+            // Here lastUsed was the instant the last byte was read, so we calculate distance between that and now to see if it is beyond the timeout
+            badClient = now - workerLastUsed > configuration.getProcessingTimeoutDuration().toMillis();
+            timedOut = badClient;
+          }
+
+          logger.debug("Checking client readingSlow=[{}] writingSlow=[{}] timedOut=[{}] writeThroughput=[{}] minWriteThroughput=[{}]", readingSlow, writingSlow, timedOut, throughput.writeThroughput(now), minimumWriteThroughput);
+
+          if (!badClient) {
+            continue;
+          }
+
+          if (logger.isDebugEnabled()) {
+            String message = "";
+
+            if (readingSlow) {
+              message += String.format(" Min read throughput [%s], actual throughput [%s].", minimumReadThroughput, throughput.readThroughput(now));
+            }
+
+            if (writingSlow) {
+              message += String.format(" Min write throughput [%s], actual throughput [%s].", minimumWriteThroughput, throughput.writeThroughput(now));
+            }
+
+            if (timedOut) {
+              message += String.format(" Connection timed out while processing. Last used [%s]ms ago. Configured client timeout [%s]ms.", (now - workerLastUsed), configuration.getProcessingTimeoutDuration().toMillis());
+            }
+
+            logger.debug("Closing connection readingSlow=[{}] writingSlow=[{}] timedOut=[{}] {}", readingSlow, writingSlow, timedOut, message);
+            logger.debug("Closing client connection [{}] due to inactivity", worker.getSocket().getRemoteSocketAddress());
+
+            StringBuilder threadDump = new StringBuilder();
+            for (Map.Entry<Thread, StackTraceElement[]> entry : Thread.getAllStackTraces().entrySet()) {
+              threadDump.append(entry.getKey()).append(" ").append(entry.getKey().getState()).append("\n");
+              for (StackTraceElement ste : entry.getValue()) {
+                threadDump.append("\tat ").append(ste).append("\n");
+              }
+              threadDump.append("\n");
+            }
+
+            logger.debug("Thread dump from server side.\n" + threadDump);
+          }
+
+          try {
+            var socket = worker.getSocket();
+            socket.close();
+            iterator.remove();
+
+            if (instrumenter != null) {
+              instrumenter.connectionClosed();
+            }
+          } catch (IOException e) {
+            // Log but ignore
+            logger.debug("Unable to close connection to client. [{}]", e);
+          }
+        }
+
+        // Take a break
+        try {
+          sleep(2_000);
+        } catch (InterruptedException ignore) {
+          // Ignore
+        }
+      }
+    }
   }
 }

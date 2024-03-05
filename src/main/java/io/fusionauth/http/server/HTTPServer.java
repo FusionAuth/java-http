@@ -21,6 +21,7 @@ import java.util.List;
 
 import io.fusionauth.http.log.Logger;
 import io.fusionauth.http.server.internal.HTTPServerThread;
+import io.fusionauth.http.util.HTTPTools;
 
 /**
  * The server bro!
@@ -83,7 +84,10 @@ public class HTTPServer implements Closeable, Configurable<HTTPServer> {
       return this;
     }
 
+    // Set up the server logger and the static loggers
     logger = configuration.getLoggerFactory().getLogger(HTTPServer.class);
+    HTTPTools.initialize(configuration().getLoggerFactory());
+
     logger.info("Starting the HTTP server. Buckle up!");
 
     context = new HTTPContext(configuration.getBaseDir());

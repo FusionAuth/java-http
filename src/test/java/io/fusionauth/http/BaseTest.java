@@ -23,6 +23,7 @@ import java.net.CookieHandler;
 import java.net.Socket;
 import java.net.URI;
 import java.net.http.HttpClient;
+import java.nio.file.Paths;
 import java.security.GeneralSecurityException;
 import java.security.InvalidAlgorithmParameterException;
 import java.security.KeyPair;
@@ -45,12 +46,13 @@ import java.time.ZonedDateTime;
 import java.time.format.DateTimeFormatter;
 import java.util.Arrays;
 import java.util.Date;
+import java.util.Map;
 import java.util.UUID;
 import java.util.stream.Collectors;
 
+import io.fusionauth.http.log.FileLogger;
+import io.fusionauth.http.log.FileLoggerFactory;
 import io.fusionauth.http.log.Level;
-import io.fusionauth.http.log.SystemOutLogger;
-import io.fusionauth.http.log.SystemOutLoggerFactory;
 import io.fusionauth.http.security.SecurityTools;
 import io.fusionauth.http.server.ExpectValidator;
 import io.fusionauth.http.server.HTTPHandler;
@@ -59,6 +61,7 @@ import io.fusionauth.http.server.HTTPServer;
 import io.fusionauth.http.server.Instrumenter;
 import org.testng.ITestListener;
 import org.testng.ITestResult;
+import org.testng.annotations.AfterMethod;
 import org.testng.annotations.AfterSuite;
 import org.testng.annotations.BeforeSuite;
 import org.testng.annotations.DataProvider;
@@ -104,8 +107,6 @@ public abstract class BaseTest {
 
   private static final DateTimeFormatter hh_mm_ss_SSS = DateTimeFormatter.ofPattern("hh:mm:ss.SSS");
 
-  public static SystemOutLogger logger = (SystemOutLogger) SystemOutLoggerFactory.FACTORY.getLogger(BaseTest.class);
-
   /*
    * Keypairs and certificates for a 3-level CA chain (root->intermediate->server).
    */
@@ -122,9 +123,107 @@ public abstract class BaseTest {
   public static KeyPair rootKeyPair;
 
   static {
-    logger.setLevel(Level.Trace);
     System.setProperty("sun.net.http.retryPost", "false");
     System.setProperty("jdk.httpclient.allowRestrictedHeaders", "connection");
+  }
+
+  /**
+   * Generates keypairs and certificates for Root CA -> Intermediate -> Server Certificate.
+   */
+  @BeforeSuite
+  public static void setupCertificates() {
+    rootKeyPair = generateNewRSAKeyPair();
+    intermediateKeyPair = generateNewRSAKeyPair();
+    keyPair = generateNewRSAKeyPair();
+
+    // Build root and intermediate CAs
+    rootCertificate = generateRootCA(rootKeyPair.getPublic(), rootKeyPair.getPrivate());
+    X509CertInfo intermediateCertInfo = generateCertInfo(intermediateKeyPair.getPublic(), "intermediate.fusionauth.io");
+    intermediateCertificate = signCertificate((X509Certificate) rootCertificate, rootKeyPair.getPrivate(), intermediateCertInfo, true);
+
+    // Build server cert
+    X509CertInfo serverCertInfo = generateCertInfo(keyPair.getPublic(), "local.fusionauth.io");
+    certificate = signCertificate((X509Certificate) intermediateCertificate, intermediateKeyPair.getPrivate(), serverCertInfo, false);
+  }
+
+  protected static X509CertInfo generateCertInfo(PublicKey publicKey, String commonName) {
+    try {
+      X509CertInfo certInfo = new X509CertInfo();
+      CertificateX509Key certKey = new CertificateX509Key(publicKey);
+      certInfo.setKey(certKey);
+      // X.509 Certificate version 3 (0 based)
+      certInfo.setVersion(new CertificateVersion(2));
+      certInfo.setAlgorithmId(new CertificateAlgorithmId(new AlgorithmId(ObjectIdentifier.of(KnownOIDs.SHA256withRSA))));
+      certInfo.setSubject(new X500Name("CN=" + commonName));
+      certInfo.setValidity(new CertificateValidity(Date.from(Instant.now().minusSeconds(30)), Date.from(Instant.now().plusSeconds(10_000))));
+      certInfo.setSerialNumber(new CertificateSerialNumber(new BigInteger(UUID.randomUUID().toString().replace("-", ""), 16)));
+
+      return certInfo;
+    } catch (Exception e) {
+      throw new IllegalArgumentException(e);
+    }
+  }
+
+  protected static KeyPair generateNewRSAKeyPair() {
+    try {
+      KeyPairGenerator keyPairGenerator = KeyPairGenerator.getInstance("RSA");
+      keyPairGenerator.initialize(4096);
+      return keyPairGenerator.generateKeyPair();
+    } catch (NoSuchAlgorithmException e) {
+      throw new RuntimeException(e);
+    }
+  }
+
+  protected static Certificate generateRootCA(PublicKey publicKey, PrivateKey privateKey)
+      throws IllegalArgumentException {
+    try {
+      // Generate the standard CertInfo, but set Issuer and Subject to the same value.
+      X509CertInfo certInfo = generateCertInfo(publicKey, "root-ca.fusionauth.io");
+      certInfo.setIssuer(new X500Name("CN=root-ca.fusionauth.io"));
+
+      // Self-sign certificate
+//      return signCertificate(new X509CertImpl(certInfo.getEncodedInfo()), privateKey, certInfo, true);
+      return X509CertImpl.newSigned(certInfo, privateKey, "SHA256withRSA");
+    } catch (Exception e) {
+      throw new IllegalArgumentException(e);
+    }
+  }
+
+  protected static X509Certificate signCertificate(X509Certificate issuer, PrivateKey issuerPrivateKey, X509CertInfo signingRequest,
+                                                   boolean isCa)
+      throws IllegalArgumentException {
+
+    try {
+      X509CertInfo issuerInfo = new X509CertInfo(issuer.getTBSCertificate());
+      signingRequest.setIssuer(issuerInfo.getSubject());
+
+      CertificateExtensions certExtensions = new CertificateExtensions();
+      if (isCa) {
+        certExtensions.setExtension(BasicConstraintsExtension.NAME, new BasicConstraintsExtension(true, true, 1));
+      }
+
+      // Set the Subject Alternate Names field to the DNS hostname.
+      X500Name subject = signingRequest.getSubject();
+      String hostname = subject.getCommonName();
+      GeneralNames altNames = new GeneralNames();
+      altNames.add(new GeneralName(new DNSName(hostname)));
+      certExtensions.setExtension(SubjectAlternativeNameExtension.NAME, new SubjectAlternativeNameExtension(false, altNames));
+      signingRequest.setExtensions(certExtensions);
+
+      // Sign it
+      return X509CertImpl.newSigned(signingRequest, issuerPrivateKey, "SHA256withRSA");
+    } catch (Exception e) {
+      throw new IllegalArgumentException(e);
+    }
+  }
+
+  @AfterMethod
+  public void flush() {
+    FileLogger fl = (FileLogger) FileLoggerFactory.FACTORY.getLogger(BaseTest.class);
+    if (fl != null) {
+      System.out.println("Flushing");
+      fl.flush();
+    }
   }
 
   public HttpClient makeClient(String scheme, CookieHandler cookieHandler) throws GeneralSecurityException, IOException {
@@ -159,13 +258,14 @@ public abstract class BaseTest {
       listenerConfiguration = new HTTPListenerConfiguration(4242);
     }
 
+    FileLoggerFactory factory = FileLoggerFactory.FACTORY;
     return new HTTPServer().withHandler(handler)
                            .withKeepAliveTimeoutDuration(ServerTimeout)
                            .withInitialReadTimeout(ServerTimeout)
                            .withProcessingTimeoutDuration(ServerTimeout)
                            .withExpectValidator(expectValidator)
                            .withInstrumenter(instrumenter)
-                           .withLoggerFactory(SystemOutLoggerFactory.FACTORY)
+                           .withLoggerFactory(factory)
                            .withMinimumReadThroughput(200 * 1024)
                            .withMinimumWriteThroughput(200 * 1024)
                            .withListener(listenerConfiguration)
@@ -213,95 +313,6 @@ public abstract class BaseTest {
     System.out.println("Total test time in minutes : " + Duration.between(TestStarted, ZonedDateTime.now()).toMinutes());
   }
 
-  protected static X509CertInfo generateCertInfo(PublicKey publicKey, String commonName) {
-    try {
-      X509CertInfo certInfo = new X509CertInfo();
-      CertificateX509Key certKey = new CertificateX509Key(publicKey);
-      certInfo.setKey(certKey);
-      // X.509 Certificate version 3 (0 based)
-      certInfo.setVersion(new CertificateVersion(2));
-      certInfo.setAlgorithmId(new CertificateAlgorithmId(new AlgorithmId(ObjectIdentifier.of(KnownOIDs.SHA256withRSA))));
-      certInfo.setSubject(new X500Name("CN=" + commonName));
-      certInfo.setValidity(new CertificateValidity(Date.from(Instant.now().minusSeconds(30)), Date.from(Instant.now().plusSeconds(10_000))));
-      certInfo.setSerialNumber(new CertificateSerialNumber(new BigInteger(UUID.randomUUID().toString().replace("-", ""), 16)));
-
-      return certInfo;
-    } catch (Exception e) {
-      throw new IllegalArgumentException(e);
-    }
-  }
-
-  protected static KeyPair generateNewRSAKeyPair() {
-    try {
-      KeyPairGenerator keyPairGenerator = KeyPairGenerator.getInstance("RSA");
-      keyPairGenerator.initialize(4096);
-      return keyPairGenerator.generateKeyPair();
-    } catch (NoSuchAlgorithmException e) {
-      throw new RuntimeException(e);
-    }
-  }
-
-  protected static Certificate generateRootCA(PublicKey publicKey, PrivateKey privateKey)
-      throws IllegalArgumentException {
-    try {
-      // Generate the standard CertInfo, but set Issuer and Subject to the same value.
-      X509CertInfo certInfo = generateCertInfo(publicKey, "root-ca.fusionauth.io");
-      certInfo.setIssuer(new X500Name("CN=root-ca.fusionauth.io"));
-
-      // Self-sign certificate
-//      return signCertificate(new X509CertImpl(certInfo.getEncodedInfo()), privateKey, certInfo, true);
-      return X509CertImpl.newSigned(certInfo, privateKey, "SHA256withRSA");
-    } catch (Exception e) {
-      throw new IllegalArgumentException(e);
-    }
-  }
-
-  /**
-   * Generates keypairs and certificates for Root CA -> Intermediate -> Server Certificate.
-   */
-  @BeforeSuite
-  public static void setupCertificates() {
-    rootKeyPair = generateNewRSAKeyPair();
-    intermediateKeyPair = generateNewRSAKeyPair();
-    keyPair = generateNewRSAKeyPair();
-
-    // Build root and intermediate CAs
-    rootCertificate = generateRootCA(rootKeyPair.getPublic(), rootKeyPair.getPrivate());
-    X509CertInfo intermediateCertInfo = generateCertInfo(intermediateKeyPair.getPublic(), "intermediate.fusionauth.io");
-    intermediateCertificate = signCertificate((X509Certificate) rootCertificate, rootKeyPair.getPrivate(), intermediateCertInfo, true);
-
-    // Build server cert
-    X509CertInfo serverCertInfo = generateCertInfo(keyPair.getPublic(), "local.fusionauth.io");
-    certificate = signCertificate((X509Certificate) intermediateCertificate, intermediateKeyPair.getPrivate(), serverCertInfo, false);
-  }
-
-  protected static X509Certificate signCertificate(X509Certificate issuer, PrivateKey issuerPrivateKey, X509CertInfo signingRequest, boolean isCa)
-      throws IllegalArgumentException {
-
-    try {
-      X509CertInfo issuerInfo = new X509CertInfo(issuer.getTBSCertificate());
-      signingRequest.setIssuer(issuerInfo.getSubject());
-
-      CertificateExtensions certExtensions = new CertificateExtensions();
-      if (isCa) {
-        certExtensions.setExtension(BasicConstraintsExtension.NAME, new BasicConstraintsExtension(true, true, 1));
-      }
-
-      // Set the Subject Alternate Names field to the DNS hostname.
-      X500Name subject = signingRequest.getSubject();
-      String hostname = subject.getCommonName();
-      GeneralNames altNames = new GeneralNames();
-      altNames.add(new GeneralName(new DNSName(hostname)));
-      certExtensions.setExtension(SubjectAlternativeNameExtension.NAME, new SubjectAlternativeNameExtension(false, altNames));
-      signingRequest.setExtensions(certExtensions);
-
-      // Sign it
-      return X509CertImpl.newSigned(signingRequest, issuerPrivateKey, "SHA256withRSA");
-    } catch (Exception e) {
-      throw new IllegalArgumentException(e);
-    }
-  }
-
   /**
    * Verifies that the chain certificates can be validated up to the supplied root certificate. See
    * {@link CertPathValidator#validate(CertPath, CertPathParameters)} for details.
@@ -345,28 +356,34 @@ public abstract class BaseTest {
       Throwable throwable = result.getThrowable();
 
       // Intentionally leaving empty lines here
+      StringBuilder threadDump = new StringBuilder();
+      for (Map.Entry<Thread, StackTraceElement[]> entry : Thread.getAllStackTraces().entrySet()) {
+        threadDump.append(entry.getKey()).append(" ").append(entry.getKey().getState()).append("\n");
+        for (StackTraceElement ste : entry.getValue()) {
+          threadDump.append("\tat ").append(ste).append("\n");
+        }
+        threadDump.append("\n");
+      }
+
       System.out.println("""
-                                 
-                
                                  
           Test failure
           -----------------
           Exception: {{exception}}
           Message: {{message}}
                                
-          HTTP Trace:
-          {{trace}}
+          Stack traces (client side):
+          {{threadDump}}
           -----------------
            """.replace("{{exception}}", throwable != null ? throwable.getClass().getSimpleName() : "-")
-              .replace("{{message}}", throwable != null ? (throwable.getMessage() != null ? throwable.getMessage() : "-") : "-"));
+              .replace("{{message}}", throwable != null ? (throwable.getMessage() != null ? throwable.getMessage() : "-") : "-")
+              .replace("{{threadDump}}", threadDump));
     }
 
     @Override
     public void onTestStart(ITestResult result) {
       Object[] dataProvider = result.getParameters();
-      String iteration = dataProvider != null && dataProvider.length > 0
-          ? " [" + serializeDataProviderArgs(dataProvider) + "]"
-          : "";
+      String iteration = dataProvider != null && dataProvider.length > 0 ? " [" + serializeDataProviderArgs(dataProvider) + "]" : "";
 
       // Still missing the factory data provider, for example when we re-run tests as GraalJS or Nashorn, I don't yet have a way to show that in this output.
       // - But TestNG can do it - so we can too! Just need to figure it out.
@@ -380,8 +397,14 @@ public abstract class BaseTest {
       }
 
       lastTestMethod = testMethod;
+
       // Trying to replicate the name of the test in the IJ TestNG runner.
-      System.out.println("[" + ++counter + "] " + hh_mm_ss_SSS.format(ZonedDateTime.now()) + " " + testMethod + iteration);
+      System.out.println("[" + (++counter) + "] " + hh_mm_ss_SSS.format(ZonedDateTime.now()) + " " + testMethod + iteration);
+
+      // Set up the logger
+      FileLogger logger = new FileLogger(Paths.get("build/test/logs/" + result.getTestClass().getName() + iteration + ".txt"));
+      logger.setLevel(Level.Trace);
+      FileLoggerFactory.setLogger(logger);
     }
 
     private String serializeDataProviderArgs(Object[] dataProvider) {

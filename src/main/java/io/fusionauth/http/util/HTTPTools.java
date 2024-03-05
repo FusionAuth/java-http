@@ -36,10 +36,23 @@ import io.fusionauth.http.HTTPValues.ControlBytes;
 import io.fusionauth.http.HTTPValues.HeaderBytes;
 import io.fusionauth.http.HTTPValues.ProtocolBytes;
 import io.fusionauth.http.ParseException;
+import io.fusionauth.http.log.Logger;
+import io.fusionauth.http.log.LoggerFactory;
 import io.fusionauth.http.server.HTTPRequest;
 import io.fusionauth.http.server.HTTPResponse;
 
 public final class HTTPTools {
+  private static Logger logger;
+
+  /**
+   * Statically sets up the logger, mostly for trace logging.
+   *
+   * @param loggerFactory The logger factory.
+   */
+  public static void initialize(LoggerFactory loggerFactory) {
+    HTTPTools.logger = loggerFactory.getLogger(HTTPTools.class);
+  }
+
   /**
    * Determines if the given character (byte) is a digit (i.e. 0-9)
    *
@@ -63,7 +76,8 @@ public final class HTTPTools {
   /**
    * Determines if the given character (byte) is an allowed HTTP token character (header field names, methods, etc).
    * <p>
-   * Covered by <a href="https://www.rfc-editor.org/rfc/rfc9110.html#name-fields">https://www.rfc-editor.org/rfc/rfc9110.html#name-fields</a>
+   * Covered by <a
+   * href="https://www.rfc-editor.org/rfc/rfc9110.html#name-fields">https://www.rfc-editor.org/rfc/rfc9110.html#name-fields</a>
    *
    * @param ch The character as a byte since HTTP is ASCII.
    * @return True if the character is a token character.
@@ -242,8 +256,11 @@ public final class HTTPTools {
     while (state != RequestPreambleState.Complete) {
       read = inputStream.read(requestBuffer);
       if (read < 0) {
+        logger.trace("Read [{}] signal from client. Closing the socket.", read);
         throw new ConnectionClosedException();
       }
+
+      logger.trace("Read [{}] from client for preamble.", read);
 
       // Tell the callback that we've read at least one byte
       readObserver.run();
@@ -277,6 +294,7 @@ public final class HTTPTools {
 
     byte[] leftover = null;
     if (index < read) {
+      logger.trace("Had [{}] body bytes from the preamble read.", (read - index));
       leftover = Arrays.copyOfRange(requestBuffer, index, read);
     }
 

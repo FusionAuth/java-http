@@ -59,13 +59,15 @@ public class HTTPInputStream extends InputStream {
     // Ignore because we don't know if we should close the socket's InputStream
   }
 
-  public void purge() throws IOException {
+  public int purge() throws IOException {
     if (bodyBytes != null) {
       bytesRemaining -= (bodyBytes.length - bodyBytesIndex);
     }
 
+    long purged = bytesRemaining;
     delegate.skipNBytes(bytesRemaining);
     bytesRemaining = 0;
+    return (int) purged;
   }
 
   @Override

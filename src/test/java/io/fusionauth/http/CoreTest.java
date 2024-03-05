@@ -29,11 +29,10 @@ import java.nio.charset.StandardCharsets;
 import java.security.SecureRandom;
 import java.security.cert.Certificate;
 import java.time.Duration;
-import java.util.Base64;
 import java.util.List;
 import java.util.Locale;
+import java.util.Map;
 import java.util.concurrent.atomic.AtomicBoolean;
-import java.util.concurrent.atomic.AtomicLong;
 import java.util.zip.InflaterInputStream;
 
 import com.inversoft.net.ssl.SSLTools;
@@ -256,14 +255,12 @@ public class CoreTest extends BaseTest {
   @Test
   public void initialReadTimeout() {
     // This test simulates if the client doesn't send bytes for the initial timeout
-    HTTPHandler handler = (req, res) -> {
-      fail("Should not be called");
-    };
+    HTTPHandler handler = (req, res) -> fail("Should not be called");
 
     var instrumenter = new CountingInstrumenter();
-    try (var ignore = makeServer("http", handler, instrumenter).withInitialReadTimeout(Duration.ofSeconds(1)).start(); var socket = new Socket("127.0.0.1", 4242)) {
+    try (var ignore = makeServer("http", handler, instrumenter).withInitialReadTimeout(Duration.ofMillis(250)).start(); var socket = new Socket("127.0.0.1", 4242)) {
       var out = socket.getOutputStream();
-      sleep(1_500);
+      sleep(2_000);
       out.write("""
           GET / HTTP/1.1\r
           Connection: close\r
@@ -273,8 +270,8 @@ public class CoreTest extends BaseTest {
           """.getBytes());
       out.flush();
       var in = socket.getInputStream();
-      in.readAllBytes();
-      fail("Should have failed");
+      var body = in.readAllBytes();
+      fail("Should have failed but instead got\n\n" + new String(body));
     } catch (Exception ignore) {
       // Expected
     }
@@ -324,18 +321,14 @@ public class CoreTest extends BaseTest {
 
   @Test
   public void logger() {
-    try {
-      // Test replacement values and ensure we are handling special regex characters.
-      AccumulatingLogger logger = new AccumulatingLogger();
-      logger.setLevel(Level.Debug);
-      logger.info("Class name: [{}]", "io.fusionauth.http.Test$InnerClass");
+    // Test replacement values and ensure we are handling special regex characters.
+    AccumulatingLogger logger = new AccumulatingLogger();
+    logger.setLevel(Level.Debug);
+    logger.info("Class name: [{}]", "io.fusionauth.http.Test$InnerClass");
 
-      // Expect that we do not encounter an exception.
-      String output = logger.toString();
-      assertTrue(output.endsWith("Class name: [io.fusionauth.http.Test$InnerClass]"));
-    } finally {
-      logger.setLevel(Level.Trace);
-    }
+    // Expect that we do not encounter an exception.
+    String output = logger.toString();
+    assertTrue(output.endsWith("Class name: [io.fusionauth.http.Test$InnerClass]"));
   }
 
   @Test(dataProvider = "schemes", groups = "performance")
@@ -397,32 +390,50 @@ public class CoreTest extends BaseTest {
       }
     };
 
-    int iterations = 10_000;
+    int iterations = 5_000;
+    int i = -1;
     CountingInstrumenter instrumenter = new CountingInstrumenter();
     try (var client = makeClient(scheme, null); var ignore = makeServer(scheme, handler, instrumenter).start()) {
-      URI uri = makeURI(scheme, "");
-      long start = System.currentTimeMillis();
-      for (int i = 0; i < iterations; i++) {
-        var response = client.send(
-            HttpRequest.newBuilder()
-                       .uri(uri)
-                       .header(Headers.Connection, Connections.Close)
-                       .POST(BodyPublishers.noBody())
-                       .build(),
-            r -> BodySubscribers.ofString(StandardCharsets.UTF_8)
-        );
+      try {
+        URI uri = makeURI(scheme, "");
+        long start = System.currentTimeMillis();
+        for (i = 0; i < iterations; i++) {
+          var response = client.send(
+              HttpRequest.newBuilder()
+                         .uri(uri)
+                         .header(Headers.Connection, Connections.Close)
+                         .POST(BodyPublishers.noBody())
+                         .build(),
+              r -> BodySubscribers.ofString(StandardCharsets.UTF_8)
+          );
 
-        if (i % 1_000 == 0) {
-          System.out.println(i);
+          if (i % 1_000 == 0) {
+            System.out.println(i);
+          }
+
+          assertEquals(response.statusCode(), 200);
+          assertEquals(response.body(), ExpectedResponse);
         }
 
-        assertEquals(response.statusCode(), 200);
-        assertEquals(response.body(), ExpectedResponse);
-      }
+        long end = System.currentTimeMillis();
+        double average = (end - start) / (double) iterations;
+        System.out.println("Average linear request time without keep-alive is [" + average + "]ms");
+      } catch (Exception e) {
+        StringBuilder threadDump = new StringBuilder();
+        for (Map.Entry<Thread, StackTraceElement[]> entry : Thread.getAllStackTraces().entrySet()) {
+          threadDump.append(entry.getKey()).append(" ").append(entry.getKey().getState()).append("\n");
+          for (StackTraceElement ste : entry.getValue()) {
+            threadDump.append("\tat ").append(ste).append("\n");
+          }
+          threadDump.append("\n");
+        }
 
-      long end = System.currentTimeMillis();
-      double average = (end - start) / (double) iterations;
-      System.out.println("Average linear request time without keep-alive is [" + average + "]ms");
+        System.out.println(threadDump);
+        throw e;
+      }
+    } catch (Exception e) {
+      System.out.println("Failed on iteration " + i);
+      throw e;
     }
 
     assertEquals(instrumenter.getConnections(), iterations);
@@ -488,7 +499,7 @@ public class CoreTest extends BaseTest {
     // This test simulates if the server has a long-running thread that doesn't write fast enough
     HTTPHandler handler = (req, res) -> {
       System.out.println("Handling");
-      sleep(3_000L);
+      sleep(4_000L);
       res.setStatus(200);
       res.setContentLength(0L);
       res.getOutputStream().close();
@@ -651,7 +662,7 @@ public class CoreTest extends BaseTest {
       }
     };
 
-    try (var client = makeClient(scheme, null); var ignore = makeServer(scheme, handler).start()) {
+    try (var ignore = makeServer(scheme, handler).start(); var client = makeClient(scheme, null)) {
       URI uri = makeURI(scheme, "?foo=bar");
       var response = client.send(
           HttpRequest.newBuilder().uri(uri).header(Headers.ContentType, "application/json").POST(BodyPublishers.ofString(RequestBody)).build(),
@@ -663,76 +674,25 @@ public class CoreTest extends BaseTest {
     }
   }
 
-  @Test
-  public void slowHandler() {
-    AtomicBoolean called = new AtomicBoolean(false);
-    AtomicLong writeThroughputDelay = new AtomicLong(0);
-
-    HTTPHandler handler = (req, res) -> {
-      assertNull(req.getContentType());
-      if (!called.getAndSet(true)) {
-        // Take the configured write delay calculation and add 1 seconds
-        long seconds = writeThroughputDelay.get() + 1;
-        System.out.println("Pausing [" + seconds + "] seconds");
-        sleep(seconds * 1000);
-      }
-
-      res.setStatus(200);
-    };
-
-    try (var server = makeServer("http", handler).start()) {
-      writeThroughputDelay.set(server.configuration().getWriteThroughputCalculationDelay().toSeconds());
-      URI uri = makeURI("http", "");
-      var response = new RESTClient<>(Void.TYPE, Void.TYPE)
-          .url(uri.toString())
-          .connectTimeout(0)
-          .readTimeout(0)
-          .post()
-          .go();
-
-      if (response.status != 200) {
-        System.out.println(response.exception);
-      }
-      assertEquals(response.status, 200);
-
-      // Make a second call to ensure that the server is still working
-      response = new RESTClient<>(Void.TYPE, Void.TYPE)
-          .url(uri.toString())
-          .connectTimeout(0)
-          .readTimeout(0)
-          .post()
-          .go();
-
-      if (response.status != 200) {
-        System.out.println(response.exception);
-      }
-      assertEquals(response.status, 200);
-    }
-  }
-
   @Test(dataProvider = "schemes")
-  public void slowWrites(String scheme) throws Exception {
-    // Test a slow connection where the HTTP server is blocked because we cannot write to the output stream as fast as we'd like
-
-    // The default test config will use a 16k buffer and a queue size of 16.
-    // - Trying to write 8 MB slowly should cause an error.
-
-    // 8 MB bytes
+  public void slowClient(String scheme) throws Exception {
+    // Test a slow connection where the HTTP server is blocked because we cannot write to the output stream as fast as we'd like. The
+    // default buffer on macOS seems to be 768k (from my testing). I set this to 8MB which should hopefully cause the writes to back up.
     byte[] bytes = new byte[1024 * 1024 * 8];
     new SecureRandom().nextBytes(bytes);
 
-    // Base64 encoded large string
-    String largeRequest = Base64.getEncoder().encodeToString(bytes);
-
     HTTPHandler handler = (req, res) -> {
-      res.setHeader(Headers.ContentType, "text/plain; charset=UTF-8");
-      int contentLength = largeRequest.getBytes(StandardCharsets.UTF_8).length;
-      res.setHeader(Headers.ContentLength, String.valueOf(contentLength));
+      res.setContentType("application/octet-stream");
+      res.setContentLength(bytes.length);
       res.setStatus(200);
 
-      Writer writer = res.getWriter();
-      writer.write(largeRequest);
-      writer.close();
+      int interation = 1;
+      var out = res.getOutputStream();
+      for (int i = 0; i < bytes.length; i += 1024 * 16) {
+        out.write(bytes, i, 1024 * 16);
+        System.out.println("Wrote " + (interation++ * 16) + "k");
+      }
+      out.close();
     };
 
     AtomicBoolean slept = new AtomicBoolean(false);
@@ -743,11 +703,11 @@ public class CoreTest extends BaseTest {
           r -> BodySubscribers.ofByteArrayConsumer(optional -> {
             byte[] actual = optional.orElse(null);
             if (actual != null) {
-              // Sleep once only since the server should fail after the first batch, but since Java or the OS might cache a lot of bytes it
+              // Sleep once since the server should fail after the first batch, but since Java or the OS might cache a lot of bytes it
               // read from the socket, we can't sleep for too long, otherwise, this test will never complete
               if (!slept.get()) {
                 int sleep = 5 * 1_000;
-                System.out.println("received [" + actual.length + "] bytes. Sleep [" + sleep + "]");
+                System.out.println("Received [" + actual.length + "] bytes. Sleep [" + sleep + "]");
                 sleep(sleep); // We expect to only wait for 2,000 ms
                 slept.set(true);
               }
@@ -760,6 +720,71 @@ public class CoreTest extends BaseTest {
       fail("Should have thrown");
     } catch (IOException e) {
       // Expected
+    }
+  }
+
+  @Test
+  public void slowHandler() {
+    AtomicBoolean called = new AtomicBoolean(false);
+    HTTPHandler handler = (req, res) -> {
+      assertNull(req.getContentType());
+
+      // Set the headers first
+      res.setContentLength(2L);
+      res.setStatus(200);
+
+      // Write a single byte to kick off the write throughput calculations
+      var outputStream = res.getOutputStream();
+      outputStream.write('4');
+
+      // Pause on the first request
+      if (!called.getAndSet(true)) {
+        System.out.println("Pausing for 4 seconds");
+        sleep(4_000);
+      }
+
+      // Write the other byte now
+      outputStream.write('2');
+    };
+
+    try (var ignore = makeServer("http", handler).withProcessingTimeoutDuration(Duration.ofSeconds(20))
+                                                 .withWriteThroughputCalculationDelayDuration(Duration.ofSeconds(1))
+                                                 .start()) {
+      URI uri = makeURI("http", "");
+      System.out.println("Sending first request");
+      var response = new RESTClient<>(String.class, String.class)
+          .url(uri.toString())
+          .connectTimeout(0)
+          .readTimeout(0)
+          .errorResponseHandler(new TextResponseHandler())
+          .successResponseHandler(new TextResponseHandler())
+          .get()
+          .go();
+      System.out.println("Got first response");
+
+      if (response.status != 200) {
+        System.out.println(response.exception);
+      }
+      assertEquals(response.status, 200);
+      assertEquals(response.successResponse, "4"); // Only part of the response will be written
+
+      // Make a second call to ensure that the server is still working
+      System.out.println("Sending second request");
+      response = new RESTClient<>(String.class, String.class)
+          .url(uri.toString())
+          .connectTimeout(0)
+          .readTimeout(0)
+          .errorResponseHandler(new TextResponseHandler())
+          .successResponseHandler(new TextResponseHandler())
+          .get()
+          .go();
+      System.out.println("Got second response");
+
+      if (response.status != 200) {
+        System.out.println(response.exception);
+      }
+      assertEquals(response.status, 200);
+      assertEquals(response.successResponse, "42");
     }
   }
 

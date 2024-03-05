@@ -79,6 +79,7 @@ public class HTTPWorker implements Runnable {
     this.buffers = new HTTPBuffers(configuration);
     this.logger = configuration.getLoggerFactory().getLogger(HTTPWorker.class);
     this.state = State.Read;
+    logger.debug("Starting HTTP worker virtual thread");
   }
 
   public Socket getSocket() {
@@ -90,9 +91,11 @@ public class HTTPWorker implements Runnable {
     boolean keepAlive = false;
     try {
       while (true) {
+        logger.debug("Running HTTP worker and preparing to read preamble");
         var request = new HTTPRequest(configuration.getContextPath(), configuration.getMultipartBufferSize(),
             listener.getCertificate() != null ? "https" : "http", listener.getPort(), socket.getInetAddress().getHostAddress());
 
+        logger.debug("Reading preamble");
         var inputStream = new ThroughputInputStream(socket.getInputStream(), throughput);
         var bodyBytes = HTTPTools.parseRequestPreamble(inputStream, request, buffers.requestBuffer(), () -> state = State.Read);
         var httpInputStream = new HTTPInputStream(configuration, request, inputStream, bodyBytes);
@@ -118,8 +121,7 @@ public class HTTPWorker implements Runnable {
           state = State.Read;
         }
 
-        var connection = request.getHeader(Headers.Connection);
-        if (connection == null || !connection.equalsIgnoreCase(Connections.Close)) {
+        if (request.isKeepAlive()) {
           response.setHeader(Headers.Connection, Connections.KeepAlive);
           keepAlive = true;
         } else {
@@ -127,23 +129,28 @@ public class HTTPWorker implements Runnable {
           keepAlive = false;
         }
 
+        logger.debug("Calling the handler");
         var handler = configuration.getHandler();
         state = State.Process; // Transition to processing
         handler.handle(request, response);
         response.close();
         outputStream = null;
+        logger.debug("Handler completed successfully");
 
+        // Since the Handler can change the Keep-Alive state, we use the response here
         if (!response.isKeepAlive()) {
           logger.debug("Closing because no Keep-Alive.");
           close(Result.Success);
           break;
         } else {
+          logger.debug("Keeping things alive");
           state = State.KeepAlive; // Transition to Keep-Alive
-          socket.setSoTimeout((int) configuration.getKeepAliveTimeoutDuration().toSeconds());
+          socket.setSoTimeout((int) configuration.getKeepAliveTimeoutDuration().toMillis());
         }
 
         // Purge the extra bytes in case the handler didn't read everything
-        httpInputStream.purge();
+        int purged = httpInputStream.purge();
+        System.out.println("Purged [" + purged + "] bytes");
       }
     } catch (SocketTimeoutException | ConnectionClosedException e) {
       // This might be a read timeout or a Keep-Alive timeout. The failure state is based on that flag
@@ -151,6 +158,8 @@ public class HTTPWorker implements Runnable {
 
       if (keepAlive) {
         logger.debug("Closing because the Keep-Alive expired.", e);
+      } else {
+        logger.debug("Closing because socket timed out.");
       }
     } catch (ParseException pe) {
       if (instrumenter != null) {
@@ -219,15 +228,15 @@ public class HTTPWorker implements Runnable {
     return expectResponse.getStatus() == 100;
   }
 
-  private enum Result {
-    Failure,
-    Success
-  }
-
   public enum State {
     Read,
     Process,
     Write,
     KeepAlive
+  }
+
+  private enum Result {
+    Failure,
+    Success
   }
 }
