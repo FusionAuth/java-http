@@ -195,6 +195,32 @@ public class CookieTest extends BaseTest {
     assertFalse(cookie.secure);
     assertEquals(cookie.value, "bar");
 
+    // Missing closing quote
+    // - This is not a valid value, but we are handling it anyway.
+    cookie = Cookie.fromResponseHeader("foo=\"bar; SameSite=");
+    assertNull(cookie.domain);
+    assertNull(cookie.expires);
+    assertFalse(cookie.httpOnly);
+    assertNull(cookie.maxAge);
+    assertEquals(cookie.name, "foo");
+    assertNull(cookie.path);
+    assertNull(cookie.sameSite);
+    assertFalse(cookie.secure);
+    assertEquals(cookie.value, "bar");
+
+    // Missing opening quote
+    // - This is not a valid value, but we are handling it anyway.
+    cookie = Cookie.fromResponseHeader("foo=bar\"; SameSite=");
+    assertNull(cookie.domain);
+    assertNull(cookie.expires);
+    assertFalse(cookie.httpOnly);
+    assertNull(cookie.maxAge);
+    assertEquals(cookie.name, "foo");
+    assertNull(cookie.path);
+    assertNull(cookie.sameSite);
+    assertFalse(cookie.secure);
+    assertEquals(cookie.value, "bar");
+
     // Broken attributes
     cookie = Cookie.fromResponseHeader("foo=bar;  =fusionauth.io; =Wed, 21 Oct 2015 07:28:00 GMT; =1; =Lax");
     assertNull(cookie.domain);
