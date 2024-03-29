@@ -130,6 +130,8 @@ public class Cookie implements Buildable<Cookie> {
    * @return The Cookie.
    */
   public static Cookie fromResponseHeader(String header) {
+    // Note we could use the JDK java.net.HttpCookie.parse(header) instead.
+    // - However, they still don't support SameSite. Super lame.
     Cookie cookie = new Cookie();
     boolean inName = false, inValue = false, inAttributes = false;
     char[] chars = header.toCharArray();
@@ -145,14 +147,19 @@ public class Cookie implements Buildable<Cookie> {
 
       if (c == '=' && inName) {
         name = header.substring(start, i);
-        if (!inAttributes && name.trim().length() == 0) {
+        if (!inAttributes && name.trim().isEmpty()) {
           return null;
         }
 
         value = "";
         inValue = true;
         inName = false;
-        start = i + 1;
+        // Values may be double-quoted
+        // https://www.rfc-editor.org/rfc/rfc6265#section-4.1.1
+        // cookie-value = *cookie-octet / ( DQUOTE *cookie-octet DQUOTE )
+        start = (i < (header.length() - 1)) && chars[i + 1] == '"'
+            ? i + 2
+            : i + 1;
       } else if (c == ';') {
         if (inName) {
           if (!inAttributes) {
@@ -162,7 +169,11 @@ public class Cookie implements Buildable<Cookie> {
           name = header.substring(start, i);
           value = null;
         } else {
-          value = header.substring(start, i);
+          // Values may be double-quoted
+          int end = chars[i - 1] == '"'
+              ? i - 1
+              : i;
+          value = header.substring(start, end);
         }
 
         if (inAttributes) {
@@ -209,6 +220,10 @@ public class Cookie implements Buildable<Cookie> {
   }
 
   public void addAttribute(String name, String value) {
+    if (name == null) {
+      return;
+    }
+
     switch (name.toLowerCase()) {
       case HTTPValues.CookieAttributes.DomainLower:
         domain = value;

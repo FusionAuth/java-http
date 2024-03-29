@@ -1,5 +1,5 @@
 /*
- * Copyright (c) 2021-2022, FusionAuth, All Rights Reserved
+ * Copyright (c) 2021-2024, FusionAuth, All Rights Reserved
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -169,6 +169,32 @@ public class CookieTest extends BaseTest {
     assertFalse(cookie.secure);
     assertEquals(cookie.value, "bar");
 
+    // Quoted value, no other attributes
+    // https://www.rfc-editor.org/rfc/rfc6265#section-4.1.1
+    // cookie-value = *cookie-octet / ( DQUOTE *cookie-octet DQUOTE )
+    cookie = Cookie.fromResponseHeader("foo=\"bar\";");
+    assertNull(cookie.domain);
+    assertNull(cookie.expires);
+    assertFalse(cookie.httpOnly);
+    assertNull(cookie.maxAge);
+    assertEquals(cookie.name, "foo");
+    assertNull(cookie.path);
+    assertNull(cookie.sameSite);
+    assertFalse(cookie.secure);
+    assertEquals(cookie.value, "bar");
+
+    // Quoted value, additional attribute
+    cookie = Cookie.fromResponseHeader("foo=\"bar\"; SameSite=");
+    assertNull(cookie.domain);
+    assertNull(cookie.expires);
+    assertFalse(cookie.httpOnly);
+    assertNull(cookie.maxAge);
+    assertEquals(cookie.name, "foo");
+    assertNull(cookie.path);
+    assertNull(cookie.sameSite);
+    assertFalse(cookie.secure);
+    assertEquals(cookie.value, "bar");
+
     // Broken attributes
     cookie = Cookie.fromResponseHeader("foo=bar;  =fusionauth.io; =Wed, 21 Oct 2015 07:28:00 GMT; =1; =Lax");
     assertNull(cookie.domain);
@@ -206,7 +232,8 @@ public class CookieTest extends BaseTest {
     assertEquals(cookie.value, "");
 
     // Empty values
-    cookie = Cookie.fromResponseHeader("foo=;Domain=;Expires=;Max-Age=;SameSite=");
+    // - Max-Age and Expires should never be empty
+    cookie = Cookie.fromResponseHeader("foo=;Domain=;SameSite=");
     assertEquals(cookie.domain, "");
     assertNull(cookie.expires);
     assertFalse(cookie.httpOnly);
