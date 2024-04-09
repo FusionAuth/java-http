@@ -791,15 +791,15 @@ public class HTTPRequest implements Buildable<HTTPRequest> {
     }
 
     // If we don't have a host header, nothing to do here.
-    String hostHeader = getHeader(Headers.XForwardedHost);
-    if (hostHeader == null) {
+    String xHost = getHeader(Headers.XForwardedHost);
+    if (xHost == null) {
       return serverPort;
     }
 
     // If we can pull the port from the X-Forwarded-Host header, let's do that.
     // - This is effectively the same as X-Forwarded-Port
     try {
-      int hostPort = URI.create("https://" + hostHeader).getPort();
+      int hostPort = URI.create("https://" + xHost).getPort();
       if (hostPort != -1) {
         return hostPort;
       }
