@@ -811,7 +811,7 @@ public class HTTPRequest implements Buildable<HTTPRequest> {
 
     // If we made this far, we have met all conditions for assuming port 443.
     // - We are missing the X-Forwarded-Port header, we have an X-Forwarded-Proto header of https, and we have an X-Forwarded-Host
-    //   header value that has not defined a port, and it has defined a port.
+    //   header value that has not defined a port.
     return 443;
   }
 }
