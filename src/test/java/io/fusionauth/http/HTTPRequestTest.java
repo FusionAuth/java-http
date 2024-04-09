@@ -71,25 +71,31 @@ public class HTTPRequestTest {
         "X-Forwarded-Port", "443",
         "X-Forwarded-Proto", "https");
 
-    // Use case 4: Missing X-Forwarded-Proto header, cannot infer 443
+    // Use case 4: Set port from the X-Forwarded-Port header, non-standard
+    assertBaseURL("https://acme.com:8192",
+        "X-Forwarded-Host", "acme.com",
+        "X-Forwarded-Port", "8192",
+        "X-Forwarded-Proto", "https");
+
+    // Use case 5: Missing X-Forwarded-Proto header, cannot infer 443
     assertBaseURL("http://acme.com:8080",
         "X-Forwarded-Host", "acme.com");
 
-    // Use case 5: Malformed X-Forwarded-Host header, so we'll ignore the port on the -Host header.
+    // Use case 6: Malformed X-Forwarded-Host header, so we'll ignore the port on the -Host header.
     assertBaseURL("https://acme.com:8080",
         "X-Forwarded-Host", "acme.com:##",
         "X-Forwarded-Proto", "https");
 
-    // Use case 6: Missing X-Forwarded-Host
+    // Use case 7: Missing X-Forwarded-Host
     assertBaseURL("https://localhost:8080",
         "X-Forwarded-Proto", "https");
 
-    // Use case 7: http and port 80
+    // Use case 8: http and port 80
     assertBaseURL("https://localhost",
         request -> request.setPort(80),
         "X-Forwarded-Proto", "https");
 
-    // Use case 8: https and port 80
+    // Use case 9: https and port 80
     assertBaseURL("http://localhost",
         request -> {
           request.setPort(80);
