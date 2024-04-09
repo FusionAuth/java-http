@@ -1,5 +1,5 @@
 /*
- * Copyright (c) 2022, FusionAuth, All Rights Reserved
+ * Copyright (c) 2022-2024, FusionAuth, All Rights Reserved
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -18,12 +18,14 @@ package io.fusionauth.http;
 import java.nio.charset.StandardCharsets;
 import java.util.List;
 import java.util.Map;
+import java.util.function.Consumer;
 
 import io.fusionauth.http.HTTPValues.Headers;
 import io.fusionauth.http.server.HTTPRequest;
 import org.testng.annotations.Test;
 import static org.testng.Assert.assertEquals;
 import static org.testng.Assert.assertTrue;
+import static org.testng.Assert.fail;
 
 /**
  * Tests the HTTPRequest.
@@ -49,6 +51,51 @@ public class HTTPRequestTest {
 
     request.addHeader("coNTent-type", "text/html; charset=UTF-8");
     assertEquals(request.getCharacterEncoding(), StandardCharsets.UTF_8);
+  }
+
+  @Test
+  public void getBaseURL() {
+    // Use case 1: missing X-Forwarded-Port, infer it from https
+    assertBaseURL("https://acme.com",
+        "X-Forwarded-Host", "acme.com",
+        "X-Forwarded-Proto", "https");
+
+    // Use case 2: Set a port on the Host, we will use that.
+    assertBaseURL("https://acme.com:8192",
+        "X-Forwarded-Host", "acme.com:8192",
+        "X-Forwarded-Proto", "https");
+
+    // Use case 3: Set port from the X-Forwarded-Port header
+    assertBaseURL("https://acme.com",
+        "X-Forwarded-Host", "acme.com",
+        "X-Forwarded-Port", "443",
+        "X-Forwarded-Proto", "https");
+
+    // Use case 4: Missing X-Forwarded-Proto header, cannot infer 443
+    assertBaseURL("http://acme.com:8080",
+        "X-Forwarded-Host", "acme.com");
+
+    // Use case 5: Malformed X-Forwarded-Host header, so we'll ignore the port on the -Host header.
+    assertBaseURL("https://acme.com:8080",
+        "X-Forwarded-Host", "acme.com:##",
+        "X-Forwarded-Proto", "https");
+
+    // Use case 6: Missing X-Forwarded-Host
+    assertBaseURL("https://localhost:8080",
+        "X-Forwarded-Proto", "https");
+
+    // Use case 7: http and port 80
+    assertBaseURL("https://localhost",
+        request -> request.setPort(80),
+        "X-Forwarded-Proto", "https");
+
+    // Use case 8: https and port 80
+    assertBaseURL("http://localhost",
+        request -> {
+          request.setPort(80);
+          request.setScheme("https");
+        },
+        "X-Forwarded-Proto", "http");
   }
 
   @Test
@@ -122,6 +169,32 @@ public class HTTPRequestTest {
     request.setPath("/path?name=");
     assertEquals(request.getPath(), "/path");
     assertEquals(request.getURLParameters(), Map.of("name", List.of("")));
+  }
+
+  private void assertBaseURL(String expected, Consumer<HTTPRequest> consumer, String... headers) {
+    HTTPRequest request = new HTTPRequest();
+
+    request.setScheme("http");
+    request.setHost("localhost");
+    request.setPort(8080);
+
+    if (consumer != null) {
+      consumer.accept(request);
+    }
+
+    if (headers.length % 2 != 0) {
+      fail("You need to provide pairs.");
+    }
+
+    for (int i = 0; i < headers.length; i = i + 2) {
+      request.setHeader(headers[i], headers[i + 1]);
+    }
+
+    assertEquals(request.getBaseURL(), expected);
+  }
+
+  private void assertBaseURL(String expected, String... headers) {
+    assertBaseURL(expected, null, headers);
   }
 
   private void assertURLs(String scheme, String source, String host, int port, String baseURL) {

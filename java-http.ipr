@@ -15,6 +15,7 @@
       <inspection_tool class="SizeReplaceableByIsEmpty" enabled="true" level="WARNING" enabled_by_default="true">
         <option name="ignoredTypes">
           <set>
+            <option value="java.lang.String" />
             <option value="java.util.List" />
           </set>
         </option>
@@ -184,7 +185,7 @@
       </option>
       <option name="RIGHT_MARGIN" value="140" />
       <option name="WRAP_COMMENTS" value="true" />
-      <DB2CodeStyleSettings version="6">
+      <DB2CodeStyleSettings version="7">
         <option name="USE_GENERAL_STYLE" value="false" />
         <option name="TYPE_CASE" value="3" />
         <option name="CUSTOM_TYPE_CASE" value="3" />
@@ -221,7 +222,7 @@
         <option name="EXPR_CASE_THEN_WRAP" value="true" />
         <option name="PRIMARY_KEY_NAME_TEMPLATE" value="{table}_{columns}_pk" />
       </DB2CodeStyleSettings>
-      <DerbyCodeStyleSettings version="6">
+      <DerbyCodeStyleSettings version="7">
         <option name="USE_GENERAL_STYLE" value="false" />
         <option name="TYPE_CASE" value="3" />
         <option name="CUSTOM_TYPE_CASE" value="3" />
@@ -262,7 +263,7 @@
         <option name="CLASS_COUNT_TO_USE_IMPORT_ON_DEMAND" value="9999" />
         <option name="NAMES_COUNT_TO_USE_IMPORT_ON_DEMAND" value="9999" />
       </GroovyCodeStyleSettings>
-      <H2CodeStyleSettings version="6">
+      <H2CodeStyleSettings version="7">
         <option name="USE_GENERAL_STYLE" value="false" />
         <option name="TYPE_CASE" value="3" />
         <option name="CUSTOM_TYPE_CASE" value="3" />
@@ -299,7 +300,7 @@
         <option name="EXPR_CASE_THEN_WRAP" value="true" />
         <option name="PRIMARY_KEY_NAME_TEMPLATE" value="{table}_{columns}_pk" />
       </H2CodeStyleSettings>
-      <HSQLCodeStyleSettings version="6">
+      <HSQLCodeStyleSettings version="7">
         <option name="USE_GENERAL_STYLE" value="false" />
         <option name="TYPE_CASE" value="3" />
         <option name="CUSTOM_TYPE_CASE" value="3" />
@@ -359,7 +360,7 @@
         </option>
         <option name="JD_INDENT_ON_CONTINUATION" value="true" />
       </JavaCodeStyleSettings>
-      <MSSQLCodeStyleSettings version="6">
+      <MSSQLCodeStyleSettings version="7">
         <option name="USE_GENERAL_STYLE" value="false" />
         <option name="TYPE_CASE" value="3" />
         <option name="CUSTOM_TYPE_CASE" value="3" />
@@ -402,7 +403,7 @@
       <MarkdownNavigatorCodeStyleSettings>
         <option name="RIGHT_MARGIN" value="72" />
       </MarkdownNavigatorCodeStyleSettings>
-      <MySQLCodeStyleSettings version="6">
+      <MySQLCodeStyleSettings version="7">
         <option name="USE_GENERAL_STYLE" value="false" />
         <option name="TYPE_CASE" value="3" />
         <option name="CUSTOM_TYPE_CASE" value="3" />
@@ -439,7 +440,7 @@
         <option name="EXPR_CASE_THEN_WRAP" value="true" />
         <option name="PRIMARY_KEY_NAME_TEMPLATE" value="{table}_{columns}_pk" />
       </MySQLCodeStyleSettings>
-      <OracleCodeStyleSettings version="6">
+      <OracleCodeStyleSettings version="7">
         <option name="USE_GENERAL_STYLE" value="false" />
         <option name="TYPE_CASE" value="3" />
         <option name="CUSTOM_TYPE_CASE" value="3" />
@@ -476,7 +477,7 @@
         <option name="EXPR_CASE_THEN_WRAP" value="true" />
         <option name="PRIMARY_KEY_NAME_TEMPLATE" value="{table}_{columns}_pk" />
       </OracleCodeStyleSettings>
-      <PostgresCodeStyleSettings version="6">
+      <PostgresCodeStyleSettings version="7">
         <option name="USE_GENERAL_STYLE" value="false" />
         <option name="TYPE_CASE" value="3" />
         <option name="CUSTOM_TYPE_CASE" value="3" />
@@ -513,7 +514,7 @@
         <option name="EXPR_CASE_THEN_WRAP" value="true" />
         <option name="PRIMARY_KEY_NAME_TEMPLATE" value="{table}_{columns}_pk" />
       </PostgresCodeStyleSettings>
-      <SQLiteCodeStyleSettings version="6">
+      <SQLiteCodeStyleSettings version="7">
         <option name="USE_GENERAL_STYLE" value="false" />
         <option name="TYPE_CASE" value="3" />
         <option name="CUSTOM_TYPE_CASE" value="3" />
@@ -550,7 +551,7 @@
         <option name="EXPR_CASE_THEN_WRAP" value="true" />
         <option name="PRIMARY_KEY_NAME_TEMPLATE" value="{table}_{columns}_pk" />
       </SQLiteCodeStyleSettings>
-      <SqlCodeStyleSettings version="6">
+      <SqlCodeStyleSettings version="7">
         <option name="TYPE_CASE" value="3" />
         <option name="CUSTOM_TYPE_CASE" value="3" />
         <option name="ALIAS_CASE" value="4" />
@@ -591,7 +592,7 @@
         <option name="WRAP_INSIDE_WHERE" value="5" />
         <option name="WRAP_INSIDE_SET" value="5" />
       </SqlCodeStyleSettings>
-      <SybaseCodeStyleSettings version="6">
+      <SybaseCodeStyleSettings version="7">
         <option name="USE_GENERAL_STYLE" value="false" />
         <option name="TYPE_CASE" value="3" />
         <option name="CUSTOM_TYPE_CASE" value="3" />

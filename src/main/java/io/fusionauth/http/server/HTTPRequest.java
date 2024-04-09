@@ -1,5 +1,5 @@
 /*
- * Copyright (c) 2022-2023, FusionAuth, All Rights Reserved
+ * Copyright (c) 2022-2024, FusionAuth, All Rights Reserved
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -17,6 +17,7 @@ package io.fusionauth.http.server;
 
 import java.io.IOException;
 import java.io.InputStream;
+import java.net.URI;
 import java.nio.charset.Charset;
 import java.nio.charset.StandardCharsets;
 import java.time.Instant;
@@ -249,11 +250,7 @@ public class HTTPRequest implements Buildable<HTTPRequest> {
     }
 
     String serverName = getHost().toLowerCase();
-    int serverPort = getPort();
-    // Ignore port 80 for http
-    if (getScheme().equalsIgnoreCase("http") && serverPort == 80) {
-      serverPort = -1;
-    }
+    int serverPort = getBaseURLServerPort();
 
     String uri = scheme + "://" + serverName;
     if (serverPort > 0) {
@@ -767,5 +764,53 @@ public class HTTPRequest implements Buildable<HTTPRequest> {
         }
         break;
     }
+  }
+
+  /**
+   * Try and infer the port if the X-Forwarded-Port header is not present.
+   *
+   * @return the server port
+   */
+  private int getBaseURLServerPort() {
+    // Ignore port 80 for http
+    int serverPort = getPort();
+    if (scheme.equalsIgnoreCase("http") && serverPort == 80) {
+      serverPort = -1;
+    }
+
+    // See if we can infer a better choice for the port than the current serverPort.
+
+    // If we already have an X-Forwarded-Port header, nothing to do here.
+    if (getHeader(Headers.XForwardedPort) != null) {
+      return serverPort;
+    }
+
+    // If we don't have an X-Forwarded-Proto header, or it is not https, nothing to do here.
+    if (!"https".equals(getHeader(Headers.XForwardedProto))) {
+      return serverPort;
+    }
+
+    // If we don't have a host header, nothing to do here.
+    String hostHeader = getHeader(Headers.XForwardedHost);
+    if (hostHeader == null) {
+      return serverPort;
+    }
+
+    // If we can pull the port from the X-Forwarded-Host header, let's do that.
+    // - This is effectively the same as X-Forwarded-Port
+    try {
+      int hostPort = URI.create("https://" + hostHeader).getPort();
+      if (hostPort != -1) {
+        return hostPort;
+      }
+    } catch (Exception ignore) {
+      // If we can't parse the hostHeader, keep the existing resolved port
+      return serverPort;
+    }
+
+    // If we made this far, we have met all conditions for assuming port 443.
+    // - We are missing the X-Forwarded-Port header, we have an X-Forwarded-Proto header of https, and we have an X-Forwarded-Host
+    //   header value that has not defined a port, and it has defined a port.
+    return 443;
   }
 }
