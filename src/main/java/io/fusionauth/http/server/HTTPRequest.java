@@ -785,11 +785,6 @@ public class HTTPRequest implements Buildable<HTTPRequest> {
       return serverPort;
     }
 
-    // If we don't have an X-Forwarded-Proto header, or it is not https, nothing to do here.
-    if (!"https".equals(getHeader(Headers.XForwardedProto))) {
-      return serverPort;
-    }
-
     // If we don't have a host header, nothing to do here.
     String xHost = getHeader(Headers.XForwardedHost);
     if (xHost == null) {
@@ -805,6 +800,12 @@ public class HTTPRequest implements Buildable<HTTPRequest> {
       }
     } catch (Exception ignore) {
       // If we can't parse the hostHeader, keep the existing resolved port
+      return serverPort;
+    }
+
+    // If we don't have an X-Forwarded-Proto header, or it is not https, nothing to do here.
+    // - We must have the X-Forwarded-Proto: https in order to assume 443
+    if (!"https".equals(getHeader(Headers.XForwardedProto))) {
       return serverPort;
     }
 
