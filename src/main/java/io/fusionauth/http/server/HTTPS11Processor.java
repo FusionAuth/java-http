@@ -1,5 +1,5 @@
 /*
- * Copyright (c) 2022, FusionAuth, All Rights Reserved
+ * Copyright (c) 2022-2024, FusionAuth, All Rights Reserved
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -27,6 +27,7 @@ import java.nio.ByteBuffer;
 import java.nio.channels.SelectionKey;
 import java.security.GeneralSecurityException;
 
+import io.fusionauth.http.ClientSSLHandshakeException;
 import io.fusionauth.http.ParseException;
 import io.fusionauth.http.log.Logger;
 import io.fusionauth.http.security.SecurityTools;
@@ -161,7 +162,11 @@ public class HTTPS11Processor implements HTTPProcessor {
     }
 
     if (state == HTTPSState.HandshakeRead || state == HTTPSState.HandshakeWrite) {
-      state = handshake();
+      try {
+        state = handshake();
+      } catch (SSLException e) {
+        throw new ClientSSLHandshakeException(state, e);
+      }
 
       if (handshakeData.hasRemaining()) {
         // This shouldn't happen, but let's resize just in case
@@ -271,7 +276,11 @@ public class HTTPS11Processor implements HTTPProcessor {
     }
 
     if (state == HTTPSState.HandshakeRead || state == HTTPSState.HandshakeWrite) {
-      state = handshake();
+      try {
+        state = handshake();
+      } catch (SSLException e) {
+        throw new ClientSSLHandshakeException(state, e);
+      }
     } else {
       encrypt();
     }
