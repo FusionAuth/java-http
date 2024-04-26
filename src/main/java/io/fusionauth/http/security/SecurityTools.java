@@ -1,5 +1,5 @@
 /*
- * Copyright (c) 2022, FusionAuth, All Rights Reserved
+ * Copyright (c) 2022-2024, FusionAuth, All Rights Reserved
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -50,11 +50,6 @@ public final class SecurityTools {
   public static final String P8_KEY_END = "-----END PRIVATE KEY";
 
   public static final String P8_KEY_START = "BEGIN PRIVATE KEY-----";
-
-  // Disable SNI so that it doesn't mess up our use of JSSE with some certificates
-  static {
-    System.setProperty("jsse.enableSNIExtension", "false");
-  }
 
   private SecurityTools() {
   }
