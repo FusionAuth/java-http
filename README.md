@@ -12,20 +12,20 @@ To add this library to your project, you can include this dependency in your Mav
 <dependency>
   <groupId>io.fusionauth</groupId>
   <artifactId>java-http</artifactId>
-  <version>0.3.2</version>
+  <version>0.3.3</version>
 </dependency>
 ```
 
 If you are using Gradle, you can add this to your build file:
 
 ```groovy
-implementation 'io.fusionauth:java-http:0.3.20'
+implementation 'io.fusionauth:java-http:0.3.3'
 ```
 
 If you are using Savant, you can add this to your build file:
 
 ```groovy
-dependency(id: "io.fusionauth:java-http:0.3.2")
+dependency(id: "io.fusionauth:java-http:0.3.3")
 ```
 
 ## Examples Usages:
