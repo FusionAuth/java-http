@@ -1,5 +1,5 @@
 /*
- * Copyright (c) 2022-2023, FusionAuth, All Rights Reserved
+ * Copyright (c) 2022-2024, FusionAuth, All Rights Reserved
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -15,6 +15,7 @@
  */
 package io.fusionauth.http.server;
 
+import javax.net.ssl.SSLHandshakeException;
 import java.io.Closeable;
 import java.io.IOException;
 import java.net.InetSocketAddress;
@@ -170,8 +171,8 @@ public class HTTPServerThread extends Thread implements Closeable, Notifier {
         }
 
         cancelAndCloseKey(key);
-      } catch (ClientAbortException e) {
-        // A client abort exception is common and should not be error logged.
+      } catch (ClientAbortException | SSLHandshakeException e) {
+        // A client abort exception or SSLHandshakeException are common and should not be error logged.
         logger.debug("A client related exception was thrown during processing", e);
         cancelAndCloseKey(key);
       } catch (Throwable t) {
