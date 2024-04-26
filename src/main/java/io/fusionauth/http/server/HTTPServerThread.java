@@ -15,7 +15,6 @@
  */
 package io.fusionauth.http.server;
 
-import javax.net.ssl.SSLHandshakeException;
 import java.io.Closeable;
 import java.io.IOException;
 import java.net.InetSocketAddress;
@@ -31,6 +30,7 @@ import java.time.Duration;
 import java.util.Map;
 
 import io.fusionauth.http.ClientAbortException;
+import io.fusionauth.http.ClientSSLHandshakeException;
 import io.fusionauth.http.ParseException;
 import io.fusionauth.http.log.Logger;
 import io.fusionauth.http.util.ThreadPool;
@@ -171,8 +171,8 @@ public class HTTPServerThread extends Thread implements Closeable, Notifier {
         }
 
         cancelAndCloseKey(key);
-      } catch (ClientAbortException | SSLHandshakeException e) {
-        // A client abort exception or SSLHandshakeException are common and should not be error logged.
+      } catch (ClientAbortException | ClientSSLHandshakeException e) {
+        // A client abort exception or client handshake exception are common and should not be error logged.
         logger.debug("A client related exception was thrown during processing", e);
         cancelAndCloseKey(key);
       } catch (Throwable t) {
