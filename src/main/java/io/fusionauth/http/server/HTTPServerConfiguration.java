@@ -336,15 +336,11 @@ public class HTTPServerConfiguration implements Configurable<HTTPServerConfigura
   }
 
   /**
-   * This configures the minimum number of bytes per second that a client must send a request to the server before the server closes the
-   * connection.
-   *
-   * @param bytesPerSecond The bytes per second throughput.
-   * @return This.
+   * {@inheritDoc}
    */
   @Override
   public HTTPServerConfiguration withMinimumReadThroughput(long bytesPerSecond) {
-    if (bytesPerSecond < 1024) {
+    if (bytesPerSecond != -1 && bytesPerSecond < 1024) {
       throw new IllegalArgumentException("The minimum bytes per second must be greater than 1024. This should probably be faster than a 28.8 baud modem!");
     }
 
@@ -353,14 +349,10 @@ public class HTTPServerConfiguration implements Configurable<HTTPServerConfigura
   }
 
   /**
-   * This configures the minimum number of bytes per second that a client must read the response from the server before the server closes
-   * the connection.
-   *
-   * @param bytesPerSecond The bytes per second throughput.
-   * @return This.
+   * {@inheritDoc}
    */
   public HTTPServerConfiguration withMinimumWriteThroughput(long bytesPerSecond) {
-    if (bytesPerSecond < 1024) {
+    if (bytesPerSecond != -1 && bytesPerSecond < 1024) {
       throw new IllegalArgumentException("The minimum bytes per second must be greater than 1024. This should probably be faster than a 28.8 baud modem!");
     }
 

@@ -44,12 +44,11 @@ import io.fusionauth.http.util.HTTPTools.HeaderValue;
  *
  * @author Brian Pontarelli
  */
+@SuppressWarnings("unused")
 public class HTTPResponse {
   private final Map<String, Map<String, Cookie>> cookies = new HashMap<>(); // <Path, <Name, Cookie>>
 
   private final Map<String, List<String>> headers = new HashMap<>();
-
-  private volatile boolean committed;
 
   private Throwable exception;
 
@@ -167,7 +166,7 @@ public class HTTPResponse {
 
   public String getHeader(String name) {
     String key = name.toLowerCase();
-    return headers.containsKey(key) && headers.get(key).size() > 0 ? headers.get(key).get(0) : null;
+    return headers.containsKey(key) && !headers.get(key).isEmpty() ? headers.get(key).getFirst() : null;
   }
 
   public List<String> getHeaders(String key) {
@@ -219,16 +218,7 @@ public class HTTPResponse {
    * @return True if the response has been committed, meaning at least one byte was written back to the client. False otherwise.
    */
   public boolean isCommitted() {
-    return committed;
-  }
-
-  /**
-   * Sets the committed status of the response.
-   *
-   * @param committed The status.
-   */
-  public void setCommitted(boolean committed) {
-    this.committed = committed;
+    return outputStream.isCommitted();
   }
 
   /**

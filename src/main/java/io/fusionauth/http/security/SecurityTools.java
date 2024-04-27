@@ -51,11 +51,6 @@ public final class SecurityTools {
 
   public static final String P8_KEY_START = "BEGIN PRIVATE KEY-----";
 
-  // Disable SNI so that it doesn't mess up our use of JSSE with some certificates
-  static {
-    System.setProperty("jsse.enableSNIExtension", "false");
-  }
-
   private SecurityTools() {
   }
 

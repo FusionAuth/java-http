@@ -33,4 +33,4 @@ if [[ $# -gt 1 && $1 == "--suspend" ]]; then
   shift
 fi
 
-~/dev/java/current21/bin/java ${suspend} -agentpath:/Applications/YourKit-Java-Profiler-2023.9.app/Contents/Resources/bin/mac/libyjpagent.dylib=disablestacktelemetry,exceptions=disable,delay=10000,listen=all -cp "${CLASSPATH}" io.fusionauth.http.load.Main
+~/dev/java/current21/bin/java ${suspend} -cp "${CLASSPATH}" io.fusionauth.http.load.Main

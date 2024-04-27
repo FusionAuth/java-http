@@ -331,6 +331,53 @@ public class CoreTest extends BaseTest {
     assertTrue(output.endsWith("Class name: [io.fusionauth.http.Test$InnerClass]"));
   }
 
+  @Test(dataProvider = "schemes")
+  public void partialWriteThenException(String scheme) throws Exception {
+    HTTPHandler handler = (req, res) -> {
+      res.setStatus(200);
+      res.getWriter().write("Here some body that should not be flushed");
+      throw new RuntimeException("Failure");
+    };
+
+    try (var client = makeClient(scheme, null); var ignore = makeServer(scheme, handler).start()) {
+      URI uri = makeURI(scheme, "");
+      var response = client.send(
+          HttpRequest.newBuilder()
+                     .uri(uri)
+                     .GET()
+                     .build(),
+          r -> BodySubscribers.ofString(StandardCharsets.UTF_8)
+      );
+
+      assertEquals(response.statusCode(), 500);
+    }
+  }
+
+  @Test(dataProvider = "schemes")
+  public void partialWriteThenFlushThenException(String scheme) throws Exception {
+    HTTPHandler handler = (req, res) -> {
+      res.setStatus(200);
+
+      Writer writer = res.getWriter();
+      writer.write("Here some body that should not be flushed");
+      writer.flush();
+      throw new RuntimeException("Failure");
+    };
+
+    try (var client = makeClient(scheme, null); var ignore = makeServer(scheme, handler).start()) {
+      URI uri = makeURI(scheme, "");
+      var response = client.send(
+          HttpRequest.newBuilder()
+                     .uri(uri)
+                     .GET()
+                     .build(),
+          r -> BodySubscribers.ofString(StandardCharsets.UTF_8)
+      );
+
+      assertEquals(response.statusCode(), 500);
+    }
+  }
+
   @Test(dataProvider = "schemes", groups = "performance")
   public void performance(String scheme) throws Exception {
     HTTPHandler handler = (req, res) -> {

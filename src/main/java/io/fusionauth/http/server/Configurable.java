@@ -165,7 +165,7 @@ public interface Configurable<T extends Configurable<T>> {
 
   /**
    * This configures the minimum number of bytes per second that a client must send a request to the server before the server closes the
-   * connection.
+   * connection. Set this to -1 to disable this check.
    *
    * @param bytesPerSecond The bytes per second throughput.
    * @return This.
@@ -177,7 +177,7 @@ public interface Configurable<T extends Configurable<T>> {
 
   /**
    * This configures the minimum number of bytes per second that a client must read the response from the server before the server closes
-   * the connection.
+   * the connection. Set this to -1 to disable this check.
    *
    * @param bytesPerSecond The bytes per second throughput.
    * @return This.

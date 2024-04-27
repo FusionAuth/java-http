@@ -16,6 +16,7 @@
 package io.fusionauth.http.server.internal;
 
 import javax.net.ssl.SSLContext;
+import javax.net.ssl.SSLServerSocket;
 import java.io.IOException;
 import java.net.InetSocketAddress;
 import java.net.ServerSocket;

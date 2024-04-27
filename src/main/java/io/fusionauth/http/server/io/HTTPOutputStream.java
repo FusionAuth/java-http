@@ -159,21 +159,22 @@ public class HTTPOutputStream extends OutputStream {
     committed = true;
 
     // +++++++++++ Step 1: Determine the extra headers first and add them +++++++++++
+    boolean noContentStatus = response.getStatus() == 204;
     boolean chunked = false;
-    if (response.getContentLength() == null) {
+    if (response.getContentLength() == null && !noContentStatus) { // 204 status is specifically "No Content" so we shouldn't write the transfer-encoding header if the status is 204
       response.setHeader(Headers.TransferEncoding, TransferEncodings.Chunked);
       chunked = true;
     }
 
     // If the output stream is closing, but nothing has been written yet, we can safely set the Content-Length header to 0 to let the client
     // know nothing more is coming beyond the preamble
-    if (closing) {
+    if (closing && !noContentStatus) { // 204 status is specifically "No Content" so we shouldn't write the content-length header if the status is 204
       response.setContentLength(0L);
     }
 
     boolean gzip = false;
     boolean deflate = false;
-    if (compress) {
+    if (compress && !noContentStatus) { // 204 status is specifically "No Content" so we shouldn't write the content-encoding and vary headers if the status is 204
       for (String encoding : request.getAcceptEncodings()) {
         if (encoding.equalsIgnoreCase(ContentEncodings.Gzip)) {
           response.setHeader(Headers.ContentEncoding, ContentEncodings.Gzip);
@@ -197,7 +198,12 @@ public class HTTPOutputStream extends OutputStream {
     delegate.write(premableStream.bytes(), 0, premableStream.size());
     delegate.flush();
 
-    // +++++++++++ Step 3: Set up the delegates +++++++++++
+    // +++++++++++ Step 3: Bail if there is no content +++++++++++
+    if (closing || noContentStatus) {
+      return;
+    }
+
+    // +++++++++++ Step 4: Set up the delegates for the body (if there is any) +++++++++++
     if (chunked) {
       delegate = new ChunkedOutputStream(delegate, buffers.chunkBuffer(), buffers.chuckedOutputStream());
       if (instrumenter != null) {

@@ -360,7 +360,10 @@ public class Cookie implements Buildable<Cookie> {
 
   public String toResponseHeader(Charset charset) {
     var build = new StringBuilder();
-    build.append(URLEncoder.encode(name, charset)).append("=").append(URLEncoder.encode(value, charset));
+    build.append(name).append("=");
+    if (value != null) {
+      build.append(URLEncoder.encode(value, charset));
+    }
     if (domain != null) {
       build.append(DomainPrefix).append(domain);
     }

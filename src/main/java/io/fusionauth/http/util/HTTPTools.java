@@ -319,7 +319,7 @@ public final class HTTPTools {
         outputStream.write(URLEncoder.encode(name, charset).getBytes());
         outputStream.write(':');
         outputStream.write(' ');
-        outputStream.write(URLEncoder.encode(value, charset).getBytes());
+        outputStream.write(value.getBytes());
         outputStream.write(ControlBytes.CRLF);
       }
     }
