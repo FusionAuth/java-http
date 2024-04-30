@@ -17,6 +17,7 @@ package io.fusionauth.http.server.io;
 
 import java.io.IOException;
 import java.io.OutputStream;
+import java.util.List;
 import java.util.zip.DeflaterOutputStream;
 import java.util.zip.GZIPOutputStream;
 
@@ -24,7 +25,6 @@ import io.fusionauth.http.HTTPValues.ContentEncodings;
 import io.fusionauth.http.HTTPValues.Headers;
 import io.fusionauth.http.HTTPValues.TransferEncodings;
 import io.fusionauth.http.io.ChunkedOutputStream;
-import io.fusionauth.http.server.HTTPRequest;
 import io.fusionauth.http.server.HTTPResponse;
 import io.fusionauth.http.server.HTTPServerConfiguration;
 import io.fusionauth.http.server.Instrumenter;
@@ -38,15 +38,15 @@ import io.fusionauth.http.util.HTTPTools;
  * @author Brian Pontarelli
  */
 public class HTTPOutputStream extends OutputStream {
+  private final List<String> acceptEncodings;
+
   private final HTTPBuffers buffers;
 
   private final Instrumenter instrumenter;
 
-  private final HTTPRequest request;
-
   private final HTTPResponse response;
 
-  private final Runnable writeObserver;
+  private final ServerToSocketOutputStream serverToSocket;
 
   private boolean committed;
 
@@ -54,26 +54,22 @@ public class HTTPOutputStream extends OutputStream {
 
   private OutputStream delegate;
 
-  public HTTPOutputStream(HTTPServerConfiguration configuration, HTTPRequest request, HTTPResponse response, OutputStream delegate,
+  private boolean wroteOneByteToClient;
+
+  public HTTPOutputStream(HTTPServerConfiguration configuration, List<String> acceptEncodings, HTTPResponse response, OutputStream delegate,
                           HTTPBuffers buffers, Runnable writeObserver) {
-    this.request = request;
+    this.acceptEncodings = acceptEncodings;
     this.response = response;
     this.buffers = buffers;
-    this.writeObserver = writeObserver;
     this.compress = configuration.isCompressByDefault();
     this.instrumenter = configuration.getInstrumenter();
-
-    // Always make the main output stream uncloseable because this is likely the SocketOutputStream. We handle Keep-Alive and Close in the
-    // HTTPWorker
-    this.delegate = new UncloseableOutputStream(delegate);
+    this.serverToSocket = new ServerToSocketOutputStream(delegate, buffers, writeObserver);
+    this.delegate = serverToSocket;
   }
 
   @Override
   public void close() throws IOException {
-    if (!committed) {
-      commit(true);
-    }
-
+    commit(true);
     delegate.close();
   }
 
@@ -82,8 +78,24 @@ public class HTTPOutputStream extends OutputStream {
     delegate.flush();
   }
 
+  /**
+   * Calls the {@link ServerToSocketOutputStream#forceFlush()} method to write all buffered bytes to the socket. This also writes the
+   * preamble to the buffer or to the socket if it hasn't been written yet.
+   *
+   * @throws IOException If the socket throws.
+   */
+  public void forceFlush() throws IOException {
+    commit(false);
+    delegate.flush();
+    serverToSocket.forceFlush();
+  }
+
+  /**
+   * @return True if at least one byte was written back to the client. False if the response has not been generated or is sitting in the
+   *     response buffer.
+   */
   public boolean isCommitted() {
-    return committed;
+    return wroteOneByteToClient;
   }
 
   public boolean isCompress() {
@@ -99,13 +111,24 @@ public class HTTPOutputStream extends OutputStream {
     this.compress = compress;
   }
 
+  public void reset() {
+    if (wroteOneByteToClient) {
+      throw new IllegalStateException("The HTTPOutputStream can't be reset after it has been committed, meaning at least one byte was written back to the client.");
+    }
+
+    serverToSocket.reset();
+    committed = false;
+    compress = false;
+    delegate = serverToSocket;
+  }
+
   /**
    * @return true if compression has been requested, and it appears as though we will compress because the requested content encoding is
    *     supported.
    */
   public boolean willCompress() {
     if (compress) {
-      for (String encoding : request.getAcceptEncodings()) {
+      for (String encoding : acceptEncodings) {
         if (encoding.equalsIgnoreCase(ContentEncodings.Gzip)) {
           return true;
         } else if (encoding.equalsIgnoreCase(ContentEncodings.Deflate)) {
@@ -121,10 +144,7 @@ public class HTTPOutputStream extends OutputStream {
 
   @Override
   public void write(byte[] buffer, int offset, int length) throws IOException {
-    if (!committed) {
-      commit(false);
-    }
-
+    commit(false);
     delegate.write(buffer, offset, length);
 
     if (instrumenter != null) {
@@ -134,10 +154,7 @@ public class HTTPOutputStream extends OutputStream {
 
   @Override
   public void write(int b) throws IOException {
-    if (!committed) {
-      commit(false);
-    }
-
+    commit(false);
     delegate.write(b);
 
     if (instrumenter != null) {
@@ -156,26 +173,30 @@ public class HTTPOutputStream extends OutputStream {
    * are going to write bytes to construct the compressing OutputStream.
    */
   private void commit(boolean closing) throws IOException {
+    if (committed) {
+      return;
+    }
+
     committed = true;
 
     // +++++++++++ Step 1: Determine the extra headers first and add them +++++++++++
-    boolean noContentStatus = response.getStatus() == 204;
+    boolean twoOhFour = response.getStatus() == 204;
     boolean chunked = false;
-    if (response.getContentLength() == null && !noContentStatus) { // 204 status is specifically "No Content" so we shouldn't write the transfer-encoding header if the status is 204
+    if (response.getContentLength() == null && !twoOhFour) { // 204 status is specifically "No Content" so we shouldn't write the transfer-encoding header if the status is 204
       response.setHeader(Headers.TransferEncoding, TransferEncodings.Chunked);
       chunked = true;
     }
 
     // If the output stream is closing, but nothing has been written yet, we can safely set the Content-Length header to 0 to let the client
     // know nothing more is coming beyond the preamble
-    if (closing && !noContentStatus) { // 204 status is specifically "No Content" so we shouldn't write the content-length header if the status is 204
+    if (closing && !twoOhFour) { // 204 status is specifically "No Content" so we shouldn't write the content-length header if the status is 204
       response.setContentLength(0L);
     }
 
     boolean gzip = false;
     boolean deflate = false;
-    if (compress && !noContentStatus) { // 204 status is specifically "No Content" so we shouldn't write the content-encoding and vary headers if the status is 204
-      for (String encoding : request.getAcceptEncodings()) {
+    if (compress && !twoOhFour) { // 204 status is specifically "No Content" so we shouldn't write the content-encoding and vary headers if the status is 204
+      for (String encoding : acceptEncodings) {
         if (encoding.equalsIgnoreCase(ContentEncodings.Gzip)) {
           response.setHeader(Headers.ContentEncoding, ContentEncodings.Gzip);
           response.setHeader(Headers.Vary, Headers.AcceptEncoding);
@@ -191,15 +212,10 @@ public class HTTPOutputStream extends OutputStream {
     }
 
     // +++++++++++ Step 2: Write the preamble. This must be first without any other output stream interference +++++++++++
-    var premableStream = buffers.preambleOutputStream();
-    writeObserver.run();
-    premableStream.reset();
-    HTTPTools.writeResponsePreamble(response, premableStream);
-    delegate.write(premableStream.bytes(), 0, premableStream.size());
-    delegate.flush();
+    HTTPTools.writeResponsePreamble(response, delegate);
 
     // +++++++++++ Step 3: Bail if there is no content +++++++++++
-    if (closing || noContentStatus) {
+    if (closing || twoOhFour) {
       return;
     }
 
@@ -225,40 +241,99 @@ public class HTTPOutputStream extends OutputStream {
   }
 
   /**
-   * Uncloseable stream that overrides all methods to delegate them to another OutputStream, except {@link #close()}.
+   * This OutputStream handles all the complexity of buffering the response, managing calls to {@link #close()}, etc.
    *
    * @author Brian Pontarelli
    */
-  private static class UncloseableOutputStream extends OutputStream {
+  private class ServerToSocketOutputStream extends OutputStream {
+    private final byte[] buffer;
+
     private final OutputStream delegate;
 
-    public UncloseableOutputStream(OutputStream delegate) {
+    private final byte[] intsAreDumb = new byte[1];
+
+    private final Runnable writeObserver;
+
+    private int bufferIndex;
+
+    public ServerToSocketOutputStream(OutputStream delegate, HTTPBuffers buffers, Runnable writeObserver) {
       this.delegate = delegate;
+      this.buffer = buffers.responseBuffer();
+      this.bufferIndex = 0;
+      this.writeObserver = writeObserver;
     }
 
+    /**
+     * Flushes the buffer but does not close the delegate.
+     *
+     * @throws IOException If the flush fails.
+     */
     @Override
-    public void close() {
-      // No-op (uncloseable)
+    public void close() throws IOException {
+      forceFlush();
     }
 
+    /**
+     * Only flushes if the buffer is 90+% full.
+     *
+     * @throws IOException If the write and flush to the delegate stream throws.
+     */
     @Override
     public void flush() throws IOException {
+      if (buffer == null || bufferIndex >= (buffer.length * 0.90)) {
+        forceFlush();
+      }
+    }
+
+    public void forceFlush() throws IOException {
+      if (buffer == null || bufferIndex == 0) {
+        return;
+      }
+
+      wroteOneByteToClient = true;
+      delegate.write(buffer, 0, bufferIndex);
       delegate.flush();
+      bufferIndex = 0;
+    }
+
+    /**
+     * Resets the ServerToSocketOutputStream by resetting the buffer location to 0. This only applies if the response buffer is in use.
+     */
+    public void reset() {
+      bufferIndex = 0;
     }
 
     @Override
-    public void write(byte[] b) throws IOException {
-      delegate.write(b);
-    }
+    public void write(byte[] b, int offset, int length) throws IOException {
+      writeObserver.run();
 
-    @Override
-    public void write(byte[] b, int off, int len) throws IOException {
-      delegate.write(b, off, len);
+      if (buffer == null) {
+        delegate.write(b, offset, length);
+      } else {
+        do {
+          int remaining = buffer.length - bufferIndex;
+          int toWrite = Math.min(remaining, length);
+          System.arraycopy(b, offset, buffer, bufferIndex, toWrite);
+          bufferIndex += toWrite;
+          offset += toWrite;
+          length -= toWrite;
+
+          if (bufferIndex >= buffer.length) {
+            forceFlush();
+          }
+        } while (length > 0);
+      }
     }
 
     @Override
     public void write(int b) throws IOException {
-      delegate.write(b);
+      intsAreDumb[0] = (byte) b;
+      write(intsAreDumb, 0, 1);
+    }
+
+    @Override
+    public void write(byte[] b) throws IOException {
+      write(b, 0, b.length);
     }
   }
 }

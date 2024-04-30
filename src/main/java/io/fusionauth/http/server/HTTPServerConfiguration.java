@@ -64,6 +64,8 @@ public class HTTPServerConfiguration implements Configurable<HTTPServerConfigura
 
   private int requestBufferSize = 16 * 1024;
 
+  private int responseBufferSize = 64 * 1024;
+
   private Duration shutdownDuration = Duration.ofSeconds(10);
 
   private Duration writeThroughputCalculationDelayDuration = Duration.ofSeconds(5);
@@ -197,6 +199,14 @@ public class HTTPServerConfiguration implements Configurable<HTTPServerConfigura
    */
   public int getRequestBufferSize() {
     return requestBufferSize;
+  }
+
+  /**
+   * @return The size of the buffer used to store the response. This allows the server to handle exceptions and errors without writing back
+   *     a 200 response that is actually an error. This defaults to 64k bytes.
+   */
+  public int getResponseBufferSize() {
+    return responseBufferSize;
   }
 
   /**
@@ -413,6 +423,15 @@ public class HTTPServerConfiguration implements Configurable<HTTPServerConfigura
     }
 
     this.requestBufferSize = requestBufferSize;
+    return this;
+  }
+
+  /**
+   * {@inheritDoc}
+   */
+  @Override
+  public HTTPServerConfiguration withResponseBufferSize(int responseBufferSize) {
+    this.responseBufferSize = responseBufferSize;
     return this;
   }
 

@@ -63,8 +63,6 @@ public class HTTPWorker implements Runnable {
 
   private final Throughput throughput;
 
-  private HTTPOutputStream outputStream;
-
   private HTTPResponse response;
 
   private volatile State state;
@@ -103,7 +101,8 @@ public class HTTPWorker implements Runnable {
 
         var throughputOutputStream = new ThroughputOutputStream(socket.getOutputStream(), throughput);
         response = new HTTPResponse();
-        outputStream = new HTTPOutputStream(configuration, request, response, throughputOutputStream, buffers, () -> state = State.Write);
+
+        HTTPOutputStream outputStream = new HTTPOutputStream(configuration, request.getAcceptEncodings(), response, throughputOutputStream, buffers, () -> state = State.Write);
         response.setOutputStream(outputStream);
 
         // Handle the "expect" response
@@ -134,7 +133,6 @@ public class HTTPWorker implements Runnable {
         state = State.Process; // Transition to processing
         handler.handle(request, response);
         response.close();
-        outputStream = null;
         logger.debug("Handler completed successfully");
 
         // Since the Handler can change the Keep-Alive state, we use the response here
@@ -150,7 +148,7 @@ public class HTTPWorker implements Runnable {
 
         // Purge the extra bytes in case the handler didn't read everything
         int purged = httpInputStream.purge();
-        System.out.println("Purged [" + purged + "] bytes");
+        logger.trace("Purged [{}] bytes", purged);
       }
     } catch (SocketTimeoutException | ConnectionClosedException e) {
       // This might be a read timeout or a Keep-Alive timeout. The failure state is based on that flag
@@ -190,23 +188,19 @@ public class HTTPWorker implements Runnable {
   }
 
   private void close(Result result) {
-    // If the conditions are perfect, we can still write back a 500
-    if (result == Result.Failure && outputStream != null && !outputStream.isCommitted() && response != null) {
-      response.setStatus(500);
-      response.setContentLength(0L);
-
-      try {
-        outputStream.close();
-      } catch (IOException ignore) {
-        // This likely means the client has severed the connection, we can still proceed below and close the socket
-      }
-    }
-
     if (result == Result.Failure && instrumenter != null) {
       instrumenter.connectionClosed();
     }
 
     try {
+      // If the conditions are perfect, we can still write back a 500
+      if (result == Result.Failure && response != null && !response.isCommitted()) {
+        response.reset();
+        response.setStatus(500);
+        response.setContentLength(0L);
+        response.close();
+      }
+
       socket.close();
     } catch (IOException e) {
       logger.debug("Could not close the connection because the socket threw an exception.", e);

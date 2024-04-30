@@ -572,8 +572,8 @@ public class CoreTest extends BaseTest {
     }
   }
 
-  @Test(dataProvider = "schemes")
-  public void simpleGet(String scheme) throws Exception {
+  @Test(dataProvider = "schemesAndResponseBufferSizes")
+  public void simpleGet(String scheme, int responseBufferSize) throws Exception {
     HTTPHandler handler = (req, res) -> {
       assertEquals(req.getAcceptEncodings(), List.of("deflate", "compress", "identity", "gzip", "br"));
       assertEquals(req.getBaseURL(), scheme.equals("http") ? "http://localhost:4242" : "https://local.fusionauth.io:4242");
@@ -607,7 +607,7 @@ public class CoreTest extends BaseTest {
       }
     };
 
-    try (var client = makeClient(scheme, null); var ignore = makeServer(scheme, handler).start()) {
+    try (var client = makeClient(scheme, null); var ignore = makeServer(scheme, handler).withResponseBufferSize(responseBufferSize).start()) {
       URI uri = makeURI(scheme, "?foo%20=bar%20");
       HttpRequest request = HttpRequest.newBuilder()
                                        .uri(uri)
@@ -680,8 +680,8 @@ public class CoreTest extends BaseTest {
     }
   }
 
-  @Test(dataProvider = "schemes")
-  public void simplePost(String scheme) throws Exception {
+  @Test(dataProvider = "schemesAndResponseBufferSizes")
+  public void simplePost(String scheme, int responseBufferSize) throws Exception {
     HTTPHandler handler = (req, res) -> {
       System.out.println("Handling");
       assertEquals(req.getHeader(Headers.ContentType), "application/json"); // Mixed case
@@ -709,7 +709,7 @@ public class CoreTest extends BaseTest {
       }
     };
 
-    try (var ignore = makeServer(scheme, handler).start(); var client = makeClient(scheme, null)) {
+    try (var ignore = makeServer(scheme, handler).withResponseBufferSize(responseBufferSize).start(); var client = makeClient(scheme, null)) {
       URI uri = makeURI(scheme, "?foo=bar");
       var response = client.send(
           HttpRequest.newBuilder().uri(uri).header(Headers.ContentType, "application/json").POST(BodyPublishers.ofString(RequestBody)).build(),
@@ -783,6 +783,7 @@ public class CoreTest extends BaseTest {
       // Write a single byte to kick off the write throughput calculations
       var outputStream = res.getOutputStream();
       outputStream.write('4');
+      res.flush(); // Force a write to the client
 
       // Pause on the first request
       if (!called.getAndSet(true)) {

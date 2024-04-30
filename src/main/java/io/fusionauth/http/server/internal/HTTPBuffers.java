@@ -27,9 +27,9 @@ import io.fusionauth.http.server.HTTPServerConfiguration;
 public class HTTPBuffers {
   private final HTTPServerConfiguration configuration;
 
-  private final FastByteArrayOutputStream preambleOutputStream;
-
   private final byte[] requestBuffer;
+
+  private final byte[] responseBuffer;
 
   private byte[] chunkBuffer;
 
@@ -37,8 +37,14 @@ public class HTTPBuffers {
 
   public HTTPBuffers(HTTPServerConfiguration configuration) {
     this.configuration = configuration;
-    this.preambleOutputStream = new FastByteArrayOutputStream(1024, 1024);
     this.requestBuffer = new byte[configuration.getRequestBufferSize()];
+
+    int responseBufferSize = configuration.getResponseBufferSize();
+    if (responseBufferSize > 0) {
+      this.responseBuffer = new byte[responseBufferSize];
+    } else {
+      this.responseBuffer = null;
+    }
   }
 
   /**
@@ -67,19 +73,19 @@ public class HTTPBuffers {
   }
 
   /**
-   * @return An output stream used for the preamble in the response. This is created in the constructor since it is always needed. It starts
-   *     at 1k and grows in 1k increments.
-   */
-  public FastByteArrayOutputStream preambleOutputStream() {
-    return preambleOutputStream;
-  }
-
-  /**
    * @return A byte array used to read the request preamble and body. This uses the configuration's
    *     {@link HTTPServerConfiguration#getRequestBufferSize()} value for the size. It is created in the constructor since it is always
    *     needed.
    */
   public byte[] requestBuffer() {
     return requestBuffer;
+  }
+
+  /**
+   * @return A byte array used to buffer the response such that the server can replace the response with an error response if an error
+   *     occurs during processing, but after the preamble and body has already been partially written.
+   */
+  public byte[] responseBuffer() {
+    return responseBuffer;
   }
 }

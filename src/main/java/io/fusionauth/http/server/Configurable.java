@@ -236,6 +236,19 @@ public interface Configurable<T extends Configurable<T>> {
   }
 
   /**
+   * Sets the size of the buffer that is used to store the HTTP response before any bytes are written back to the client. This is useful
+   * when the server is generating the response but encounters an error. In this case, the server will throw out the response and change to
+   * a 500 error response. This defaults to 64k. Negative values disable the response buffer.
+   *
+   * @param responseBufferSize The size of the buffer. Set to -1 to disable buffering completely.
+   * @return This.
+   */
+  default T withResponseBufferSize(int responseBufferSize) {
+    configuration().withResponseBufferSize(responseBufferSize);
+    return (T) this;
+  }
+
+  /**
    * Sets the duration the server will wait for running requests to be completed. Defaults to 10 seconds.
    *
    * @param duration The duration the server will wait for all running request processing threads to complete their work.

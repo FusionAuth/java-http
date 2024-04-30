@@ -221,7 +221,6 @@ public abstract class BaseTest {
   public void flush() {
     FileLogger fl = (FileLogger) FileLoggerFactory.FACTORY.getLogger(BaseTest.class);
     if (fl != null) {
-      System.out.println("Flushing");
       fl.flush();
     }
   }
@@ -289,6 +288,21 @@ public abstract class BaseTest {
     return new Object[][]{
         {"http"},
         {"https"}
+    };
+  }
+
+  /**
+   * @return The possible response buffer lengths and schemes.
+   */
+  @DataProvider
+  public Object[][] schemesAndResponseBufferSizes() {
+    return new Object[][]{
+        {"http", 64 * 1024},
+        {"https", 64 * 1024},
+        {"http", 512},
+        {"https", 512},
+        {"http", -1},
+        {"https", -1}
     };
   }
 

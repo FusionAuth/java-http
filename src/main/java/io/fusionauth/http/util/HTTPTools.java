@@ -19,7 +19,6 @@ import java.io.IOException;
 import java.io.InputStream;
 import java.io.OutputStream;
 import java.net.URLDecoder;
-import java.net.URLEncoder;
 import java.nio.charset.Charset;
 import java.nio.charset.IllegalCharsetNameException;
 import java.nio.charset.StandardCharsets;
@@ -312,11 +311,10 @@ public final class HTTPTools {
     writeStatusLine(response, outputStream);
 
     // Write the headers (minus the cookies)
-    Charset charset = response.getCharset();
     for (var headers : response.getHeadersMap().entrySet()) {
       String name = headers.getKey();
       for (String value : headers.getValue()) {
-        outputStream.write(URLEncoder.encode(name, charset).getBytes());
+        outputStream.write(name.getBytes());
         outputStream.write(':');
         outputStream.write(' ');
         outputStream.write(value.getBytes());
@@ -329,7 +327,7 @@ public final class HTTPTools {
       outputStream.write(HeaderBytes.SetCookie);
       outputStream.write(':');
       outputStream.write(' ');
-      outputStream.write(cookie.toResponseHeader(charset).getBytes());
+      outputStream.write(cookie.toResponseHeader().getBytes());
       outputStream.write(ControlBytes.CRLF);
     }
 

@@ -15,8 +15,6 @@
  */
 package io.fusionauth.http;
 
-import java.net.URLEncoder;
-import java.nio.charset.Charset;
 import java.time.ZonedDateTime;
 import java.util.ArrayList;
 import java.util.List;
@@ -358,11 +356,11 @@ public class Cookie implements Buildable<Cookie> {
     return name + "=" + value;
   }
 
-  public String toResponseHeader(Charset charset) {
+  public String toResponseHeader() {
     var build = new StringBuilder();
     build.append(name).append("=");
     if (value != null) {
-      build.append(URLEncoder.encode(value, charset));
+      build.append(value);
     }
     if (domain != null) {
       build.append(DomainPrefix).append(domain);

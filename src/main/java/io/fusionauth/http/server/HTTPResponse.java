@@ -111,6 +111,15 @@ public class HTTPResponse {
   }
 
   /**
+   * Flushes any buffered response (including the preamble) to the client. This is a force flush operation.
+   *
+   * @throws IOException If the socket throws.
+   */
+  public void flush() throws IOException {
+    outputStream.forceFlush();
+  }
+
+  /**
    * Determines the character set by parsing the {@code Content-Type} header (if it exists) to pull out the {@code charset} parameter.
    *
    * @return The Charset or UTF-8 if it wasn't specified in the {@code Content-Type} header.
@@ -135,6 +144,23 @@ public class HTTPResponse {
     }
 
     return null;
+  }
+
+  /**
+   * Hard resets this response if it hasn't been committed yet. If the response has been committed back to the client, this throws up.
+   */
+  public void reset() {
+    if (outputStream.isCommitted()) {
+      throw new IllegalStateException("The HTTPResponse can't be reset after it has been committed, meaning at least one byte was written back to the client.");
+    }
+
+    cookies.clear();
+    headers.clear();
+    exception = null;
+    outputStream.reset();
+    status = 200;
+    statusMessage = null;
+    writer = null;
   }
 
   public void setContentLength(long length) {
