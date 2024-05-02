@@ -24,6 +24,13 @@ import io.fusionauth.http.server.HTTPRequest;
 import io.fusionauth.http.server.HTTPServerConfiguration;
 import io.fusionauth.http.server.Instrumenter;
 
+/**
+ * An InputStream that handles the HTTP body, including body bytes that were read while the preamble was processed. This class also handles
+ * chunked bodies by using a delegate InputStream that wraps the original source of the body bytes. The {@link ChunkedInputStream} is the
+ * delegate that this class leverages for chunking.
+ *
+ * @author Brian Pontarelli
+ */
 public class HTTPInputStream extends InputStream {
   private final Instrumenter instrumenter;
 
@@ -102,34 +109,7 @@ public class HTTPInputStream extends InputStream {
 
   @Override
   public int read(byte[] buffer) throws IOException {
-    // Signal end of the stream if there is no more to read and the request isn't chunked
-    if (bytesRemaining <= 0 && !request.isChunked()) {
-      return -1;
-    }
-
-    if (!committed) {
-      commit();
-    }
-
-    int read;
-    if (bodyBytes != null) {
-      read = Math.min(bodyBytes.length, buffer.length);
-      System.arraycopy(bodyBytes, bodyBytesIndex, buffer, 0, read);
-      bodyBytesIndex += read;
-
-      if (bodyBytesIndex >= bodyBytes.length) {
-        bodyBytes = null;
-      }
-    } else {
-      read = delegate.read(buffer);
-    }
-
-    if (instrumenter != null) {
-      instrumenter.readFromClient(read);
-    }
-
-    bytesRemaining -= read;
-    return read;
+    return read(buffer, 0, buffer.length);
   }
 
   @Override

@@ -16,7 +16,6 @@
 package io.fusionauth.http.server.internal;
 
 import javax.net.ssl.SSLContext;
-import javax.net.ssl.SSLServerSocket;
 import java.io.IOException;
 import java.net.InetSocketAddress;
 import java.net.ServerSocket;
@@ -37,8 +36,8 @@ import io.fusionauth.http.server.Instrumenter;
 import io.fusionauth.http.server.io.Throughput;
 
 /**
- * A thread that manages the Selection process for a single server socket. Since some server resources are shared, this separates the shared
- * resources across sockets by selecting separately.
+ * A thread that manages the accept process for a single server socket. Once a connection is accepted, the socket is passed to a virtual
+ * thread for processing.
  *
  * @author Brian Pontarelli
  */
@@ -198,6 +197,9 @@ public class HTTPServerThread extends Thread {
             continue;
           }
 
+          // Bad client, first things first, remove the client from the list
+          iterator.remove();
+
           if (logger.isDebugEnabled()) {
             String message = "";
 
@@ -231,7 +233,6 @@ public class HTTPServerThread extends Thread {
           try {
             var socket = worker.getSocket();
             socket.close();
-            iterator.remove();
 
             if (instrumenter != null) {
               instrumenter.connectionClosed();
@@ -244,6 +245,7 @@ public class HTTPServerThread extends Thread {
 
         // Take a break
         try {
+          //noinspection BusyWait
           sleep(2_000);
         } catch (InterruptedException ignore) {
           // Ignore

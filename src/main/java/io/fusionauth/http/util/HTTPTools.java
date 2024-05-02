@@ -34,7 +34,6 @@ import io.fusionauth.http.HTTPMethod;
 import io.fusionauth.http.HTTPValues.ControlBytes;
 import io.fusionauth.http.HTTPValues.HeaderBytes;
 import io.fusionauth.http.HTTPValues.ProtocolBytes;
-import io.fusionauth.http.ParseException;
 import io.fusionauth.http.log.Logger;
 import io.fusionauth.http.log.LoggerFactory;
 import io.fusionauth.http.server.HTTPRequest;
@@ -220,11 +219,6 @@ public final class HTTPTools {
 
         parseHeaderParameter(chars, start, chars.length, parameters);
       }
-    }
-
-    // TODO : Is this really always false?
-    if (headerValue == null) {
-      throw new ParseException("Unable to parse a parameterized HTTP header [" + value + "]");
     }
 
     if (parameters == null) {

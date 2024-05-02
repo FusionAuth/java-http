@@ -27,7 +27,6 @@ import io.fusionauth.http.HTTPValues.Connections;
 import io.fusionauth.http.HTTPValues.Headers;
 import io.fusionauth.http.ParseException;
 import io.fusionauth.http.log.Logger;
-import io.fusionauth.http.server.ExpectValidator;
 import io.fusionauth.http.server.HTTPHandler;
 import io.fusionauth.http.server.HTTPListenerConfiguration;
 import io.fusionauth.http.server.HTTPRequest;
@@ -63,8 +62,6 @@ public class HTTPWorker implements Runnable {
 
   private final Throughput throughput;
 
-  private HTTPResponse response;
-
   private volatile State state;
 
   public HTTPWorker(Socket socket, HTTPServerConfiguration configuration, Instrumenter instrumenter, HTTPListenerConfiguration listener,
@@ -86,6 +83,7 @@ public class HTTPWorker implements Runnable {
 
   @Override
   public void run() {
+    HTTPResponse response = null;
     boolean keepAlive = false;
     try {
       while (true) {
@@ -112,7 +110,7 @@ public class HTTPWorker implements Runnable {
 
           // If the "expect" wasn't accepted, close the socket and exit
           if (!expectContinue(request)) {
-            close(Result.Success);
+            close(Result.Success, response);
             return;
           }
 
@@ -128,31 +126,32 @@ public class HTTPWorker implements Runnable {
           keepAlive = false;
         }
 
-        logger.debug("Calling the handler");
+        logger.debug("Calling the handler.");
         var handler = configuration.getHandler();
         state = State.Process; // Transition to processing
         handler.handle(request, response);
         response.close();
-        logger.debug("Handler completed successfully");
+        logger.debug("Handler completed successfully.");
 
         // Since the Handler can change the Keep-Alive state, we use the response here
-        if (!response.isKeepAlive()) {
+        if (!keepAlive) {
           logger.debug("Closing because no Keep-Alive.");
-          close(Result.Success);
+          close(Result.Success, response);
           break;
-        } else {
-          logger.debug("Keeping things alive");
-          state = State.KeepAlive; // Transition to Keep-Alive
-          socket.setSoTimeout((int) configuration.getKeepAliveTimeoutDuration().toMillis());
         }
+
+        // Transition to Keep-Alive state and reset the SO timeout
+        logger.debug("Keeping things alive.");
+        state = State.KeepAlive;
+        socket.setSoTimeout((int) configuration.getKeepAliveTimeoutDuration().toMillis());
 
         // Purge the extra bytes in case the handler didn't read everything
         int purged = httpInputStream.purge();
-        logger.trace("Purged [{}] bytes", purged);
+        logger.trace("Purged [{}] bytes.", purged);
       }
     } catch (SocketTimeoutException | ConnectionClosedException e) {
       // This might be a read timeout or a Keep-Alive timeout. The failure state is based on that flag
-      close(keepAlive ? Result.Success : Result.Failure);
+      close(keepAlive ? Result.Success : Result.Failure, response);
 
       if (keepAlive) {
         logger.debug("Closing because the Keep-Alive expired.", e);
@@ -165,21 +164,21 @@ public class HTTPWorker implements Runnable {
       }
 
       logger.debug("Closing because of a bad request.");
-      close(Result.Failure);
+      close(Result.Failure, response);
     } catch (SocketException e) {
       // This should only happen when the server is shutdown and this thread is waiting to read or write. In that case, this will throw a
       // SocketException and the thread will be interrupted. Since the server is being shutdown, we should let the client know.
       if (Thread.currentThread().isInterrupted()) {
         logger.debug("Closing because server was shutdown.");
-        close(Result.Success);
+        close(Result.Success, response);
       }
     } catch (IOException io) {
       logger.debug("An IO exception was thrown during processing. These are pretty common.", io);
-      close(Result.Failure);
+      close(Result.Failure, response);
     } catch (Throwable t) {
       // Log the error and signal a failure
       logger.error("HTTP worker threw an exception while processing a request.", t);
-      close(Result.Failure);
+      close(Result.Failure, response);
     }
   }
 
@@ -187,7 +186,7 @@ public class HTTPWorker implements Runnable {
     return state;
   }
 
-  private void close(Result result) {
+  private void close(Result result, HTTPResponse response) {
     if (result == Result.Failure && instrumenter != null) {
       instrumenter.connectionClosed();
     }
@@ -208,8 +207,8 @@ public class HTTPWorker implements Runnable {
   }
 
   private boolean expectContinue(HTTPRequest request) throws IOException {
-    HTTPResponse expectResponse = new HTTPResponse();
-    ExpectValidator validator = configuration.getExpectValidator();
+    var expectResponse = new HTTPResponse();
+    var validator = configuration.getExpectValidator();
     if (validator != null) {
       validator.validate(request, expectResponse);
     }
