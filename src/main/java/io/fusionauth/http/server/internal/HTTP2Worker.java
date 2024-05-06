@@ -48,7 +48,7 @@ import io.fusionauth.http.util.ThreadPool;
  *
  * @author Brian Pontarelli
  */
-public class HTTPWorker implements Runnable {
+public class HTTP2Worker implements Runnable {
   public static final String HTTP2 = "h2";
 
   public static final String[] SSLProtocols = {HTTP2};
@@ -69,15 +69,15 @@ public class HTTPWorker implements Runnable {
 
   private volatile State state;
 
-  public HTTPWorker(Socket socket, HTTPServerConfiguration configuration, Instrumenter instrumenter, HTTPListenerConfiguration listener,
-                    Throughput throughput) {
+  public HTTP2Worker(Socket socket, HTTPServerConfiguration configuration, Instrumenter instrumenter, HTTPListenerConfiguration listener,
+                     Throughput throughput) {
     this.socket = socket;
     this.configuration = configuration;
     this.instrumenter = instrumenter;
     this.listener = listener;
     this.throughput = throughput;
     this.buffers = new HTTPBuffers(configuration);
-    this.logger = configuration.getLoggerFactory().getLogger(HTTPWorker.class);
+    this.logger = configuration.getLoggerFactory().getLogger(HTTP2Worker.class);
     this.state = State.Read;
     logger.debug("Starting HTTP worker virtual thread");
   }
