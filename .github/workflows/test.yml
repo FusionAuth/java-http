@@ -1,9 +1,9 @@
 name: test
 
-# Run the tests when code is pushed to `master`
+# Run the tests when code is pushed to `main`
 on:
   push:
-    branches: [ master ]
+    branches: [ main ]
 
   # Allows you to run this workflow manually from the Actions tab
   workflow_dispatch:
@@ -13,8 +13,8 @@ jobs:
     runs-on: ubuntu-latest
 
     steps:
-      - uses: actions/checkout@v3
-      - uses: actions/setup-java@v3
+      - uses: actions/checkout@v4
+      - uses: actions/setup-java@v4
         with:
           distribution: 'temurin'
           java-version: 17
@@ -23,9 +23,9 @@ jobs:
           mkdir -p ~/dev/savant
           mkdir -p ~/.savant/plugins
           cd ~/dev/savant
-          curl -fSL https://github.com/savant-build/savant-core/releases/download/2.0.0-RC.6/savant-2.0.0-RC.6.tar.gz > savant.tar.gz
+          curl -fSL https://github.com/savant-build/savant-core/releases/download/2.0.0-RC.7/savant-2.0.0-RC.7.tar.gz > savant.tar.gz
           tar -xzf savant.tar.gz
-          ln -s savant-2.0.0-RC.6 current
+          ln -s savant-2.0.0-RC.7 current
           rm savant.tar.gz
           cat <<EOF > ~/.savant/plugins/org.savantbuild.plugin.java.properties
           17=${JAVA_HOME_17_X64}
@@ -38,7 +38,7 @@ jobs:
         shell: bash
       - name: Archive TestNG reports
         if: failure()
-        uses: actions/upload-artifact@v3
+        uses: actions/upload-artifact@v4
         with:
           name: testng-reports
           path: build/test-reports
