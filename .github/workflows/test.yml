@@ -18,7 +18,6 @@ jobs:
         with:
           distribution: 'temurin'
           java-version: 17
-          architecture: aarch64
       - name: Install Savant Build
         run: |
           mkdir -p ~/dev/savant
@@ -29,7 +28,7 @@ jobs:
           ln -s savant-2.0.0-RC.7 current
           rm savant.tar.gz
           cat <<EOF > ~/.savant/plugins/org.savantbuild.plugin.java.properties
-          17=${JAVA_HOME_17_AARCH64}
+          17=${JAVA_HOME_17_X64}
           EOF
         shell: bash
       - name: Run the build
