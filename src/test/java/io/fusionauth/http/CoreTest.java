@@ -288,6 +288,53 @@ public class CoreTest extends BaseTest {
     }
   }
 
+
+  @Test()
+  public void utf8HeaderValues() throws Exception {
+    String scheme = "http";
+    String city = "São Paulo";
+
+    HTTPHandler handler = (req, res) -> {
+      res.setHeader(Headers.ContentType, "text/plain");
+      res.setHeader(Headers.ContentLength, "" + ExpectedResponse.length());
+      res.setHeader("X-Response-Header", city);
+      res.setStatus(200);
+
+      try {
+        OutputStream outputStream = res.getOutputStream();
+        outputStream.write(ExpectedResponse.getBytes());
+        outputStream.close();
+      } catch (IOException e) {
+        throw new RuntimeException(e);
+      }
+    };
+
+    // Java HTTPClient only supports ASCII header values, so send it directly
+    try (HTTPServer ignore = makeServer(scheme, handler).start(); Socket sock = new Socket("127.0.0.1", 4242)) {
+      var os = sock.getOutputStream();
+      var is = sock.getInputStream();
+      os.write("""
+          GET /api/status HTTP/1.1\r
+          Host: localhost:42\r
+          X-Foo: São Paulo\r
+          \r
+          """.getBytes(StandardCharsets.UTF_8));
+      os.flush();
+
+      var resp = new String(is.readAllBytes(), StandardCharsets.UTF_8);
+
+      assertEquals(resp, """
+          HTTP/1.1 200 \r
+          content-length: 16\r
+          content-type: text/plain\r
+          connection: keep-alive\r
+          x-response-header: São Paulo\r
+          \r
+          {"version":"42"}""");
+    }
+  }
+
+
   @Test
   public void keepAliveTimeout() {
     AtomicBoolean called = new AtomicBoolean(false);

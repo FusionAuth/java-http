@@ -72,11 +72,11 @@
     <orderEntry type="module-library" scope="TEST">
       <library>
         <CLASSES>
-          <root url="jar://$MODULE_DIR$/.savant/cache/org/testng/testng/7.8.0/testng-7.8.0.jar!/" />
+          <root url="jar://$MODULE_DIR$/.savant/cache/org/testng/testng/7.10.2/testng-7.10.2.jar!/" />
         </CLASSES>
         <JAVADOC />
         <SOURCES>
-          <root url="jar://$MODULE_DIR$/.savant/cache/org/testng/testng/7.8.0/testng-7.8.0-src.jar!/" />
+          <root url="jar://$MODULE_DIR$/.savant/cache/org/testng/testng/7.10.2/testng-7.10.2-src.jar!/" />
         </SOURCES>
       </library>
     </orderEntry>
@@ -105,11 +105,11 @@
     <orderEntry type="module-library" scope="TEST">
       <library>
         <CLASSES>
-          <root url="jar://$MODULE_DIR$/.savant/cache/org/webjars/jquery/3.6.1/jquery-3.6.1.jar!/" />
+          <root url="jar://$MODULE_DIR$/.savant/cache/org/webjars/jquery/3.7.1/jquery-3.7.1.jar!/" />
         </CLASSES>
         <JAVADOC />
         <SOURCES>
-          <root url="jar://$MODULE_DIR$/.savant/cache/org/webjars/jquery/3.6.1/jquery-3.6.1-src.jar!/" />
+          <root url="jar://$MODULE_DIR$/.savant/cache/org/webjars/jquery/3.7.1/jquery-3.7.1-src.jar!/" />
         </SOURCES>
       </library>
     </orderEntry>
