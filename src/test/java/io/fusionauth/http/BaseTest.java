@@ -15,7 +15,6 @@
  */
 package io.fusionauth.http;
 
-import java.io.File;
 import java.io.IOException;
 import java.io.InputStream;
 import java.io.OutputStream;
@@ -142,6 +141,18 @@ public abstract class BaseTest {
     }
 
     return builder.connectTimeout(ClientTimeout).build();
+  }
+
+  public Socket makeClientSocket(String scheme) throws GeneralSecurityException, IOException {
+    Socket socket;
+    if (scheme.equals("https")) {
+      var ctx = SecurityTools.clientContext(rootCertificate);
+      socket = ctx.getSocketFactory().createSocket("127.0.0.1", 4242);
+    } else {
+      socket = new Socket("127.0.0.1", 4242);
+    }
+
+    return socket;
   }
 
   public HTTPServer makeServer(String scheme, HTTPHandler handler, Instrumenter instrumenter) {

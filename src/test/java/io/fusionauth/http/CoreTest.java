@@ -790,7 +790,7 @@ public class CoreTest extends BaseTest {
   @Test(dataProvider = "schemes")
   public void utf8HeaderValues(String scheme) throws Exception {
 
-    String city = "São Paulo";
+    var city = "São Paulo";
 
     HTTPHandler handler = (req, res) -> {
       res.setHeader(Headers.ContentType, "text/plain");
@@ -807,28 +807,31 @@ public class CoreTest extends BaseTest {
       }
     };
 
-    // Java HTTPClient only supports ASCII header values, so send it directly
-    try (HTTPServer ignore = makeServer(scheme, handler).start(); Socket sock = new Socket("127.0.0.1", 4242)) {
+    // Java HttpClient only supports ASCII header values, so send request directly
+    try (HTTPServer ignore = makeServer(scheme, handler).start();
+         Socket sock = makeClientSocket(scheme)) {
+
       var os = sock.getOutputStream();
       var is = sock.getInputStream();
-      os.write("""
-          GET /api/status HTTP/1.1\r
-          Host: localhost:42\r
-          X-Request-Header: São Paulo\r
-          \r
-          """.getBytes(StandardCharsets.UTF_8));
+      os.write(String.format("""
+                         GET /api/status HTTP/1.1\r
+                         Host: localhost:42\r
+                         X-Request-Header: %s\r
+                         \r
+                         """, city)
+                     .getBytes(StandardCharsets.UTF_8));
       os.flush();
 
       var resp = new String(is.readAllBytes(), StandardCharsets.UTF_8);
 
-      assertEquals(resp, """
+      assertEquals(resp, String.format("""
           HTTP/1.1 200 \r
           content-length: 16\r
           content-type: text/plain\r
           connection: keep-alive\r
-          x-response-header: São Paulo\r
+          x-response-header: %s\r
           \r
-          {"version":"42"}""");
+          {"version":"42"}""", city));
     }
   }
 
