@@ -15,7 +15,9 @@
  */
 package io.fusionauth.http.server;
 
+import java.io.ByteArrayOutputStream;
 import java.nio.ByteBuffer;
+import java.nio.charset.StandardCharsets;
 
 import io.fusionauth.http.HTTPMethod;
 import io.fusionauth.http.HTTPValues.Headers;
@@ -34,8 +36,8 @@ import io.fusionauth.http.log.Logger;
 public class HTTPRequestProcessor {
   private final int bufferSize;
 
-  // TODO : Should this be sized with a configuration parameter?
-  private final StringBuilder builder = new StringBuilder();
+  // Allocate a 4k buffer for starters, it will grow as needed.
+  private final ByteArrayOutputStream byteBuffer = new ByteArrayOutputStream(4096);
 
   private final HTTPServerConfiguration configuration;
 
@@ -78,28 +80,27 @@ public class HTTPRequestProcessor {
 
   public RequestState processPreambleBytes(ByteBuffer buffer) {
     while (buffer.hasRemaining()) {
-      // TODO : Can we get some performance using ByteBuffer rather than StringBuilder here?
 
       // If there is a state transition, store the value properly and reset the builder (if needed)
       byte ch = buffer.get();
       RequestPreambleState nextState = preambleState.next(ch);
       if (nextState != preambleState) {
         switch (preambleState) {
-          case RequestMethod -> request.setMethod(HTTPMethod.of(builder.toString()));
-          case RequestPath -> request.setPath(builder.toString());
-          case RequestProtocol -> request.setProtocol(builder.toString());
-          case HeaderName -> headerName = builder.toString();
-          case HeaderValue -> request.addHeader(headerName, builder.toString());
+          case RequestMethod -> request.setMethod(HTTPMethod.of(byteBuffer.toString(StandardCharsets.UTF_8)));
+          case RequestPath -> request.setPath(byteBuffer.toString(StandardCharsets.UTF_8));
+          case RequestProtocol -> request.setProtocol(byteBuffer.toString(StandardCharsets.UTF_8));
+          case HeaderName -> headerName = byteBuffer.toString(StandardCharsets.UTF_8);
+          case HeaderValue -> request.addHeader(headerName, byteBuffer.toString(StandardCharsets.UTF_8));
         }
 
         // If the next state is storing, reset the builder
         if (nextState.store()) {
-          builder.delete(0, builder.length());
-          builder.appendCodePoint(ch);
+          byteBuffer.reset();
+          byteBuffer.write(ch);
         }
       } else if (preambleState.store()) {
         // If the current state is storing, store the character
-        builder.appendCodePoint(ch);
+        byteBuffer.write(ch);
       }
 
       preambleState = nextState;

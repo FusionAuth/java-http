@@ -119,8 +119,10 @@ public final class HTTPTools {
     return ch >= '!' && ch <= '~';
   }
 
+  // RFC9110 section-5.5 allows for "obs-text", which includes 0x80-0xFF, but really shouldn't be used.
   public static boolean isValueCharacter(byte ch) {
-    return isURICharacter(ch) || ch == ' ' || ch == '\t' || ch == '\n';
+    int intVal = ch & 0xFF;  // Convert the value into an integer without extending the sign bit.
+    return isURICharacter(ch) || intVal == ' ' || intVal == '\t' || intVal == '\n' || intVal >= 0x80;
   }
 
   /**

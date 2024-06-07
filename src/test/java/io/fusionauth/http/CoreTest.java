@@ -1,5 +1,5 @@
 /*
- * Copyright (c) 2022-2023, FusionAuth, All Rights Reserved
+ * Copyright (c) 2022-2024, FusionAuth, All Rights Reserved
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -784,6 +784,54 @@ public class CoreTest extends BaseTest {
 
       var response = client.send(request, r -> BodySubscribers.discarding());
       assertEquals(response.statusCode(), 200);
+    }
+  }
+
+  @Test(dataProvider = "schemes")
+  public void utf8HeaderValues(String scheme) throws Exception {
+
+    var city = "São Paulo";
+
+    HTTPHandler handler = (req, res) -> {
+      res.setHeader(Headers.ContentType, "text/plain");
+      res.setHeader(Headers.ContentLength, "" + ExpectedResponse.length());
+      res.setHeader("X-Response-Header", city);
+      res.setStatus(200);
+
+      try {
+        OutputStream outputStream = res.getOutputStream();
+        outputStream.write(ExpectedResponse.getBytes());
+        outputStream.close();
+      } catch (IOException e) {
+        throw new RuntimeException(e);
+      }
+    };
+
+    // Java HttpClient only supports ASCII header values, so send request directly
+    try (HTTPServer ignore = makeServer(scheme, handler).start();
+         Socket sock = makeClientSocket(scheme)) {
+
+      var os = sock.getOutputStream();
+      var is = sock.getInputStream();
+      os.write(String.format("""
+                         GET /api/status HTTP/1.1\r
+                         Host: localhost:42\r
+                         X-Request-Header: %s\r
+                         \r
+                         """, city)
+                     .getBytes(StandardCharsets.UTF_8));
+      os.flush();
+
+      var resp = new String(is.readAllBytes(), StandardCharsets.UTF_8);
+
+      assertEquals(resp, String.format("""
+          HTTP/1.1 200 \r
+          content-length: 16\r
+          content-type: text/plain\r
+          connection: keep-alive\r
+          x-response-header: %s\r
+          \r
+          {"version":"42"}""", city));
     }
   }
 
