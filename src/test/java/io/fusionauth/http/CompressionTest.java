@@ -35,7 +35,6 @@ import io.fusionauth.http.HTTPValues.ContentEncodings;
 import io.fusionauth.http.HTTPValues.Headers;
 import io.fusionauth.http.server.CountingInstrumenter;
 import io.fusionauth.http.server.HTTPHandler;
-import io.fusionauth.http.server.HTTPServer;
 import org.testng.annotations.DataProvider;
 import org.testng.annotations.Test;
 import static org.testng.Assert.assertEquals;
@@ -95,9 +94,8 @@ public class CompressionTest extends BaseTest {
     };
 
     CountingInstrumenter instrumenter = new CountingInstrumenter();
-    try (HTTPServer ignore = makeServer(scheme, handler, instrumenter).start()) {
+    try (var client = makeClient(scheme, null); var ignore = makeServer(scheme, handler, instrumenter).start()) {
       URI uri = makeURI(scheme, "");
-      var client = makeClient(scheme, null);
       var response = client.send(
           HttpRequest.newBuilder().header(Headers.AcceptEncoding, encoding).uri(uri).GET().build(),
           r -> BodySubscribers.ofInputStream()
@@ -135,9 +133,8 @@ public class CompressionTest extends BaseTest {
     };
 
     CountingInstrumenter instrumenter = new CountingInstrumenter();
-    try (HTTPServer ignore = makeServer(scheme, handler, instrumenter).start()) {
+    try (var client = makeClient(scheme, null); var ignore = makeServer(scheme, handler, instrumenter).start()) {
       URI uri = makeURI(scheme, "");
-      var client = makeClient(scheme, null);
       var response = client.send(
           HttpRequest.newBuilder().header(Headers.AcceptEncoding, encoding).uri(uri).GET().build(),
           r -> BodySubscribers.ofInputStream()
@@ -172,10 +169,8 @@ public class CompressionTest extends BaseTest {
 
     for (boolean compress : List.of(true, false)) {
       CountingInstrumenter instrumenter = new CountingInstrumenter();
-      try (HTTPServer ignore = makeServer("http", handler, instrumenter).withCompressByDefault(compress).start()) {
+      try (var client = makeClient("http", null); var ignore = makeServer("http", handler, instrumenter).withCompressByDefault(compress).start()) {
         URI uri = makeURI("http", "");
-        var client = makeClient("http", null);
-
         int counter = 25_000;
         long start = System.currentTimeMillis();
         for (int i = 0; i < counter; i++) {
@@ -256,9 +251,8 @@ public class CompressionTest extends BaseTest {
     };
 
     CountingInstrumenter instrumenter = new CountingInstrumenter();
-    try (HTTPServer ignore = makeServer(scheme, handler, instrumenter).start()) {
+    try (var client = makeClient(scheme, null); var ignore = makeServer(scheme, handler, instrumenter).start()) {
       URI uri = makeURI(scheme, "");
-      var client = makeClient(scheme, null);
       var response = client.send(
           HttpRequest.newBuilder().uri(uri).GET().build(),
           r -> BodySubscribers.ofString(StandardCharsets.UTF_8)
@@ -293,9 +287,8 @@ public class CompressionTest extends BaseTest {
     };
 
     CountingInstrumenter instrumenter = new CountingInstrumenter();
-    try (HTTPServer ignore = makeServer(scheme, handler, instrumenter).start()) {
+    try (var client = makeClient(scheme, null); var ignore = makeServer(scheme, handler, instrumenter).start()) {
       URI uri = makeURI(scheme, "");
-      var client = makeClient(scheme, null);
       var response = client.send(
           HttpRequest.newBuilder().header(Headers.AcceptEncoding, "br").uri(uri).GET().build(),
           r -> BodySubscribers.ofString(StandardCharsets.UTF_8)

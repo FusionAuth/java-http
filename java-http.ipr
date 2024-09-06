@@ -13,6 +13,17 @@
     <profile version="1.0">
       <option name="myName" value="Project Default" />
       <inspection_tool class="HttpUrlsUsage" enabled="false" level="WEAK WARNING" enabled_by_default="false" />
+      <inspection_tool class="NullableProblems" enabled="true" level="WARNING" enabled_by_default="true">
+        <option name="REPORT_NULLABLE_METHOD_OVERRIDES_NOTNULL" value="true" />
+        <option name="REPORT_NOT_ANNOTATED_METHOD_OVERRIDES_NOTNULL" value="true" />
+        <option name="REPORT_NOTNULL_PARAMETER_OVERRIDES_NULLABLE" value="true" />
+        <option name="REPORT_NOT_ANNOTATED_PARAMETER_OVERRIDES_NOTNULL" value="true" />
+        <option name="REPORT_NOT_ANNOTATED_GETTER" value="true" />
+        <option name="IGNORE_EXTERNAL_SUPER_NOTNULL" value="true" />
+        <option name="REPORT_NOT_ANNOTATED_SETTER_PARAMETER" value="true" />
+        <option name="REPORT_ANNOTATION_NOT_PROPAGATED_TO_OVERRIDERS" value="true" />
+        <option name="REPORT_NULLS_PASSED_TO_NON_ANNOTATED_METHOD" value="true" />
+      </inspection_tool>
       <inspection_tool class="SizeReplaceableByIsEmpty" enabled="true" level="WARNING" enabled_by_default="true">
         <option name="ignoredTypes">
           <set>
@@ -1391,7 +1402,7 @@
       <module fileurl="file://$PROJECT_DIR$/load-tests/tomcat/tomcat.iml" filepath="$PROJECT_DIR$/load-tests/tomcat/tomcat.iml" />
     </modules>
   </component>
-  <component name="ProjectRootManager" version="2" languageLevel="JDK_17" default="true" project-jdk-name="Java 17" project-jdk-type="JavaSDK">
+  <component name="ProjectRootManager" version="2" languageLevel="JDK_21" default="true" project-jdk-name="Java 21" project-jdk-type="JavaSDK">
     <output url="file://$PROJECT_DIR$/out" />
   </component>
   <component name="VcsDirectoryMappings">

@@ -15,6 +15,11 @@
  */
 package io.fusionauth.http.security;
 
+import java.net.URI;
+import java.net.http.HttpClient;
+import java.net.http.HttpRequest;
+import java.net.http.HttpResponse.BodySubscribers;
+import java.nio.charset.StandardCharsets;
 import java.nio.file.Files;
 import java.nio.file.Path;
 
@@ -35,6 +40,22 @@ public class SecurityToolsTest extends BaseTest {
   @BeforeClass
   public static void setUp() {
     projectDir = Path.of("");
+  }
+
+  @Test
+  public void securityContextMangling() throws Exception {
+    setupCertificates();
+    SecurityTools.clientContext(certificate);
+    SecurityTools.serverContext(certificate, keyPair.getPrivate());
+
+    try (var client = HttpClient.newHttpClient()) {
+      HttpRequest request = HttpRequest.newBuilder()
+                                       .uri(URI.create("https://login.fusionauth.io"))
+                                       .GET()
+                                       .build();
+      var response = client.send(request, r -> BodySubscribers.ofString(StandardCharsets.UTF_8));
+      assertEquals(response.statusCode(), 200);
+    }
   }
 
   @Test

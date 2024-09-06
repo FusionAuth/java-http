@@ -15,63 +15,41 @@
  */
 package io.fusionauth.http.util;
 
+import java.io.ByteArrayOutputStream;
+import java.io.IOException;
+import java.io.InputStream;
+import java.io.OutputStream;
 import java.net.URLDecoder;
-import java.nio.ByteBuffer;
 import java.nio.charset.Charset;
 import java.nio.charset.IllegalCharsetNameException;
 import java.nio.charset.StandardCharsets;
+import java.util.Arrays;
 import java.util.HashMap;
 import java.util.LinkedList;
 import java.util.List;
 import java.util.Map;
+import java.util.Objects;
 
+import io.fusionauth.http.ConnectionClosedException;
+import io.fusionauth.http.HTTPMethod;
 import io.fusionauth.http.HTTPValues.ControlBytes;
+import io.fusionauth.http.HTTPValues.HeaderBytes;
 import io.fusionauth.http.HTTPValues.ProtocolBytes;
-import io.fusionauth.http.ParseException;
-import io.fusionauth.http.io.ByteBufferOutputStream;
+import io.fusionauth.http.log.Logger;
+import io.fusionauth.http.log.LoggerFactory;
+import io.fusionauth.http.server.HTTPRequest;
 import io.fusionauth.http.server.HTTPResponse;
 
 public final class HTTPTools {
-  /**
-   * Builds the HTTP response head section (status line, headers, etc).
-   *
-   * @param response  The response.
-   * @param maxLength The maximum length of the complete HTTP response head section.
-   * @return The bytes of the response head section.
-   */
-  public static ByteBuffer buildExpectResponsePreamble(HTTPResponse response, int maxLength) {
-    ByteBufferOutputStream bbos = new ByteBufferOutputStream(1024, maxLength);
-    writeStatusLine(response, bbos);
-    if (response.getStatus() != 100) {
-      bbos.write("Content-Length: 0".getBytes());
-      bbos.write(ControlBytes.CRLF);
-      bbos.write("Connection: close".getBytes());
-      bbos.write(ControlBytes.CRLF);
-    }
-    bbos.write(ControlBytes.CRLF);
-    return bbos.toByteBuffer();
-  }
+  private static Logger logger;
 
   /**
-   * Builds the HTTP response head section (status line, headers, etc).
+   * Statically sets up the logger, mostly for trace logging.
    *
-   * @param response  The response.
-   * @param maxLength The maximum length of the complete HTTP response head section.
-   * @return The bytes of the response head section.
+   * @param loggerFactory The logger factory.
    */
-  public static ByteBuffer buildResponsePreamble(HTTPResponse response, int maxLength) {
-    ByteBufferOutputStream bbos = new ByteBufferOutputStream(1024, maxLength);
-    writeStatusLine(response, bbos);
-    response.getHeadersMap().forEach((key, values) ->
-        values.forEach(value -> {
-          bbos.write(key.getBytes());
-          bbos.write(':');
-          bbos.write(' ');
-          bbos.write(value.getBytes());
-          bbos.write(ControlBytes.CRLF);
-        }));
-    bbos.write(ControlBytes.CRLF);
-    return bbos.toByteBuffer();
+  public static void initialize(LoggerFactory loggerFactory) {
+    HTTPTools.logger = loggerFactory.getLogger(HTTPTools.class);
   }
 
   /**
@@ -97,7 +75,8 @@ public final class HTTPTools {
   /**
    * Determines if the given character (byte) is an allowed HTTP token character (header field names, methods, etc).
    * <p>
-   * Covered by https://www.rfc-editor.org/rfc/rfc9110.html#name-fields
+   * Covered by <a
+   * href="https://www.rfc-editor.org/rfc/rfc9110.html#name-fields">https://www.rfc-editor.org/rfc/rfc9110.html#name-fields</a>
    *
    * @param ch The character as a byte since HTTP is ASCII.
    * @return True if the character is a token character.
@@ -245,15 +224,111 @@ public final class HTTPTools {
       }
     }
 
-    if (headerValue == null) {
-      throw new ParseException("Unable to parse a parameterized HTTP header [" + value + "]");
-    }
-
     if (parameters == null) {
       parameters = Map.of();
     }
 
     return new HeaderValue(headerValue, parameters);
+  }
+
+  /**
+   * Parses the request preamble directly from the given InputStream.
+   *
+   * @param inputStream   The input stream to read the preamble from.
+   * @param request       The HTTP request to populate.
+   * @param requestBuffer A buffer used for reading to help reduce memory thrashing.
+   * @param readObserver  An observer that is called once one byte has been read.
+   * @return Any leftover body bytes from the last read from the InputStream.
+   * @throws IOException If the read fails.
+   */
+  public static byte[] parseRequestPreamble(InputStream inputStream, HTTPRequest request, byte[] requestBuffer, Runnable readObserver)
+      throws IOException {
+    RequestPreambleState state = RequestPreambleState.RequestMethod;
+    var valueBuffer = new ByteArrayOutputStream(512);
+    String headerName = null;
+
+    int read = 0;
+    int index = 0;
+    while (state != RequestPreambleState.Complete) {
+      read = inputStream.read(requestBuffer);
+      if (read < 0) {
+        logger.trace("Read [{}] signal from client. Closing the socket.", read);
+        throw new ConnectionClosedException();
+      }
+
+      logger.trace("Read [{}] from client for preamble.", read);
+
+      // Tell the callback that we've read at least one byte
+      readObserver.run();
+
+      for (index = 0; index < read && state != RequestPreambleState.Complete; index++) {
+        // If there is a state transition, store the value properly and reset the builder (if needed)
+        byte ch = requestBuffer[index];
+        RequestPreambleState nextState = state.next(ch);
+        if (nextState != state) {
+          switch (state) {
+            case RequestMethod -> request.setMethod(HTTPMethod.of(valueBuffer.toString(StandardCharsets.UTF_8)));
+            case RequestPath -> request.setPath(valueBuffer.toString(StandardCharsets.UTF_8));
+            case RequestProtocol -> request.setProtocol(valueBuffer.toString(StandardCharsets.UTF_8));
+            case HeaderName -> headerName = valueBuffer.toString(StandardCharsets.UTF_8);
+            case HeaderValue -> request.addHeader(headerName, valueBuffer.toString(StandardCharsets.UTF_8));
+          }
+
+          // If the next state is storing, reset the builder
+          if (nextState.store()) {
+            valueBuffer.reset();
+            valueBuffer.write(ch);
+          }
+        } else if (state.store()) {
+          // If the current state is storing, store the character
+          valueBuffer.write(ch);
+        }
+
+        state = nextState;
+      }
+    }
+
+    byte[] leftover = null;
+    if (index < read) {
+      logger.trace("Had [{}] body bytes from the preamble read.", (read - index));
+      leftover = Arrays.copyOfRange(requestBuffer, index, read);
+    }
+
+    return leftover;
+  }
+
+  /**
+   * Writes the HTTP response head section (status line, headers, etc).
+   *
+   * @param response     The response.
+   * @param outputStream The output stream to write the preamble to.
+   * @throws IOException If the stream threw an exception.
+   */
+  public static void writeResponsePreamble(HTTPResponse response, OutputStream outputStream) throws IOException {
+    writeStatusLine(response, outputStream);
+
+    // Write the headers (minus the cookies)
+    for (var headers : response.getHeadersMap().entrySet()) {
+      String name = headers.getKey();
+      for (String value : headers.getValue()) {
+        outputStream.write(name.getBytes());
+        outputStream.write(':');
+        outputStream.write(' ');
+        outputStream.write(value.getBytes());
+        outputStream.write(ControlBytes.CRLF);
+      }
+    }
+
+    // Write the cookies
+    for (var cookie : response.getCookies()) {
+      outputStream.write(HeaderBytes.SetCookie);
+      outputStream.write(':');
+      outputStream.write(' ');
+      outputStream.write(cookie.toResponseHeader().getBytes());
+      outputStream.write(ControlBytes.CRLF);
+    }
+
+    outputStream.write(ControlBytes.CRLF);
   }
 
   private static void parseHeaderParameter(char[] chars, int start, int end, Map<String, String> parameters) {
@@ -299,12 +374,7 @@ public final class HTTPTools {
     }
 
     String encodedValue = new String(chars, start, end - start);
-    String value;
-    if (charset != null) {
-      value = URLDecoder.decode(encodedValue, charset);
-    } else {
-      value = URLDecoder.decode(encodedValue, StandardCharsets.UTF_8);
-    }
+    String value = URLDecoder.decode(encodedValue, Objects.requireNonNullElse(charset, StandardCharsets.UTF_8));
 
     if (name == null) {
       name = value;
@@ -322,8 +392,9 @@ public final class HTTPTools {
    *
    * @param response The response to pull the status information from.
    * @param out      The OutputStream.
+   * @throws IOException If the stream threw an exception.
    */
-  private static void writeStatusLine(HTTPResponse response, ByteBufferOutputStream out) {
+  private static void writeStatusLine(HTTPResponse response, OutputStream out) throws IOException {
     out.write(ProtocolBytes.HTTTP1_1);
     out.write(' ');
     out.write(Integer.toString(response.getStatus()).getBytes());

@@ -10,11 +10,11 @@
     <orderEntry type="module-library">
       <library>
         <CLASSES>
-          <root url="jar://$USER_HOME$/.savant/cache/io/fusionauth/java-http/0.1.8/java-http-0.1.8.jar!/" />
+          <root url="jar://$USER_HOME$/.savant/cache/io/fusionauth/java-http/0.4.0-{integration}/java-http-0.4.0-{integration}.jar!/" />
         </CLASSES>
         <JAVADOC />
         <SOURCES>
-          <root url="jar://$USER_HOME$/.savant/cache/io/fusionauth/java-http/0.1.8/java-http-0.1.8-src.jar!/" />
+          <root url="jar://$USER_HOME$/.savant/cache/io/fusionauth/java-http/0.4.0-{integration}/java-http-0.4.0-{integration}-src.jar!/" />
         </SOURCES>
       </library>
     </orderEntry>

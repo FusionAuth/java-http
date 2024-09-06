@@ -13,23 +13,24 @@
  * either express or implied. See the License for the specific
  * language governing permissions and limitations under the License.
  */
-package io.fusionauth.http.body.response;
-
-import java.nio.ByteBuffer;
+package io.fusionauth.http.log;
 
 /**
- * A body processor that handles when there is no body.
+ * Simple implementation of the LoggerFactory that returns various FileLoggers
  *
  * @author Brian Pontarelli
  */
-public class EmptyBodyProcessor implements BodyProcessor {
-  @Override
-  public ByteBuffer[] currentBuffers() {
-    return null;
-  }
+public class FileLoggerFactory implements LoggerFactory {
+  public static final FileLoggerFactory FACTORY = new FileLoggerFactory();
+
+  private static FileLogger logger;
 
   @Override
-  public boolean isComplete() {
-    return true;
+  public Logger getLogger(Class<?> klass) {
+    return logger;
+  }
+
+  public static void setLogger(FileLogger logger) {
+    FileLoggerFactory.logger = logger;
   }
 }

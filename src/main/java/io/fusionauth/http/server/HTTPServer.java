@@ -16,20 +16,21 @@
 package io.fusionauth.http.server;
 
 import java.io.Closeable;
-import java.io.IOException;
 import java.util.ArrayList;
 import java.util.List;
 
 import io.fusionauth.http.log.Logger;
-import io.fusionauth.http.util.ThreadPool;
+import io.fusionauth.http.server.internal.HTTPServerThread;
+import io.fusionauth.http.util.HTTPTools;
 
 /**
  * The server bro!
  *
  * @author Brian Pontarelli
  */
+@SuppressWarnings("unused")
 public class HTTPServer implements Closeable, Configurable<HTTPServer> {
-  private final List<HTTPServerThread> threads = new ArrayList<>();
+  private final List<HTTPServerThread> servers = new ArrayList<>();
 
   private HTTPServerConfiguration configuration = new HTTPServerConfiguration();
 
@@ -37,27 +38,33 @@ public class HTTPServer implements Closeable, Configurable<HTTPServer> {
 
   private Logger logger;
 
-  private ThreadPool threadPool;
-
   @Override
   public void close() {
     logger.info("HTTP server shutdown requested. Attempting to close each listener. This could take a while.");
 
-    for (HTTPServerThread thread : threads) {
-      thread.close();
+    long start = System.currentTimeMillis();
+    long shutdownDuration = configuration.getShutdownDuration().toMillis();
 
+    // First, shutdown all the threads
+    for (HTTPServerThread thread : servers) {
+      thread.shutdown();
+    }
+
+    // Next, try joining on them
+    for (Thread thread : servers) {
       try {
-        thread.join(10_000);
+        thread.join(shutdownDuration);
       } catch (InterruptedException e) {
         // Ignore so we join on all the threads
       }
+
+      // Just bail
+      if (System.currentTimeMillis() - start > shutdownDuration) {
+        break;
+      }
     }
 
-    if (threadPool.shutdown()) {
-      logger.info("HTTP server shutdown successfully.");
-    } else {
-      logger.error("HTTP server shutdown failed. It's harshing my mellow!");
-    }
+    logger.info("HTTP server shutdown successfully.");
   }
 
   @Override
@@ -77,25 +84,24 @@ public class HTTPServer implements Closeable, Configurable<HTTPServer> {
       return this;
     }
 
+    // Set up the server logger and the static loggers
     logger = configuration.getLoggerFactory().getLogger(HTTPServer.class);
+    HTTPTools.initialize(configuration().getLoggerFactory());
+
     logger.info("Starting the HTTP server. Buckle up!");
 
     context = new HTTPContext(configuration.getBaseDir());
 
-    // Start the thread pool for the workers
-    threadPool = new ThreadPool(configuration.getNumberOfWorkerThreads(), "HTTP Server Worker Thread", configuration.getShutdownDuration());
-
     try {
       for (HTTPListenerConfiguration listener : configuration.getListeners()) {
-        HTTPServerThread thread = new HTTPServerThread(configuration, listener, threadPool);
-        thread.start();
-        threads.add(thread);
-
+        HTTPServerThread server = new HTTPServerThread(configuration, listener);
+        servers.add(server);
+        server.start();
         logger.info("HTTP server listening on port [{}]", listener.getPort());
       }
 
       logger.info("HTTP server started successfully");
-    } catch (IOException e) {
+    } catch (Exception e) {
       logger.error("Unable to start the HTTP server because one of the listeners threw an exception.", e);
 
       // Clean up the threads that did start

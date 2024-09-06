@@ -27,7 +27,7 @@ import io.fusionauth.http.log.SystemOutLoggerFactory;
  *
  * @param <T> The type of configurable for casting.
  */
-@SuppressWarnings("unchecked")
+@SuppressWarnings({"unchecked", "UnusedReturnValue", "unused"})
 public interface Configurable<T extends Configurable<T>> {
   /**
    * @return The configuration object.
@@ -43,18 +43,6 @@ public interface Configurable<T extends Configurable<T>> {
    */
   default T withBaseDir(Path baseDir) {
     configuration().withBaseDir(baseDir);
-    return (T) this;
-  }
-
-  /**
-   * Sets the duration that the server will allow client connections to remain open. This includes Keep-Alive as well as read timeout.
-   * Defaults to 20 seconds.
-   *
-   * @param duration The duration.
-   * @return This.
-   */
-  default T withClientTimeout(Duration duration) {
-    configuration().withClientTimeout(duration);
     return (T) this;
   }
 
@@ -106,6 +94,18 @@ public interface Configurable<T extends Configurable<T>> {
   }
 
   /**
+   * Sets the duration that the server will attempt to read the first byte from a client. This is the very first byte after the socket
+   * connection has been accepted by the server. Defaults to 2 seconds.
+   *
+   * @param duration The duration.
+   * @return This.
+   */
+  default T withInitialReadTimeout(Duration duration) {
+    configuration().withInitialReadTimeout(duration);
+    return (T) this;
+  }
+
+  /**
    * Sets an instrumenter that the server will notify when events and conditions happen.
    *
    * @param instrumenter The instrumenter.
@@ -113,6 +113,18 @@ public interface Configurable<T extends Configurable<T>> {
    */
   default T withInstrumenter(Instrumenter instrumenter) {
     configuration().withInstrumenter(instrumenter);
+    return (T) this;
+  }
+
+  /**
+   * Sets the duration that the server will allow client connections to remain open and idle after each request has been processed. This is
+   * the Keep-Alive state before the first byte of the next request is read. Defaults to 20 seconds.
+   *
+   * @param duration The duration.
+   * @return This.
+   */
+  default T withKeepAliveTimeoutDuration(Duration duration) {
+    configuration().withKeepAliveTimeoutDuration(duration);
     return (T) this;
   }
 
@@ -141,33 +153,19 @@ public interface Configurable<T extends Configurable<T>> {
   }
 
   /**
-   * Sets the maximum length of the output buffer queue. Defaults to 128.
-   * <p>
-   * This parameter will affect the runtime memory requirement of the server. This can be calculated by multiplying this value by values
-   * returned from {@link HTTPServerConfiguration#getResponseBufferSize()} and {@link HTTPServerConfiguration#getNumberOfWorkerThreads()}.
+   * This configures the maximum size of a chunk in the response when the server is using chunked response encoding. Defaults to 16k.
    *
-   * @param outputBufferQueueLength The length of the output buffer queue.
+   * @param size The size in bytes.
    * @return This.
    */
-  default T withMaxOutputBufferQueueLength(int outputBufferQueueLength) {
-    configuration().withMaxOutputBufferQueueLength(outputBufferQueueLength);
-    return (T) this;
-  }
-
-  /**
-   * Sets the max preamble length (the start-line and headers constitute the head). Defaults to 64k
-   *
-   * @param maxLength The max preamble length.
-   * @return This.
-   */
-  default T withMaxPreambleLength(int maxLength) {
-    configuration().withMaxPreambleLength(maxLength);
+  default T withMaxResponseChunkSize(int size) {
+    configuration().withMaxResponseChunkSize(size);
     return (T) this;
   }
 
   /**
    * This configures the minimum number of bytes per second that a client must send a request to the server before the server closes the
-   * connection.
+   * connection. Set this to -1 to disable this check.
    *
    * @param bytesPerSecond The bytes per second throughput.
    * @return This.
@@ -179,7 +177,7 @@ public interface Configurable<T extends Configurable<T>> {
 
   /**
    * This configures the minimum number of bytes per second that a client must read the response from the server before the server closes
-   * the connection.
+   * the connection. Set this to -1 to disable this check.
    *
    * @param bytesPerSecond The bytes per second throughput.
    * @return This.
@@ -201,28 +199,14 @@ public interface Configurable<T extends Configurable<T>> {
   }
 
   /**
-   * Sets the number of worker threads that will handle requests coming into the HTTP server. Defaults to 40.
-   * <p>
-   * This parameter will affect the runtime memory requirement of the server. This can be calculated by multiplying this value by the
-   * returned from {@link HTTPServerConfiguration#getResponseBufferSize()} and
-   * {@link HTTPServerConfiguration#getMaxOutputBufferQueueLength()}.
+   * Sets the duration that the server will allow worker threads to run after the final request byte is read and before the first response
+   * byte is written. Defaults to 10 seconds.
    *
-   * @param numberOfWorkerThreads The number of worker threads.
+   * @param duration The duration.
    * @return This.
    */
-  default T withNumberOfWorkerThreads(int numberOfWorkerThreads) {
-    configuration().withNumberOfWorkerThreads(numberOfWorkerThreads);
-    return (T) this;
-  }
-
-  /**
-   * Sets the size of the preamble buffer (that is the buffer that reads the start-line and headers). Defaults to 4096.
-   *
-   * @param size The buffer size.
-   * @return This.
-   */
-  default T withPreambleBufferSize(int size) {
-    configuration().withPreambleBufferSize(size);
+  default T withProcessingTimeoutDuration(Duration duration) {
+    configuration().withProcessingTimeoutDuration(duration);
     return (T) this;
   }
 
@@ -252,13 +236,11 @@ public interface Configurable<T extends Configurable<T>> {
   }
 
   /**
-   * Sets the size of the buffer that is used to process the HTTP response. This defaults to 16k.
-   * <p>
-   * This parameter will affect the runtime memory requirement of the server. This can be calculated by multiplying this value by the
-   * returned from {@link HTTPServerConfiguration#getNumberOfWorkerThreads()} and
-   * {@link HTTPServerConfiguration#getMaxOutputBufferQueueLength()}.
+   * Sets the size of the buffer that is used to store the HTTP response before any bytes are written back to the client. This is useful
+   * when the server is generating the response but encounters an error. In this case, the server will throw out the response and change to
+   * a 500 error response. This defaults to 64k. Negative values disable the response buffer.
    *
-   * @param responseBufferSize The size of the buffer.
+   * @param responseBufferSize The size of the buffer. Set to -1 to disable buffering completely.
    * @return This.
    */
   default T withResponseBufferSize(int responseBufferSize) {

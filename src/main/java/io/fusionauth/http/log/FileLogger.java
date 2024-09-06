@@ -15,14 +15,43 @@
  */
 package io.fusionauth.http.log;
 
+import java.io.IOException;
+import java.io.Writer;
+import java.nio.file.Files;
+import java.nio.file.Path;
+import java.nio.file.StandardOpenOption;
+
 /**
  * A simple logger that spits out messages to System.out.
  *
  * @author Brian Pontarelli
  */
-public class SystemOutLogger extends BaseLogger {
+public class FileLogger extends BaseLogger {
+  private final Writer writer;
+
+  public FileLogger(Path file) {
+    try {
+      Files.createDirectories(file.getParent());
+      this.writer = Files.newBufferedWriter(file, StandardOpenOption.CREATE, StandardOpenOption.TRUNCATE_EXISTING);
+    } catch (IOException e) {
+      throw new RuntimeException(e);
+    }
+  }
+
+  public void flush() {
+    try {
+      this.writer.flush();
+    } catch (IOException e) {
+      throw new RuntimeException(e);
+    }
+  }
+
   @Override
   protected void handleMessage(String message) {
-    System.out.println(message);
+    try {
+      writer.write(message + "\n");
+    } catch (IOException e) {
+      throw new RuntimeException(e);
+    }
   }
 }

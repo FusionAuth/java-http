@@ -16,12 +16,9 @@
 package io.fusionauth.http;
 
 /**
- * An exception thrown when the server determines the request is too slow, has timed out or something like that.
+ * An exception thrown when the client closes the socket and the server should handle it gracefully.
  *
  * @author Daniel DeGroff
  */
 public class ConnectionClosedException extends RuntimeException {
-  public ConnectionClosedException(Throwable cause) {
-    super(cause);
-  }
 }

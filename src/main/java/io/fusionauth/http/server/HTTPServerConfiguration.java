@@ -34,8 +34,6 @@ public class HTTPServerConfiguration implements Configurable<HTTPServerConfigura
 
   private Path baseDir = Path.of("");
 
-  private Duration clientTimeoutDuration = Duration.ofSeconds(20);
-
   private boolean compressByDefault = true;
 
   private String contextPath = "";
@@ -44,29 +42,29 @@ public class HTTPServerConfiguration implements Configurable<HTTPServerConfigura
 
   private HTTPHandler handler;
 
+  private Duration initialReadTimeoutDuration = Duration.ofSeconds(2);
+
   private Instrumenter instrumenter;
+
+  private Duration keepAliveTimeoutDuration = Duration.ofSeconds(20);
 
   private LoggerFactory loggerFactory = SystemOutLoggerFactory.FACTORY;
 
-  private int maxHeadLength = 128 * 1024;
+  private int maxResponseChunkSize = 16 * 1024; // 16k bytes
 
-  private int maxOutputBufferQueueLength = 128;
+  private long minimumReadThroughput = 16 * 1024; // 16k/second
 
-  private long minimumReadThroughput = 16 * 1024; // Per second
+  private long minimumWriteThroughput = 16 * 1024; // 16k/second
 
-  private long minimumWriteThroughput = 16 * 1024; // Per second
+  private int multipartBufferSize = 16 * 1024; // 16k bytes
 
-  private int multipartBufferSize = 16 * 1024;
-
-  private int numberOfWorkerThreads = 40;
-
-  private int preambleBufferSize = 16 * 1024;
+  private Duration processingTimeoutDuration = Duration.ofSeconds(10);
 
   private Duration readThroughputCalculationDelayDuration = Duration.ofSeconds(5);
 
   private int requestBufferSize = 16 * 1024;
 
-  private int responseBufferSize = 16 * 1024;
+  private int responseBufferSize = 64 * 1024;
 
   private Duration shutdownDuration = Duration.ofSeconds(10);
 
@@ -80,52 +78,76 @@ public class HTTPServerConfiguration implements Configurable<HTTPServerConfigura
     return this;
   }
 
+  /**
+   * @return The base dir for the entire server. This can be used to calculate files from as needed.
+   */
   public Path getBaseDir() {
     return baseDir;
   }
 
-  public Duration getClientTimeoutDuration() {
-    return clientTimeoutDuration;
-  }
-
+  /**
+   * @return The context page that the entire server serves requests under or null.
+   */
   public String getContextPath() {
     return contextPath;
   }
 
+  /**
+   * @return The expect validator or null.
+   */
   public ExpectValidator getExpectValidator() {
     return expectValidator;
   }
 
+  /**
+   * @return The HTTP handler for this server. Cannot be null and is required.
+   */
   public HTTPHandler getHandler() {
     return handler;
   }
 
+  /**
+   * @return The timeout between a socket being accepted by the server and the first byte being read. This is distinct and separate from the
+   *     timeout for subsequent reads after the connection has been "kept alive".
+   */
+  public Duration getInitialReadTimeoutDuration() {
+    return initialReadTimeoutDuration;
+  }
+
+  /**
+   * @return The instrumenter or null.
+   */
   public Instrumenter getInstrumenter() {
     return instrumenter;
   }
 
+  /**
+   * @return The timeout between requests when the server is in Keep-Alive mode. This is the maximum value to prevent DoS attacks that use
+   *     the HTTP headers to set extremely long timeouts.
+   */
+  public Duration getKeepAliveTimeoutDuration() {
+    return keepAliveTimeoutDuration;
+  }
+
+  /**
+   * @return All configured listeners (if any) or an empty list.
+   */
   public List<HTTPListenerConfiguration> getListeners() {
     return listeners;
   }
 
+  /**
+   * @return The logger factory.
+   */
   public LoggerFactory getLoggerFactory() {
     return loggerFactory;
   }
 
-  public int getMaxHeadLength() {
-    return maxHeadLength;
-  }
-
   /**
-   * This configuration will affect the runtime memory requirement.
-   * <p>
-   * The maximum memory requirement for the output buffer can be calculated multiplying this value by the values returned from
-   * {@link HTTPServerConfiguration#getResponseBufferSize()} and * {@link HTTPServerConfiguration#getNumberOfWorkerThreads()}.
-   *
-   * @return the maximum output buffer queue length.
+   * @return The max chunk size in the response. Defaults to 16k bytes.
    */
-  public int getMaxOutputBufferQueueLength() {
-    return maxOutputBufferQueueLength;
+  public int getMaxResponseChunkSize() {
+    return maxResponseChunkSize;
   }
 
   /**
@@ -148,24 +170,21 @@ public class HTTPServerConfiguration implements Configurable<HTTPServerConfigura
     return minimumWriteThroughput;
   }
 
+  /**
+   * @return The multipart buffer size in bytes. This is primary used for parsing multipart requests by the {@link HTTPRequest} class.
+   *     Defaults to 16k bytes.
+   */
   public int getMultipartBufferSize() {
     return multipartBufferSize;
   }
 
   /**
-   * The number of worker threads. This configuration will affect the runtime memory requirement.
-   * <p>
-   * The maximum memory requirement for the output buffer can be calculated multiplying this value by the values returned from
-   * {@link HTTPServerConfiguration#getMaxOutputBufferQueueLength()} and * {@link HTTPServerConfiguration#getResponseBufferSize()}.
-   *
-   * @return the number of worker threads.
+   * @return The timeout between when the request has been fully read and the first byte is written. This provides the worker thread to
+   *     perform work before it begins to write. This timeout should be relatively short depending on how long you want the browser/client
+   *     to wait before the response comes back. Defaults to 10 seconds.
    */
-  public int getNumberOfWorkerThreads() {
-    return numberOfWorkerThreads;
-  }
-
-  public int getPreambleBufferSize() {
-    return preambleBufferSize;
+  public Duration getProcessingTimeoutDuration() {
+    return processingTimeoutDuration;
   }
 
   /**
@@ -175,22 +194,25 @@ public class HTTPServerConfiguration implements Configurable<HTTPServerConfigura
     return readThroughputCalculationDelayDuration;
   }
 
+  /**
+   * @return The size of the buffer used to read the request. This defaults to 16k bytes.
+   */
   public int getRequestBufferSize() {
     return requestBufferSize;
   }
 
   /**
-   * The size of the response buffer in bytes. This configuration will affect the runtime memory requirement.
-   * <p>
-   * The maximum memory requirement for the output buffer can be calculated multiplying this value by the values returned from
-   * {@link HTTPServerConfiguration#getMaxOutputBufferQueueLength()} and * {@link HTTPServerConfiguration#getNumberOfWorkerThreads()}.
-   *
-   * @return the response buffer size in bytes.
+   * @return The size of the buffer used to store the response. This allows the server to handle exceptions and errors without writing back
+   *     a 200 response that is actually an error. This defaults to 64k bytes.
    */
   public int getResponseBufferSize() {
     return responseBufferSize;
   }
 
+  /**
+   * @return The duration that the server will wait while worker threads complete before forcibly shutting itself down. Defaults to 10
+   *     seconds.
+   */
   public Duration getShutdownDuration() {
     return shutdownDuration;
   }
@@ -202,6 +224,9 @@ public class HTTPServerConfiguration implements Configurable<HTTPServerConfigura
     return writeThroughputCalculationDelayDuration;
   }
 
+  /**
+   * @return Whether all responses are compressed by default. Defaults to true.
+   */
   public boolean isCompressByDefault() {
     return compressByDefault;
   }
@@ -212,21 +237,6 @@ public class HTTPServerConfiguration implements Configurable<HTTPServerConfigura
   @Override
   public HTTPServerConfiguration withBaseDir(Path baseDir) {
     this.baseDir = baseDir;
-    return this;
-  }
-
-  /**
-   * {@inheritDoc}
-   */
-  @Override
-  public HTTPServerConfiguration withClientTimeout(Duration duration) {
-    Objects.requireNonNull(duration, "You cannot set the client timeout to null");
-    if (duration.isZero() || duration.isNegative()) {
-      throw new IllegalArgumentException("The client timeout duration must be greater than 0");
-    }
-
-
-    this.clientTimeoutDuration = duration;
     return this;
   }
 
@@ -271,8 +281,38 @@ public class HTTPServerConfiguration implements Configurable<HTTPServerConfigura
    * {@inheritDoc}
    */
   @Override
+  public HTTPServerConfiguration withInitialReadTimeout(Duration duration) {
+    Objects.requireNonNull(duration, "You cannot set the client timeout to null");
+    if (duration.isZero() || duration.isNegative()) {
+      throw new IllegalArgumentException("The client timeout duration must be greater than 0");
+    }
+
+
+    this.initialReadTimeoutDuration = duration;
+    return this;
+  }
+
+  /**
+   * {@inheritDoc}
+   */
+  @Override
   public HTTPServerConfiguration withInstrumenter(Instrumenter instrumenter) {
     this.instrumenter = instrumenter;
+    return this;
+  }
+
+  /**
+   * {@inheritDoc}
+   */
+  @Override
+  public HTTPServerConfiguration withKeepAliveTimeoutDuration(Duration duration) {
+    Objects.requireNonNull(duration, "You cannot set the keep-alive timeout duration to null");
+
+    if (duration.isZero() || duration.isNegative()) {
+      throw new IllegalArgumentException("The keep-alive timeout duration must be grater than 0");
+    }
+
+    this.keepAliveTimeoutDuration = duration;
     return this;
   }
 
@@ -300,12 +340,8 @@ public class HTTPServerConfiguration implements Configurable<HTTPServerConfigura
    * {@inheritDoc}
    */
   @Override
-  public HTTPServerConfiguration withMaxOutputBufferQueueLength(int outputBufferQueueLength) {
-    if (outputBufferQueueLength < 16) {
-      throw new IllegalArgumentException("The maximum output buffer queue length must be greater than or equal to 16");
-    }
-
-    this.maxOutputBufferQueueLength = outputBufferQueueLength;
+  public HTTPServerConfiguration withMaxResponseChunkSize(int size) {
+    this.maxResponseChunkSize = size;
     return this;
   }
 
@@ -313,25 +349,8 @@ public class HTTPServerConfiguration implements Configurable<HTTPServerConfigura
    * {@inheritDoc}
    */
   @Override
-  public HTTPServerConfiguration withMaxPreambleLength(int maxLength) {
-    if (maxLength <= 0) {
-      throw new IllegalArgumentException("The maximum preamble length must be greater than 0");
-    }
-
-    this.maxHeadLength = maxLength;
-    return this;
-  }
-
-  /**
-   * This configures the minimum number of bytes per second that a client must send a request to the server before the server closes the
-   * connection.
-   *
-   * @param bytesPerSecond The bytes per second throughput.
-   * @return This.
-   */
-  @Override
   public HTTPServerConfiguration withMinimumReadThroughput(long bytesPerSecond) {
-    if (bytesPerSecond < 1024) {
+    if (bytesPerSecond != -1 && bytesPerSecond < 1024) {
       throw new IllegalArgumentException("The minimum bytes per second must be greater than 1024. This should probably be faster than a 28.8 baud modem!");
     }
 
@@ -340,14 +359,10 @@ public class HTTPServerConfiguration implements Configurable<HTTPServerConfigura
   }
 
   /**
-   * This configures the minimum number of bytes per second that a client must read the response from the server before the server closes
-   * the connection.
-   *
-   * @param bytesPerSecond The bytes per second throughput.
-   * @return This.
+   * {@inheritDoc}
    */
   public HTTPServerConfiguration withMinimumWriteThroughput(long bytesPerSecond) {
-    if (bytesPerSecond < 1024) {
+    if (bytesPerSecond != -1 && bytesPerSecond < 1024) {
       throw new IllegalArgumentException("The minimum bytes per second must be greater than 1024. This should probably be faster than a 28.8 baud modem!");
     }
 
@@ -372,25 +387,14 @@ public class HTTPServerConfiguration implements Configurable<HTTPServerConfigura
    * {@inheritDoc}
    */
   @Override
-  public HTTPServerConfiguration withNumberOfWorkerThreads(int numberOfWorkerThreads) {
-    if (numberOfWorkerThreads <= 0) {
-      throw new IllegalArgumentException("The number of worker threads must be greater than 0");
+  public HTTPServerConfiguration withProcessingTimeoutDuration(Duration duration) {
+    Objects.requireNonNull(duration, "You cannot set the processing timeout duration to null");
+
+    if (duration.isZero() || duration.isNegative()) {
+      throw new IllegalArgumentException("The processing timeout duration must be grater than 0");
     }
 
-    this.numberOfWorkerThreads = numberOfWorkerThreads;
-    return this;
-  }
-
-  /**
-   * {@inheritDoc}
-   */
-  @Override
-  public HTTPServerConfiguration withPreambleBufferSize(int size) {
-    if (size <= 0) {
-      throw new IllegalArgumentException("The preamble buffer size must be greater than 0");
-    }
-
-    this.preambleBufferSize = size;
+    this.processingTimeoutDuration = duration;
     return this;
   }
 
@@ -427,10 +431,6 @@ public class HTTPServerConfiguration implements Configurable<HTTPServerConfigura
    */
   @Override
   public HTTPServerConfiguration withResponseBufferSize(int responseBufferSize) {
-    if (responseBufferSize <= 0) {
-      throw new IllegalArgumentException("The response buffer size must be greater than 0");
-    }
-
     this.responseBufferSize = responseBufferSize;
     return this;
   }

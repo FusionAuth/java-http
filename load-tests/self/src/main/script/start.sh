@@ -33,4 +33,4 @@ if [[ $# -gt 1 && $1 == "--suspend" ]]; then
   shift
 fi
 
-~/dev/java/current17/bin/java ${suspend} -cp "${CLASSPATH}" io.fusionauth.http.load.Main
+~/dev/java/current21/bin/java ${suspend} -cp "${CLASSPATH}" io.fusionauth.http.load.Main

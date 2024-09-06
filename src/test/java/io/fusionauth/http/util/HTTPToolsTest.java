@@ -91,5 +91,14 @@ public class HTTPToolsTest {
     assertEquals(HTTPTools.parseHeaderValue("value; list=\"a;b\"; another=param"), new HeaderValue("value", Map.of("another", "param", "list", "a;b")));
     assertEquals(HTTPTools.parseHeaderValue("value; list=\"a\";"), new HeaderValue("value", Map.of("list", "a")));
     assertEquals(HTTPTools.parseHeaderValue("value; list*"), new HeaderValue("value", Map.of("list", "")));
+    assertEquals(HTTPTools.parseHeaderValue("value;"), new HeaderValue("value", Map.of()));
+    assertEquals(HTTPTools.parseHeaderValue("value; "), new HeaderValue("value", Map.of()));
+    assertEquals(HTTPTools.parseHeaderValue("value; f"), new HeaderValue("value", Map.of("f", "")));
+    assertEquals(HTTPTools.parseHeaderValue("value;  f"), new HeaderValue("value", Map.of("f", "")));
+    assertEquals(HTTPTools.parseHeaderValue("value; f="), new HeaderValue("value", Map.of("f", "")));
+    assertEquals(HTTPTools.parseHeaderValue("value;  f="), new HeaderValue("value", Map.of("f", "")));
+    assertEquals(HTTPTools.parseHeaderValue("value; f=f"), new HeaderValue("value", Map.of("f", "f")));
+    assertEquals(HTTPTools.parseHeaderValue("value; f =f"), new HeaderValue("value", Map.of("f ", "f")));
+    assertEquals(HTTPTools.parseHeaderValue("value; f= f"), new HeaderValue("value", Map.of("f", " f")));
   }
 }

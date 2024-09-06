@@ -20,6 +20,7 @@ package io.fusionauth.http;
  *
  * @author Brian Pontarelli
  */
+@SuppressWarnings("unused")
 public final class HTTPValues {
   private HTTPValues() {
   }
@@ -253,6 +254,8 @@ public final class HTTPValues {
 
     public static final String UserAgent = "User-Agent";
 
+    public static final String Vary = "Vary";
+
     public static final String XForwardedFor = "X-Forwarded-For";
 
     public static final String XForwardedHost = "X-Forwarded-Host";
@@ -262,6 +265,13 @@ public final class HTTPValues {
     public static final String XForwardedProto = "X-Forwarded-Proto";
 
     private Headers() {
+    }
+  }
+
+  public static final class HeaderBytes {
+    public static final byte[] SetCookie = Headers.SetCookie.getBytes();
+
+    private HeaderBytes() {
     }
   }
 

@@ -42,10 +42,11 @@ import io.fusionauth.http.Buildable;
 import io.fusionauth.http.Cookie;
 import io.fusionauth.http.FileInfo;
 import io.fusionauth.http.HTTPMethod;
+import io.fusionauth.http.HTTPValues.Connections;
 import io.fusionauth.http.HTTPValues.ContentTypes;
 import io.fusionauth.http.HTTPValues.Headers;
 import io.fusionauth.http.HTTPValues.TransferEncodings;
-import io.fusionauth.http.body.BodyException;
+import io.fusionauth.http.io.BodyException;
 import io.fusionauth.http.io.MultipartStream;
 import io.fusionauth.http.util.HTTPTools;
 import io.fusionauth.http.util.HTTPTools.HeaderValue;
@@ -366,7 +367,7 @@ public class HTTPRequest implements Buildable<HTTPRequest> {
 
   public String getHeader(String name) {
     List<String> values = getHeaders(name);
-    return values != null && values.size() > 0 ? values.get(0) : null;
+    return values != null && !values.isEmpty() ? values.getFirst() : null;
   }
 
   public List<String> getHeaders(String name) {
@@ -429,7 +430,7 @@ public class HTTPRequest implements Buildable<HTTPRequest> {
   }
 
   public Locale getLocale() {
-    return locales.size() > 0 ? locales.get(0) : Locale.getDefault();
+    return locales.size() > 0 ? locales.getFirst() : Locale.getDefault();
   }
 
   public List<Locale> getLocales() {
@@ -457,7 +458,7 @@ public class HTTPRequest implements Buildable<HTTPRequest> {
   public String getParameter(String name) {
     List<String> values = getParameters().get(name);
     if (values != null && values.size() > 0) {
-      return values.get(0);
+      return values.getFirst();
     }
 
     return null;
@@ -565,7 +566,7 @@ public class HTTPRequest implements Buildable<HTTPRequest> {
 
   public String getURLParameter(String name) {
     List<String> values = urlParameters.get(name);
-    return (values != null && values.size() > 0) ? values.get(0) : null;
+    return (values != null && values.size() > 0) ? values.getFirst() : null;
   }
 
   public List<String> getURLParameters(String name) {
@@ -592,6 +593,16 @@ public class HTTPRequest implements Buildable<HTTPRequest> {
 
   public boolean isChunked() {
     return getTransferEncoding() != null && getTransferEncoding().equalsIgnoreCase(TransferEncodings.Chunked);
+  }
+
+  /**
+   * Determines if the request is asking for the server to keep the connection alive. This is based on the Connection header.
+   *
+   * @return True if the Connection header is missing or not `Close`.
+   */
+  public boolean isKeepAlive() {
+    var connection = getHeader(Headers.Connection);
+    return connection == null || !connection.equalsIgnoreCase(Connections.Close);
   }
 
   public boolean isMultipart() {

@@ -25,6 +25,7 @@ import java.time.ZonedDateTime;
 import java.time.format.DateTimeFormatter;
 import java.util.ArrayList;
 import java.util.HashMap;
+import java.util.LinkedHashMap;
 import java.util.List;
 import java.util.Map;
 import java.util.stream.Collectors;
@@ -34,7 +35,7 @@ import io.fusionauth.http.HTTPValues.Connections;
 import io.fusionauth.http.HTTPValues.ContentTypes;
 import io.fusionauth.http.HTTPValues.Headers;
 import io.fusionauth.http.HTTPValues.Status;
-import io.fusionauth.http.io.DelegatingOutputStream;
+import io.fusionauth.http.server.io.HTTPOutputStream;
 import io.fusionauth.http.util.HTTPTools;
 import io.fusionauth.http.util.HTTPTools.HeaderValue;
 
@@ -44,16 +45,15 @@ import io.fusionauth.http.util.HTTPTools.HeaderValue;
  *
  * @author Brian Pontarelli
  */
+@SuppressWarnings("unused")
 public class HTTPResponse {
   private final Map<String, Map<String, Cookie>> cookies = new HashMap<>(); // <Path, <Name, Cookie>>
 
-  private final Map<String, List<String>> headers = new HashMap<>();
-
-  private final DelegatingOutputStream outputStream;
-
-  private volatile boolean committed;
+  private final Map<String, List<String>> headers = new LinkedHashMap<>();
 
   private Throwable exception;
+
+  private HTTPOutputStream outputStream;
 
   private int status = 200;
 
@@ -61,17 +61,9 @@ public class HTTPResponse {
 
   private Writer writer;
 
-  public HTTPResponse(OutputStream outputStream, HTTPRequest request, boolean compressByDefault) {
-    this.outputStream = new DelegatingOutputStream(request, this, outputStream, compressByDefault);
-  }
-
-  public HTTPResponse(OutputStream outputStream, HTTPRequest request) {
-    this(outputStream, request, true);
-  }
-
   public void addCookie(Cookie cookie) {
     String path = cookie.path != null ? cookie.path : "/";
-    cookies.computeIfAbsent(path, key -> new HashMap<>()).put(cookie.name, cookie);
+    cookies.computeIfAbsent(path, key -> new LinkedHashMap<>()).put(cookie.name, cookie);
   }
 
   /**
@@ -112,11 +104,20 @@ public class HTTPResponse {
 
   public boolean containsHeader(String name) {
     String key = name.toLowerCase();
-    return headers.containsKey(key) && headers.get(key).size() > 0;
+    return headers.containsKey(key) && !headers.get(key).isEmpty();
   }
 
   public boolean failure() {
     return status < 200 || status > 299;
+  }
+
+  /**
+   * Flushes any buffered response (including the preamble) to the client. This is a force flush operation.
+   *
+   * @throws IOException If the socket throws.
+   */
+  public void flush() throws IOException {
+    outputStream.forceFlush();
   }
 
   /**
@@ -144,6 +145,23 @@ public class HTTPResponse {
     }
 
     return null;
+  }
+
+  /**
+   * Hard resets this response if it hasn't been committed yet. If the response has been committed back to the client, this throws up.
+   */
+  public void reset() {
+    if (outputStream.isCommitted()) {
+      throw new IllegalStateException("The HTTPResponse can't be reset after it has been committed, meaning at least one byte was written back to the client.");
+    }
+
+    cookies.clear();
+    headers.clear();
+    exception = null;
+    outputStream.reset();
+    status = 200;
+    statusMessage = null;
+    writer = null;
   }
 
   public void setContentLength(long length) {
@@ -175,7 +193,7 @@ public class HTTPResponse {
 
   public String getHeader(String name) {
     String key = name.toLowerCase();
-    return headers.containsKey(key) && headers.get(key).size() > 0 ? headers.get(key).get(0) : null;
+    return headers.containsKey(key) && !headers.get(key).isEmpty() ? headers.get(key).getFirst() : null;
   }
 
   public List<String> getHeaders(String key) {
@@ -188,6 +206,10 @@ public class HTTPResponse {
 
   public OutputStream getOutputStream() {
     return outputStream;
+  }
+
+  public void setOutputStream(HTTPOutputStream outputStream) {
+    this.outputStream = outputStream;
   }
 
   public String getRedirect() {
@@ -223,16 +245,7 @@ public class HTTPResponse {
    * @return True if the response has been committed, meaning at least one byte was written back to the client. False otherwise.
    */
   public boolean isCommitted() {
-    return committed;
-  }
-
-  /**
-   * Sets the committed status of the response.
-   *
-   * @param committed The status.
-   */
-  public void setCommitted(boolean committed) {
-    this.committed = committed;
+    return outputStream.isCommitted();
   }
 
   /**

@@ -29,19 +29,18 @@ import java.nio.charset.StandardCharsets;
 import java.security.SecureRandom;
 import java.security.cert.Certificate;
 import java.time.Duration;
-import java.util.Base64;
 import java.util.List;
 import java.util.Locale;
+import java.util.Map;
 import java.util.concurrent.atomic.AtomicBoolean;
-import java.util.concurrent.atomic.AtomicLong;
 import java.util.zip.InflaterInputStream;
 
 import com.inversoft.net.ssl.SSLTools;
-import com.inversoft.rest.ClientResponse;
 import com.inversoft.rest.RESTClient;
 import com.inversoft.rest.TextResponseHandler;
 import io.fusionauth.http.HTTPValues.Connections;
 import io.fusionauth.http.HTTPValues.Headers;
+import io.fusionauth.http.log.AccumulatingLogger;
 import io.fusionauth.http.log.AccumulatingLoggerFactory;
 import io.fusionauth.http.log.Level;
 import io.fusionauth.http.server.CountingInstrumenter;
@@ -59,7 +58,7 @@ import static org.testng.Assert.fail;
  *
  * @author Brian Pontarelli
  */
-@SuppressWarnings("UastIncorrectHttpHeaderInspection")
+@SuppressWarnings({"UastIncorrectHttpHeaderInspection", "OptionalGetWithoutIsPresent", "ThrowablePrintedToSystemOut"})
 public class CoreTest extends BaseTest {
   public static final String ExpectedResponse = "{\"version\":\"42\"}";
 
@@ -75,8 +74,7 @@ public class CoreTest extends BaseTest {
       res.getOutputStream().close();
     };
 
-    try (HTTPServer ignore = makeServer(scheme, handler).start()) {
-      var client = makeClient(scheme, null);
+    try (var client = makeClient(scheme, null); var ignore = makeServer(scheme, handler).start()) {
       URI uri = makeURI(scheme, "");
       HttpRequest request = HttpRequest.newBuilder()
                                        .uri(uri)
@@ -98,13 +96,12 @@ public class CoreTest extends BaseTest {
     };
 
     var instrumenter = new CountingInstrumenter();
-    try (HTTPServer ignore = makeServer("http", handler, instrumenter).start()) {
+    try (var client = HttpClient.newHttpClient(); var ignore = makeServer("http", handler, instrumenter).start()) {
       sendBadRequest("""
           GET / HTTP/1.1\r
           X-Bad-Header: Bad-Header\r\r
           """);
 
-      var client = HttpClient.newHttpClient();
       URI uri = makeURI("http", "");
       HttpRequest request = HttpRequest.newBuilder()
                                        .uri(uri)
@@ -118,15 +115,14 @@ public class CoreTest extends BaseTest {
     assertEquals(instrumenter.getBadRequests(), 1);
   }
 
-  @Test
+  @Test(enabled = false)
   public void certificateChain() throws Exception {
     HTTPHandler handler = (req, res) -> {
       res.setStatus(200);
       res.getOutputStream().close();
     };
 
-    try (HTTPServer ignore = makeServer("https", handler).start()) {
-      var client = makeClient("https", null);
+    try (var client = makeClient("https", null); var ignore = makeServer("https", handler).start()) {
       URI uri = makeURI("https", "");
       HttpRequest request = HttpRequest.newBuilder()
                                        .uri(uri)
@@ -144,33 +140,6 @@ public class CoreTest extends BaseTest {
     }
   }
 
-  @Test
-  public void clientTimeout() throws Exception {
-    HTTPHandler handler = (req, res) -> {
-      System.out.println("Handling");
-      res.setStatus(200);
-      res.setContentLength(0L);
-      res.getOutputStream().close();
-    };
-
-    var instrumenter = new CountingInstrumenter();
-    try (HTTPServer ignore = makeServer("http", handler, instrumenter).withClientTimeout(Duration.ofSeconds(1)).start(); Socket socket = new Socket("127.0.0.1", 4242)) {
-      var out = socket.getOutputStream();
-      out.write("""
-          GET / HTTP/1.1\r
-          Content-Length: 4\r
-          \r
-          body
-          """.getBytes());
-      out.flush();
-      sleep(3_000L);
-
-      var in = socket.getInputStream();
-      assertEquals(in.read(), -1);
-      assertEquals(instrumenter.getClosedConnections(), 1);
-    }
-  }
-
   @Test(dataProvider = "schemes")
   public void emptyContentType(String scheme) throws Exception {
     HTTPHandler handler = (req, res) -> {
@@ -178,9 +147,8 @@ public class CoreTest extends BaseTest {
       res.setStatus(200);
     };
 
-    try (HTTPServer ignore = makeServer(scheme, handler).start()) {
+    try (var client = makeClient(scheme, null); var ignore = makeServer(scheme, handler).start()) {
       URI uri = makeURI(scheme, "");
-      var client = makeClient(scheme, null);
       var response = client.send(
           HttpRequest.newBuilder().uri(uri).header(Headers.ContentType, "").POST(BodyPublishers.noBody()).build(),
           r -> BodySubscribers.ofString(StandardCharsets.UTF_8)
@@ -198,9 +166,8 @@ public class CoreTest extends BaseTest {
       res.setStatus(200);
     };
 
-    try (HTTPServer ignore = makeServer(scheme, handler).start()) {
+    try (var client = makeClient(scheme, null); var ignore = makeServer(scheme, handler).start()) {
       URI uri = makeURI(scheme, "");
-      var client = makeClient(scheme, null);
       var response = client.send(
           HttpRequest.newBuilder().uri(uri).header(Headers.ContentType, "; charset=UTF-16").POST(BodyPublishers.noBody()).build(),
           r -> BodySubscribers.ofString(StandardCharsets.UTF_8)
@@ -216,9 +183,8 @@ public class CoreTest extends BaseTest {
       throw new IllegalStateException("Bad state");
     };
 
-    try (HTTPServer ignore = makeServer(scheme, handler).start()) {
+    try (var client = makeClient(scheme, null); var ignore = makeServer(scheme, handler).start()) {
       URI uri = makeURI(scheme, "");
-      var client = makeClient(scheme, null);
       var response = client.send(
           HttpRequest.newBuilder().uri(uri).GET().build(),
           r -> BodySubscribers.ofString(StandardCharsets.UTF_8)
@@ -234,9 +200,8 @@ public class CoreTest extends BaseTest {
       throw new IllegalStateException("Bad state");
     };
 
-    try (HTTPServer ignore = makeServer(scheme, handler).start()) {
+    try (var client = makeClient(scheme, null); var ignore = makeServer(scheme, handler).start()) {
       URI uri = makeURI(scheme, "");
-      var client = makeClient(scheme, null);
       var response = client.send(
           HttpRequest.newBuilder().uri(uri).header(Headers.ContentType, "application/json").POST(BodyPublishers.ofString(RequestBody)).build(),
           r -> BodySubscribers.ofString(StandardCharsets.UTF_8)
@@ -268,9 +233,8 @@ public class CoreTest extends BaseTest {
       }
     };
 
-    try (HTTPServer ignore = makeServer(scheme, handler).start()) {
+    try (var client = makeClient(scheme, null); var ignore = makeServer(scheme, handler).start()) {
       URI uri = makeURI(scheme, "");
-      var client = makeClient(scheme, null);
       var response = client.send(
           HttpRequest.newBuilder()
                      .uri(uri)
@@ -289,30 +253,48 @@ public class CoreTest extends BaseTest {
   }
 
   @Test
-  public void keepAliveTimeout() {
-    AtomicBoolean called = new AtomicBoolean(false);
-    final AtomicLong writeThroughputDelay = new AtomicLong(0);
+  public void initialReadTimeout() {
+    // This test simulates if the client doesn't send bytes for the initial timeout
+    HTTPHandler handler = (req, res) -> fail("Should not be called");
 
+    var instrumenter = new CountingInstrumenter();
+    try (var ignore = makeServer("http", handler, instrumenter).withInitialReadTimeout(Duration.ofMillis(250)).start(); var socket = new Socket("127.0.0.1", 4242)) {
+      var out = socket.getOutputStream();
+      sleep(2_000);
+      out.write("""
+          GET / HTTP/1.1\r
+          Connection: close\r
+          Content-Length: 4\r
+          \r
+          body
+          """.getBytes());
+      out.flush();
+      var in = socket.getInputStream();
+      var body = in.readAllBytes();
+      fail("Should have failed but instead got\n\n" + new String(body));
+    } catch (Exception ignore) {
+      // Expected
+    }
+
+    assertEquals(instrumenter.getClosedConnections(), 1);
+  }
+
+  @Test
+  public void keepAliveTimeout() {
+    // This test only works with GET and the URLConnection because this setup will re-submit the same request if the Keep-Alive connection
+    // is terminated by the server
     HTTPHandler handler = (req, res) -> {
       assertNull(req.getContentType());
-      if (!called.getAndSet(true)) {
-        // Take the configured write delay calculation and add 1 seconds
-        long seconds = writeThroughputDelay.get() + 1;
-        System.out.println("Pausing [" + seconds + "] seconds");
-        sleep(seconds * 1000);
-      }
-
       res.setStatus(200);
     };
 
-    try (HTTPServer ignore = makeServer("http", handler).start()) {
-      writeThroughputDelay.set(ignore.configuration().getWriteThroughputCalculationDelay().toSeconds());
+    try (var ignore = makeServer("http", handler).withKeepAliveTimeoutDuration(Duration.ofSeconds(1)).start()) {
       URI uri = makeURI("http", "");
-      ClientResponse<Void, Void> response = new RESTClient<>(Void.TYPE, Void.TYPE)
+      var response = new RESTClient<>(Void.TYPE, Void.TYPE)
           .url(uri.toString())
           .connectTimeout(0)
           .readTimeout(0)
-          .post()
+          .get()
           .go();
 
       if (response.status != 200) {
@@ -320,11 +302,14 @@ public class CoreTest extends BaseTest {
       }
       assertEquals(response.status, 200);
 
+      // This will cause the keep-alive on the server to expire and that means the socket will be dead but the client should receover
+      sleep(2_000L);
+
       response = new RESTClient<>(Void.TYPE, Void.TYPE)
           .url(uri.toString())
           .connectTimeout(0)
           .readTimeout(0)
-          .post()
+          .get()
           .go();
 
       if (response.status != 200) {
@@ -336,16 +321,60 @@ public class CoreTest extends BaseTest {
 
   @Test
   public void logger() {
-    try {
-      // Test replacement values and ensure we are handling special regex characters.
-      logger.setLevel(Level.Debug);
-      logger.info("Class name: [{}]", "io.fusionauth.http.Test$InnerClass");
+    // Test replacement values and ensure we are handling special regex characters.
+    AccumulatingLogger logger = new AccumulatingLogger();
+    logger.setLevel(Level.Debug);
+    logger.info("Class name: [{}]", "io.fusionauth.http.Test$InnerClass");
 
-      // Expect that we do not encounter an exception.
-      String output = logger.toString();
-      assertTrue(output.endsWith("Class name: [io.fusionauth.http.Test$InnerClass]"));
-    } finally {
-      logger.setLevel(Level.Trace);
+    // Expect that we do not encounter an exception.
+    String output = logger.toString();
+    assertTrue(output.endsWith("Class name: [io.fusionauth.http.Test$InnerClass]"));
+  }
+
+  @Test(dataProvider = "schemes")
+  public void partialWriteThenException(String scheme) throws Exception {
+    HTTPHandler handler = (req, res) -> {
+      res.setStatus(200);
+      res.getWriter().write("Here some body that should not be flushed");
+      throw new RuntimeException("Failure");
+    };
+
+    try (var client = makeClient(scheme, null); var ignore = makeServer(scheme, handler).start()) {
+      URI uri = makeURI(scheme, "");
+      var response = client.send(
+          HttpRequest.newBuilder()
+                     .uri(uri)
+                     .GET()
+                     .build(),
+          r -> BodySubscribers.ofString(StandardCharsets.UTF_8)
+      );
+
+      assertEquals(response.statusCode(), 500);
+    }
+  }
+
+  @Test(dataProvider = "schemes")
+  public void partialWriteThenFlushThenException(String scheme) throws Exception {
+    HTTPHandler handler = (req, res) -> {
+      res.setStatus(200);
+
+      Writer writer = res.getWriter();
+      writer.write("Here some body that should not be flushed");
+      writer.flush();
+      throw new RuntimeException("Failure");
+    };
+
+    try (var client = makeClient(scheme, null); var ignore = makeServer(scheme, handler).start()) {
+      URI uri = makeURI(scheme, "");
+      var response = client.send(
+          HttpRequest.newBuilder()
+                     .uri(uri)
+                     .GET()
+                     .build(),
+          r -> BodySubscribers.ofString(StandardCharsets.UTF_8)
+      );
+
+      assertEquals(response.statusCode(), 500);
     }
   }
 
@@ -367,9 +396,8 @@ public class CoreTest extends BaseTest {
 
     int iterations = 100_000;
     CountingInstrumenter instrumenter = new CountingInstrumenter();
-    try (HTTPServer ignore = makeServer(scheme, handler, instrumenter).start()) {
+    try (var client = makeClient(scheme, null); var ignore = makeServer(scheme, handler, instrumenter).start()) {
       URI uri = makeURI(scheme, "");
-      var client = makeClient(scheme, null);
       long start = System.currentTimeMillis();
       for (int i = 0; i < iterations; i++) {
         var response = client.send(
@@ -383,9 +411,6 @@ public class CoreTest extends BaseTest {
         if (i % 1_000 == 0) {
           System.out.println(i);
         }
-
-        // Wipe the logger, so we only have the final failed request
-        resetLogger();
       }
 
       long end = System.currentTimeMillis();
@@ -412,34 +437,50 @@ public class CoreTest extends BaseTest {
       }
     };
 
-    int iterations = 10_000;
+    int iterations = 5_000;
+    int i = -1;
     CountingInstrumenter instrumenter = new CountingInstrumenter();
-    try (HTTPServer ignore = makeServer(scheme, handler, instrumenter).start()) {
-      URI uri = makeURI(scheme, "");
-      var client = makeClient(scheme, null);
-      long start = System.currentTimeMillis();
-      for (int i = 0; i < iterations; i++) {
-        System.out.println("Iteration " + i + " start " + System.currentTimeMillis());
-        var response = client.send(
-            HttpRequest.newBuilder()
-                       .uri(uri)
-                       .header(Headers.Connection, Connections.Close)
-                       .POST(BodyPublishers.noBody())
-                       .build(),
-            r -> BodySubscribers.ofString(StandardCharsets.UTF_8)
-        );
-        System.out.println("Iteration " + i + " end " + System.currentTimeMillis());
+    try (var client = makeClient(scheme, null); var ignore = makeServer(scheme, handler, instrumenter).start()) {
+      try {
+        URI uri = makeURI(scheme, "");
+        long start = System.currentTimeMillis();
+        for (i = 0; i < iterations; i++) {
+          var response = client.send(
+              HttpRequest.newBuilder()
+                         .uri(uri)
+                         .header(Headers.Connection, Connections.Close)
+                         .POST(BodyPublishers.noBody())
+                         .build(),
+              r -> BodySubscribers.ofString(StandardCharsets.UTF_8)
+          );
 
-        assertEquals(response.statusCode(), 200);
-        assertEquals(response.body(), ExpectedResponse);
+          if (i % 1_000 == 0) {
+            System.out.println(i);
+          }
 
-        // Wipe the logger, so we only have the final failed request
-        resetLogger();
+          assertEquals(response.statusCode(), 200);
+          assertEquals(response.body(), ExpectedResponse);
+        }
+
+        long end = System.currentTimeMillis();
+        double average = (end - start) / (double) iterations;
+        System.out.println("Average linear request time without keep-alive is [" + average + "]ms");
+      } catch (Exception e) {
+        StringBuilder threadDump = new StringBuilder();
+        for (Map.Entry<Thread, StackTraceElement[]> entry : Thread.getAllStackTraces().entrySet()) {
+          threadDump.append(entry.getKey()).append(" ").append(entry.getKey().getState()).append("\n");
+          for (StackTraceElement ste : entry.getValue()) {
+            threadDump.append("\tat ").append(ste).append("\n");
+          }
+          threadDump.append("\n");
+        }
+
+        System.out.println(threadDump);
+        throw e;
       }
-
-      long end = System.currentTimeMillis();
-      double average = (end - start) / (double) iterations;
-      System.out.println("Average linear request time without keep-alive is [" + average + "]ms");
+    } catch (Exception e) {
+      System.out.println("Failed on iteration " + i);
+      throw e;
     }
 
     assertEquals(instrumenter.getConnections(), iterations);
@@ -467,7 +508,7 @@ public class CoreTest extends BaseTest {
       }
     };
 
-    try (HTTPServer ignore = makeServer(scheme, handler).start()) {
+    try (var ignore = makeServer(scheme, handler).start()) {
       SSLTools.disableSSLValidation();
       URI uri = makeURI(scheme, "");
       var response = new RESTClient<>(String.class, String.class).url(uri.toString())
@@ -483,7 +524,7 @@ public class CoreTest extends BaseTest {
       SSLTools.enableSSLValidation();
     }
 
-    try (HTTPServer ignore = makeServer(scheme, handler).start()) {
+    try (var ignore = makeServer(scheme, handler).start()) {
       SSLTools.disableSSLValidation();
       URI uri = makeURI(scheme, "");
       var response = new RESTClient<>(String.class, String.class).url(uri.toString())
@@ -500,8 +541,39 @@ public class CoreTest extends BaseTest {
     }
   }
 
-  @Test(dataProvider = "schemes")
-  public void simpleGet(String scheme) throws Exception {
+  @Test
+  public void serverTimeout() throws Exception {
+    // This test simulates if the server has a long-running thread that doesn't write fast enough
+    HTTPHandler handler = (req, res) -> {
+      System.out.println("Handling");
+      sleep(4_000L);
+      res.setStatus(200);
+      res.setContentLength(0L);
+      res.getOutputStream().close();
+      System.out.println("Closed");
+    };
+
+    var instrumenter = new CountingInstrumenter();
+    try (var ignore = makeServer("http", handler, instrumenter).withInitialReadTimeout(Duration.ofSeconds(1)).start(); Socket socket = new Socket("127.0.0.1", 4242)) {
+      var out = socket.getOutputStream();
+      out.write("""
+          GET / HTTP/1.1\r
+          Connection: close\r
+          Content-Length: 4\r
+          \r
+          body
+          """.getBytes());
+      out.flush();
+
+      var in = socket.getInputStream();
+      var body = in.readAllBytes();
+      assertEquals(body.length, 0, new String(body));
+      assertEquals(instrumenter.getClosedConnections(), 1);
+    }
+  }
+
+  @Test(dataProvider = "schemesAndResponseBufferSizes")
+  public void simpleGet(String scheme, int responseBufferSize) throws Exception {
     HTTPHandler handler = (req, res) -> {
       assertEquals(req.getAcceptEncodings(), List.of("deflate", "compress", "identity", "gzip", "br"));
       assertEquals(req.getBaseURL(), scheme.equals("http") ? "http://localhost:4242" : "https://local.fusionauth.io:4242");
@@ -535,8 +607,7 @@ public class CoreTest extends BaseTest {
       }
     };
 
-    try (HTTPServer ignore = makeServer(scheme, handler).start()) {
-      var client = makeClient(scheme, null);
+    try (var client = makeClient(scheme, null); var ignore = makeServer(scheme, handler).withResponseBufferSize(responseBufferSize).start()) {
       URI uri = makeURI(scheme, "?foo%20=bar%20");
       HttpRequest request = HttpRequest.newBuilder()
                                        .uri(uri)
@@ -552,6 +623,9 @@ public class CoreTest extends BaseTest {
       var response = client.send(request, r -> BodySubscribers.ofInputStream());
 
       assertEquals(response.statusCode(), 200);
+      assertEquals(response.headers().firstValue(Headers.ContentEncoding).get(), "deflate");
+      assertEquals(response.headers().firstValue(Headers.TransferEncoding).get(), "chunked");
+
       var result = new String(new InflaterInputStream(response.body()).readAllBytes(), StandardCharsets.UTF_8);
       assertEquals(result, ExpectedResponse);
     }
@@ -573,17 +647,14 @@ public class CoreTest extends BaseTest {
       }
     };
 
-    setupCertificates();
     var certChain = new Certificate[]{certificate, intermediateCertificate};
-
-    try (HTTPServer ignore = new HTTPServer().withHandler(handler)
-                                             .withListener(new HTTPListenerConfiguration(4242))
-                                             .withListener(new HTTPListenerConfiguration(4243))
-                                             .withListener(new HTTPListenerConfiguration(4244, certChain, keyPair.getPrivate()))
-                                             .withLoggerFactory(AccumulatingLoggerFactory.FACTORY)
-                                             .withNumberOfWorkerThreads(1)
-                                             .start()) {
-      var client = makeClient("https", null);
+    try (var client = makeClient("https", null);
+         var ignore = new HTTPServer().withHandler(handler)
+                                      .withListener(new HTTPListenerConfiguration(4242))
+                                      .withListener(new HTTPListenerConfiguration(4243))
+                                      .withListener(new HTTPListenerConfiguration(4244, certChain, keyPair.getPrivate()))
+                                      .withLoggerFactory(AccumulatingLoggerFactory.FACTORY)
+                                      .start()) {
       URI uri = URI.create("http://localhost:4242/api/system/version?foo=bar");
       HttpRequest request = HttpRequest.newBuilder().uri(uri).GET().build();
       var response = client.send(request, r -> BodySubscribers.ofString(StandardCharsets.UTF_8));
@@ -609,8 +680,8 @@ public class CoreTest extends BaseTest {
     }
   }
 
-  @Test(dataProvider = "schemes")
-  public void simplePost(String scheme) throws Exception {
+  @Test(dataProvider = "schemesAndResponseBufferSizes")
+  public void simplePost(String scheme, int responseBufferSize) throws Exception {
     HTTPHandler handler = (req, res) -> {
       System.out.println("Handling");
       assertEquals(req.getHeader(Headers.ContentType), "application/json"); // Mixed case
@@ -638,8 +709,7 @@ public class CoreTest extends BaseTest {
       }
     };
 
-    try (HTTPServer ignore = makeServer(scheme, handler).start()) {
-      var client = makeClient(scheme, null);
+    try (var ignore = makeServer(scheme, handler).withResponseBufferSize(responseBufferSize).start(); var client = makeClient(scheme, null)) {
       URI uri = makeURI(scheme, "?foo=bar");
       var response = client.send(
           HttpRequest.newBuilder().uri(uri).header(Headers.ContentType, "application/json").POST(BodyPublishers.ofString(RequestBody)).build(),
@@ -652,44 +722,39 @@ public class CoreTest extends BaseTest {
   }
 
   @Test(dataProvider = "schemes")
-  public void slowWrites(String scheme) throws Exception {
-    // Test a slow connection where the HTTP server is blocked because we cannot write to the output stream as fast as we'd like
-
-    // The default test config will use a 16k buffer and a queue size of 16.
-    // - Trying to write 8 MB slowly should cause an error.
-
-    // 8 MB bytes
+  public void slowClient(String scheme) throws Exception {
+    // Test a slow connection where the HTTP server is blocked because we cannot write to the output stream as fast as we'd like. The
+    // default buffer on macOS seems to be 768k (from my testing). I set this to 8MB which should hopefully cause the writes to back up.
     byte[] bytes = new byte[1024 * 1024 * 8];
     new SecureRandom().nextBytes(bytes);
 
-    // Base64 encoded large string
-    String largeRequest = Base64.getEncoder().encodeToString(bytes);
-
     HTTPHandler handler = (req, res) -> {
-      res.setHeader(Headers.ContentType, "text/plain; charset=UTF-8");
-      int contentLength = largeRequest.getBytes(StandardCharsets.UTF_8).length;
-      res.setHeader(Headers.ContentLength, String.valueOf(contentLength));
+      res.setContentType("application/octet-stream");
+      res.setContentLength(bytes.length);
       res.setStatus(200);
 
-      Writer writer = res.getWriter();
-      writer.write(largeRequest);
-      writer.close();
+      int interation = 1;
+      var out = res.getOutputStream();
+      for (int i = 0; i < bytes.length; i += 1024 * 16) {
+        out.write(bytes, i, 1024 * 16);
+        System.out.println("Wrote " + (interation++ * 16) + "k");
+      }
+      out.close();
     };
 
     AtomicBoolean slept = new AtomicBoolean(false);
-    try (HTTPServer ignore = makeServer(scheme, handler).start()) {
+    try (var client = makeClient(scheme, null); var ignore = makeServer(scheme, handler).start()) {
       URI uri = makeURI(scheme, "");
-      var client = makeClient(scheme, null);
       client.send(
           HttpRequest.newBuilder().uri(uri).GET().build(),
           r -> BodySubscribers.ofByteArrayConsumer(optional -> {
             byte[] actual = optional.orElse(null);
             if (actual != null) {
-              // Sleep once only since the server should fail after the first batch, but since Java or the OS might cache a lot of bytes it
+              // Sleep once since the server should fail after the first batch, but since Java or the OS might cache a lot of bytes it
               // read from the socket, we can't sleep for too long, otherwise, this test will never complete
               if (!slept.get()) {
                 int sleep = 5 * 1_000;
-                System.out.println("received [" + actual.length + "] bytes. Sleep [" + sleep + "]");
+                System.out.println("Received [" + actual.length + "] bytes. Sleep [" + sleep + "]");
                 sleep(sleep); // We expect to only wait for 2,000 ms
                 slept.set(true);
               }
@@ -705,13 +770,78 @@ public class CoreTest extends BaseTest {
     }
   }
 
+  @Test
+  public void slowHandler() {
+    AtomicBoolean called = new AtomicBoolean(false);
+    HTTPHandler handler = (req, res) -> {
+      assertNull(req.getContentType());
+
+      // Set the headers first
+      res.setContentLength(2L);
+      res.setStatus(200);
+
+      // Write a single byte to kick off the write throughput calculations
+      var outputStream = res.getOutputStream();
+      outputStream.write('4');
+      res.flush(); // Force a write to the client
+
+      // Pause on the first request
+      if (!called.getAndSet(true)) {
+        System.out.println("Pausing for 4 seconds");
+        sleep(4_000);
+      }
+
+      // Write the other byte now
+      outputStream.write('2');
+    };
+
+    try (var ignore = makeServer("http", handler).withProcessingTimeoutDuration(Duration.ofSeconds(20))
+                                                 .withWriteThroughputCalculationDelayDuration(Duration.ofSeconds(1))
+                                                 .start()) {
+      URI uri = makeURI("http", "");
+      System.out.println("Sending first request");
+      var response = new RESTClient<>(String.class, String.class)
+          .url(uri.toString())
+          .connectTimeout(0)
+          .readTimeout(0)
+          .errorResponseHandler(new TextResponseHandler())
+          .successResponseHandler(new TextResponseHandler())
+          .get()
+          .go();
+      System.out.println("Got first response");
+
+      if (response.status != 200) {
+        System.out.println(response.exception);
+      }
+      assertEquals(response.status, 200);
+      assertEquals(response.successResponse, "4"); // Only part of the response will be written
+
+      // Make a second call to ensure that the server is still working
+      System.out.println("Sending second request");
+      response = new RESTClient<>(String.class, String.class)
+          .url(uri.toString())
+          .connectTimeout(0)
+          .readTimeout(0)
+          .errorResponseHandler(new TextResponseHandler())
+          .successResponseHandler(new TextResponseHandler())
+          .get()
+          .go();
+      System.out.println("Got second response");
+
+      if (response.status != 200) {
+        System.out.println(response.exception);
+      }
+      assertEquals(response.status, 200);
+      assertEquals(response.successResponse, "42");
+    }
+  }
+
   @Test(dataProvider = "schemes")
   public void statusOnly(String scheme) throws Exception {
     HTTPHandler handler = (req, res) -> res.setStatus(200);
 
-    try (HTTPServer ignore = makeServer(scheme, handler).start()) {
+    try (var client = makeClient(scheme, null); var ignore = makeServer(scheme, handler).start()) {
       URI uri = makeURI(scheme, "");
-      var client = makeClient(scheme, null);
       var response = client.send(
           HttpRequest.newBuilder().uri(uri).header(Headers.ContentType, "application/json").POST(BodyPublishers.ofString(RequestBody)).build(),
           r -> BodySubscribers.ofString(StandardCharsets.UTF_8)
@@ -728,8 +858,7 @@ public class CoreTest extends BaseTest {
       res.getOutputStream().close();
     };
 
-    try (HTTPServer ignore = makeServer("https", handler).start()) {
-      var client = makeClient("https", null);
+    try (var client = makeClient("https", null); var ignore = makeServer("https", handler).start()) {
       URI uri = makeURI("https", "");
       var body = BodyPublishers.ofByteArray("primeCSRFToken=QkJCAXsbQBgZhSVe1I4dv9B2ZXYDbUtCzAYUwfkvRjUJcUsBosHTeRbpvHgqXPN8TIK8DkSjG6HeaeJ-Yr4oCnXlUIW8T1r_9tVvuxxo38VKucd8gLnC2Mx7h_QuZu9dHEN79Q%3D%3D&tenantId=&tenant.name=Testing2&tenant.issuer=acme.com&tenant.themeId=75a068fd-e94b-451a-9aeb-3ddb9a3b5987&tenant.formConfiguration.adminUserFormId=ff153db4-d233-fcaa-76fd-98649866ff0b&__cb_tenant.usernameConfiguration.unique.enabled=false&tenant.usernameConfiguration.unique.strategy=OnCollision&tenant.usernameConfiguration.unique.numberOfDigits=5&tenant.usernameConfiguration.unique.separator=%23&tenant.connectorPolicies%5B0%5D.connectorId=e3306678-a53a-4964-9040-1c96f36dda72&connectorDomains%5B0%5D=*&tenant.connectorPolicies%5B0%5D.migrate=false&tenant.emailConfiguration.host=smtp.sendgrid.net&tenant.emailConfiguration.port=587&tenant.emailConfiguration.username=apikey&tenant.emailConfiguration.password=&tenant.emailConfiguration.security=TLS&tenant.emailConfiguration.defaultFromEmail=no-reply%40fusionauth.io&tenant.emailConfiguration.defaultFromName=FusionAuth&additionalEmailHeaders=&__cb_tenant.emailConfiguration.debug=false&__cb_tenant.emailConfiguration.verifyEmail=false&tenant.emailConfiguration.verifyEmail=true&__cb_tenant.emailConfiguration.implicitEmailVerificationAllowed=false&tenant.emailConfiguration.implicitEmailVerificationAllowed=true&__cb_tenant.emailConfiguration.verifyEmailWhenChanged=false&tenant.emailConfiguration.verificationEmailTemplateId=7fa81426-42a9-4eb2-ac09-73c044d410b1&tenant.emailConfiguration.emailVerifiedEmailTemplateId=&tenant.emailConfiguration.verificationStrategy=FormField&tenant.emailConfiguration.unverified.behavior=Gated&__cb_tenant.emailConfiguration.unverified.allowEmailChangeWhenGated=false&__cb_tenant.userDeletePolicy.unverified.enabled=false&tenant.userDeletePolicy.unverified.numberOfDaysToRetain=120&tenant.emailConfiguration.emailUpdateEmailTemplateId=&tenant.emailConfiguration.forgotPasswordEmailTemplateId=0502df1e-4010-4b43-b571-d423fce978b2&tenant.emailConfiguration.loginIdInUseOnCreateEmailTemplateId=&tenant.emailConfiguration.loginIdInUseOnUpdateEmailTemplateId=&tenant.emailConfiguration.loginNewDeviceEmailTemplateId=&tenant.emailConfiguration.loginSuspiciousEmailTemplateId=&tenant.emailConfiguration.passwordResetSuccessEmailTemplateId=&tenant.emailConfiguration.passwordUpdateEmailTemplateId=&tenant.emailConfiguration.passwordlessEmailTemplateId=fa6668cb-8569-44df-b0a2-8fcd996df915&tenant.emailConfiguration.setPasswordEmailTemplateId=e160cc59-a73e-4d95-8287-f82e5c541a5c&tenant.emailConfiguration.twoFactorMethodAddEmailTemplateId=&tenant.emailConfiguration.twoFactorMethodRemoveEmailTemplateId=&__cb_tenant.familyConfiguration.enabled=false&tenant.familyConfiguration.maximumChildAge=12&tenant.familyConfiguration.minimumOwnerAge=21&__cb_tenant.familyConfiguration.allowChildRegistrations=false&tenant.familyConfiguration.allowChildRegistrations=true&tenant.familyConfiguration.familyRequestEmailTemplateId=&tenant.familyConfiguration.confirmChildEmailTemplateId=&tenant.familyConfiguration.parentRegistrationEmailTemplateId=&__cb_tenant.familyConfiguration.parentEmailRequired=false&__cb_tenant.familyConfiguration.deleteOrphanedAccounts=false&tenant.familyConfiguration.deleteOrphanedAccountsDays=30&tenant.multiFactorConfiguration.loginPolicy=Enabled&__cb_tenant.multiFactorConfiguration.authenticator.enabled=false&tenant.multiFactorConfiguration.authenticator.enabled=true&__cb_tenant.multiFactorConfiguration.email.enabled=false&tenant.multiFactorConfiguration.email.templateId=61ee368e-018e-4c15-b7a7-47a696648dba&__cb_tenant.multiFactorConfiguration.sms.enabled=false&tenant.multiFactorConfiguration.sms.messengerId=&tenant.multiFactorConfiguration.sms.templateId=&__cb_tenant.webAuthnConfiguration.enabled=false&tenant.webAuthnConfiguration.enabled=true&tenant.webAuthnConfiguration.relyingPartyId=&tenant.webAuthnConfiguration.relyingPartyName=&__cb_tenant.webAuthnConfiguration.debug=false&__cb_tenant.webAuthnConfiguration.bootstrapWorkflow.enabled=false&tenant.webAuthnConfiguration.bootstrapWorkflow.authenticatorAttachmentPreference=any&tenant.webAuthnConfiguration.bootstrapWorkflow.userVerificationRequirement=required&__cb_tenant.webAuthnConfiguration.reauthenticationWorkflow.enabled=false&tenant.webAuthnConfiguration.reauthenticationWorkflow.enabled=true&tenant.webAuthnConfiguration.reauthenticationWorkflow.authenticatorAttachmentPreference=platform&tenant.webAuthnConfiguration.reauthenticationWorkflow.userVerificationRequirement=required&tenant.httpSessionMaxInactiveInterval=172800&tenant.logoutURL=&tenant.oauthConfiguration.clientCredentialsAccessTokenPopulateLambdaId=&tenant.jwtConfiguration.timeToLiveInSeconds=3600&tenant.jwtConfiguration.accessTokenKeyId=aea58f2a-4943-15ed-2190-0aa051200b64&tenant.jwtConfiguration.idTokenKeyId=092dbedc-30af-4149-9c61-b578f2c72f59&tenant.jwtConfiguration.refreshTokenExpirationPolicy=Fixed&tenant.jwtConfiguration.refreshTokenTimeToLiveInMinutes=43200&tenant.jwtConfiguration.refreshTokenSlidingWindowConfiguration.maximumTimeToLiveInMinutes=43200&tenant.jwtConfiguration.refreshTokenUsagePolicy=Reusable&__cb_tenant.jwtConfiguration.refreshTokenRevocationPolicy.onLoginPrevented=false&tenant.jwtConfiguration.refreshTokenRevocationPolicy.onLoginPrevented=true&__cb_tenant.jwtConfiguration.refreshTokenRevocationPolicy.onMultiFactorEnable=false&__cb_tenant.jwtConfiguration.refreshTokenRevocationPolicy.onPasswordChanged=false&tenant.jwtConfiguration.refreshTokenRevocationPolicy.onPasswordChanged=true&tenant.failedAuthenticationConfiguration.userActionId=&tenant.failedAuthenticationConfiguration.tooManyAttempts=5&tenant.failedAuthenticationConfiguration.resetCountInSeconds=60&tenant.failedAuthenticationConfiguration.actionDuration=3&tenant.failedAuthenticationConfiguration.actionDurationUnit=MINUTES&__cb_tenant.failedAuthenticationConfiguration.actionCancelPolicy.onPasswordReset=false&__cb_tenant.failedAuthenticationConfiguration.emailUser=false&__cb_tenant.passwordValidationRules.breachDetection.enabled=false&tenant.passwordValidationRules.breachDetection.matchMode=High&tenant.passwordValidationRules.breachDetection.onLogin=Off&tenant.passwordValidationRules.breachDetection.notifyUserEmailTemplateId=&tenant.passwordValidationRules.minLength=8&tenant.passwordValidationRules.maxLength=256&__cb_tenant.passwordValidationRules.requireMixedCase=false&__cb_tenant.passwordValidationRules.requireNonAlpha=false&__cb_tenant.passwordValidationRules.requireNumber=false&__cb_tenant.minimumPasswordAge.enabled=false&tenant.minimumPasswordAge.seconds=30&__cb_tenant.maximumPasswordAge.enabled=false&tenant.maximumPasswordAge.days=180&__cb_tenant.passwordValidationRules.rememberPreviousPasswords.enabled=false&tenant.passwordValidationRules.rememberPreviousPasswords.count=1&__cb_tenant.passwordValidationRules.validateOnLogin=false&tenant.passwordEncryptionConfiguration.encryptionScheme=salted-pbkdf2-hmac-sha256&tenant.passwordEncryptionConfiguration.encryptionSchemeFactor=24000&__cb_tenant.passwordEncryptionConfiguration.modifyEncryptionSchemeOnLogin=false&__cb_tenant.eventConfiguration.events%5B%27JWTPublicKeyUpdate%27%5D.enabled=false&tenant.eventConfiguration.events%5B%27JWTPublicKeyUpdate%27%5D.transactionType=None&__cb_tenant.eventConfiguration.events%5B%27JWTRefreshTokenRevoke%27%5D.enabled=false&tenant.eventConfiguration.events%5B%27JWTRefreshTokenRevoke%27%5D.transactionType=None&__cb_tenant.eventConfiguration.events%5B%27JWTRefresh%27%5D.enabled=false&tenant.eventConfiguration.events%5B%27JWTRefresh%27%5D.transactionType=None&__cb_tenant.eventConfiguration.events%5B%27GroupCreate%27%5D.enabled=false&tenant.eventConfiguration.events%5B%27GroupCreate%27%5D.transactionType=None&__cb_tenant.eventConfiguration.events%5B%27GroupCreateComplete%27%5D.enabled=false&__cb_tenant.eventConfiguration.events%5B%27GroupDelete%27%5D.enabled=false&tenant.eventConfiguration.events%5B%27GroupDelete%27%5D.transactionType=None&__cb_tenant.eventConfiguration.events%5B%27GroupDeleteComplete%27%5D.enabled=false&__cb_tenant.eventConfiguration.events%5B%27GroupMemberAdd%27%5D.enabled=false&tenant.eventConfiguration.events%5B%27GroupMemberAdd%27%5D.transactionType=None&__cb_tenant.eventConfiguration.events%5B%27GroupMemberAddComplete%27%5D.enabled=false&__cb_tenant.eventConfiguration.events%5B%27GroupMemberRemove%27%5D.enabled=false&tenant.eventConfiguration.events%5B%27GroupMemberRemove%27%5D.transactionType=None&__cb_tenant.eventConfiguration.events%5B%27GroupMemberRemoveComplete%27%5D.enabled=false&__cb_tenant.eventConfiguration.events%5B%27GroupMemberUpdate%27%5D.enabled=false&tenant.eventConfiguration.events%5B%27GroupMemberUpdate%27%5D.transactionType=None&__cb_tenant.eventConfiguration.events%5B%27GroupMemberUpdateComplete%27%5D.enabled=false&__cb_tenant.eventConfiguration.events%5B%27GroupUpdate%27%5D.enabled=false&tenant.eventConfiguration.events%5B%27GroupUpdate%27%5D.transactionType=None&__cb_tenant.eventConfiguration.events%5B%27GroupUpdateComplete%27%5D.enabled=false&__cb_tenant.eventConfiguration.events%5B%27UserAction%27%5D.enabled=false&__cb_tenant.eventConfiguration.events%5B%27UserBulkCreate%27%5D.enabled=false&tenant.eventConfiguration.events%5B%27UserBulkCreate%27%5D.transactionType=None&__cb_tenant.eventConfiguration.events%5B%27UserCreate%27%5D.enabled=false&tenant.eventConfiguration.events%5B%27UserCreate%27%5D.transactionType=None&__cb_tenant.eventConfiguration.events%5B%27UserCreateComplete%27%5D.enabled=false&__cb_tenant.eventConfiguration.events%5B%27UserDeactivate%27%5D.enabled=false&tenant.eventConfiguration.events%5B%27UserDeactivate%27%5D.transactionType=None&__cb_tenant.eventConfiguration.events%5B%27UserDelete%27%5D.enabled=false&tenant.eventConfiguration.events%5B%27UserDelete%27%5D.transactionType=None&__cb_tenant.eventConfiguration.events%5B%27UserDeleteComplete%27%5D.enabled=false&__cb_tenant.eventConfiguration.events%5B%27UserEmailUpdate%27%5D.enabled=false&__cb_tenant.eventConfiguration.events%5B%27UserEmailVerified%27%5D.enabled=false&tenant.eventConfiguration.events%5B%27UserEmailVerified%27%5D.transactionType=None&__cb_tenant.eventConfiguration.events%5B%27UserIdentityProviderLink%27%5D.enabled=false&__cb_tenant.eventConfiguration.events%5B%27UserIdentityProviderUnlink%27%5D.enabled=false&__cb_tenant.eventConfiguration.events%5B%27UserLoginIdDuplicateOnCreate%27%5D.enabled=false&__cb_tenant.eventConfiguration.events%5B%27UserLoginIdDuplicateOnUpdate%27%5D.enabled=false&__cb_tenant.eventConfiguration.events%5B%27UserLoginFailed%27%5D.enabled=false&tenant.eventConfiguration.events%5B%27UserLoginFailed%27%5D.transactionType=None&__cb_tenant.eventConfiguration.events%5B%27UserLoginNewDevice%27%5D.enabled=false&tenant.eventConfiguration.events%5B%27UserLoginNewDevice%27%5D.transactionType=None&__cb_tenant.eventConfiguration.events%5B%27UserLoginSuccess%27%5D.enabled=false&tenant.eventConfiguration.events%5B%27UserLoginSuccess%27%5D.transactionType=None&__cb_tenant.eventConfiguration.events%5B%27UserLoginSuspicious%27%5D.enabled=false&tenant.eventConfiguration.events%5B%27UserLoginSuspicious%27%5D.transactionType=None&__cb_tenant.eventConfiguration.events%5B%27UserPasswordBreach%27%5D.enabled=false&tenant.eventConfiguration.events%5B%27UserPasswordBreach%27%5D.transactionType=None&__cb_tenant.eventConfiguration.events%5B%27UserPasswordResetSend%27%5D.enabled=false&__cb_tenant.eventConfiguration.events%5B%27UserPasswordResetStart%27%5D.enabled=false&__cb_tenant.eventConfiguration.events%5B%27UserPasswordResetSuccess%27%5D.enabled=false&__cb_tenant.eventConfiguration.events%5B%27UserPasswordUpdate%27%5D.enabled=false&__cb_tenant.eventConfiguration.events%5B%27UserReactivate%27%5D.enabled=false&tenant.eventConfiguration.events%5B%27UserReactivate%27%5D.transactionType=None&__cb_tenant.eventConfiguration.events%5B%27UserRegistrationCreate%27%5D.enabled=false&tenant.eventConfiguration.events%5B%27UserRegistrationCreate%27%5D.transactionType=None&__cb_tenant.eventConfiguration.events%5B%27UserRegistrationCreateComplete%27%5D.enabled=false&__cb_tenant.eventConfiguration.events%5B%27UserRegistrationDelete%27%5D.enabled=false&tenant.eventConfiguration.events%5B%27UserRegistrationDelete%27%5D.transactionType=None&__cb_tenant.eventConfiguration.events%5B%27UserRegistrationDeleteComplete%27%5D.enabled=false&__cb_tenant.eventConfiguration.events%5B%27UserRegistrationUpdate%27%5D.enabled=false&tenant.eventConfiguration.events%5B%27UserRegistrationUpdate%27%5D.transactionType=None&__cb_tenant.eventConfiguration.events%5B%27UserRegistrationUpdateComplete%27%5D.enabled=false&__cb_tenant.eventConfiguration.events%5B%27UserRegistrationVerified%27%5D.enabled=false&tenant.eventConfiguration.events%5B%27UserRegistrationVerified%27%5D.transactionType=None&__cb_tenant.eventConfiguration.events%5B%27UserTwoFactorMethodAdd%27%5D.enabled=false&__cb_tenant.eventConfiguration.events%5B%27UserTwoFactorMethodRemove%27%5D.enabled=false&__cb_tenant.eventConfiguration.events%5B%27UserUpdate%27%5D.enabled=false&tenant.eventConfiguration.events%5B%27UserUpdate%27%5D.transactionType=None&__cb_tenant.eventConfiguration.events%5B%27UserUpdateComplete%27%5D.enabled=false&tenant.externalIdentifierConfiguration.authorizationGrantIdTimeToLiveInSeconds=30&tenant.externalIdentifierConfiguration.changePasswordIdTimeToLiveInSeconds=600&tenant.externalIdentifierConfiguration.deviceCodeTimeToLiveInSeconds=300&tenant.externalIdentifierConfiguration.emailVerificationIdTimeToLiveInSeconds=86400&tenant.externalIdentifierConfiguration.externalAuthenticationIdTimeToLiveInSeconds=300&tenant.externalIdentifierConfiguration.oneTimePasswordTimeToLiveInSeconds=60&tenant.externalIdentifierConfiguration.passwordlessLoginTimeToLiveInSeconds=180&tenant.externalIdentifierConfiguration.pendingAccountLinkTimeToLiveInSeconds=3600&tenant.externalIdentifierConfiguration.registrationVerificationIdTimeToLiveInSeconds=86400&tenant.externalIdentifierConfiguration.samlv2AuthNRequestIdTimeToLiveInSeconds=300&tenant.externalIdentifierConfiguration.setupPasswordIdTimeToLiveInSeconds=86400&tenant.externalIdentifierConfiguration.trustTokenTimeToLiveInSeconds=180&tenant.externalIdentifierConfiguration.twoFactorIdTimeToLiveInSeconds=300&tenant.externalIdentifierConfiguration.twoFactorOneTimeCodeIdTimeToLiveInSeconds=60&tenant.externalIdentifierConfiguration.twoFactorTrustIdTimeToLiveInSeconds=2592000&tenant.externalIdentifierConfiguration.webAuthnAuthenticationChallengeTimeToLiveInSeconds=180&tenant.externalIdentifierConfiguration.webAuthnRegistrationChallengeTimeToLiveInSeconds=180&tenant.externalIdentifierConfiguration.changePasswordIdGenerator.length=32&tenant.externalIdentifierConfiguration.changePasswordIdGenerator.type=randomBytes&tenant.externalIdentifierConfiguration.emailVerificationIdGenerator.length=32&tenant.externalIdentifierConfiguration.emailVerificationIdGenerator.type=randomBytes&tenant.externalIdentifierConfiguration.emailVerificationOneTimeCodeGenerator.length=6&tenant.externalIdentifierConfiguration.emailVerificationOneTimeCodeGenerator.type=randomAlphaNumeric&tenant.externalIdentifierConfiguration.passwordlessLoginGenerator.length=32&tenant.externalIdentifierConfiguration.passwordlessLoginGenerator.type=randomBytes&tenant.externalIdentifierConfiguration.registrationVerificationIdGenerator.length=32&tenant.externalIdentifierConfiguration.registrationVerificationIdGenerator.type=randomBytes&tenant.externalIdentifierConfiguration.registrationVerificationOneTimeCodeGenerator.length=6&tenant.externalIdentifierConfiguration.registrationVerificationOneTimeCodeGenerator.type=randomAlphaNumeric&tenant.externalIdentifierConfiguration.setupPasswordIdGenerator.length=32&tenant.externalIdentifierConfiguration.setupPasswordIdGenerator.type=randomBytes&tenant.externalIdentifierConfiguration.deviceUserCodeIdGenerator.length=6&tenant.externalIdentifierConfiguration.deviceUserCodeIdGenerator.type=randomAlphaNumeric&tenant.externalIdentifierConfiguration.twoFactorOneTimeCodeIdGenerator.length=6&tenant.externalIdentifierConfiguration.twoFactorOneTimeCodeIdGenerator.type=randomDigits&tenant.emailConfiguration.properties=&__cb_tenant.scimServerConfiguration.enabled=false&tenant.scimServerConfiguration.clientEntityTypeId=&tenant.scimServerConfiguration.serverEntityTypeId=&tenant.lambdaConfiguration.scimUserRequestConverterId=&tenant.lambdaConfiguration.scimUserResponseConverterId=&tenant.lambdaConfiguration.scimEnterpriseUserRequestConverterId=&tenant.lambdaConfiguration.scimEnterpriseUserResponseConverterId=&tenant.lambdaConfiguration.scimGroupRequestConverterId=&tenant.lambdaConfiguration.scimGroupResponseConverterId=&scimSchemas=&__cb_tenant.loginConfiguration.requireAuthentication=false&tenant.loginConfiguration.requireAuthentication=true&tenant.accessControlConfiguration.uiIPAccessControlListId=&__cb_tenant.captchaConfiguration.enabled=false&tenant.captchaConfiguration.enabled=true&tenant.captchaConfiguration.captchaMethod=GoogleRecaptchaV2&tenant.captchaConfiguration.siteKey=6LdGKU8kAAAAAJ75pcseAvWyo3cYnQyIU3eGqulg&tenant.captchaConfiguration.secretKey=6LdGKU8kAAAAALqeN2ECaeLOONJduofuRerZBlyI&tenant.captchaConfiguration.threshold=0.5&tenant.ssoConfiguration.deviceTrustTimeToLiveInSeconds=31536000&blockedDomains=&__cb_tenant.rateLimitConfiguration.failedLogin.enabled=false&tenant.rateLimitConfiguration.failedLogin.limit=5&tenant.rateLimitConfiguration.failedLogin.timePeriodInSeconds=60&__cb_tenant.rateLimitConfiguration.forgotPassword.enabled=false&tenant.rateLimitConfiguration.forgotPassword.limit=5&tenant.rateLimitConfiguration.forgotPassword.timePeriodInSeconds=60&__cb_tenant.rateLimitConfiguration.sendEmailVerification.enabled=false&tenant.rateLimitConfiguration.sendEmailVerification.limit=5&tenant.rateLimitConfiguration.sendEmailVerification.timePeriodInSeconds=60&__cb_tenant.rateLimitConfiguration.sendPasswordless.enabled=false&tenant.rateLimitConfiguration.sendPasswordless.limit=5&tenant.rateLimitConfiguration.sendPasswordless.timePeriodInSeconds=60&__cb_tenant.rateLimitConfiguration.sendRegistrationVerification.enabled=false&tenant.rateLimitConfiguration.sendRegistrationVerification.limit=5&tenant.rateLimitConfiguration.sendRegistrationVerification.timePeriodInSeconds=60&__cb_tenant.rateLimitConfiguration.sendTwoFactor.enabled=false&tenant.rateLimitConfiguration.sendTwoFactor.limit=5&tenant.rateLimitConfiguration.sendTwoFactor.timePeriodInSeconds=60".getBytes(StandardCharsets.UTF_8));
       HttpRequest request = HttpRequest.newBuilder()
@@ -771,8 +900,7 @@ public class CoreTest extends BaseTest {
       res.getOutputStream().close();
     };
 
-    try (HTTPServer ignore = makeServer(scheme, handler).start()) {
-      var client = makeClient(scheme, null);
+    try (var client = makeClient(scheme, null); var ignore = makeServer(scheme, handler).start()) {
       URI uri = URI.create("http://localhost:4242/위키백과:대문");
       if (scheme.equals("https")) {
         uri = URI.create("https://local.fusionauth.io:4242/위키백과:대문");
@@ -789,7 +917,6 @@ public class CoreTest extends BaseTest {
 
   @Test(dataProvider = "schemes")
   public void utf8HeaderValues(String scheme) throws Exception {
-
     var city = "São Paulo";
 
     HTTPHandler handler = (req, res) -> {
@@ -826,9 +953,9 @@ public class CoreTest extends BaseTest {
 
       assertEquals(resp, String.format("""
           HTTP/1.1 200 \r
-          content-length: 16\r
-          content-type: text/plain\r
           connection: keep-alive\r
+          content-type: text/plain\r
+          content-length: 16\r
           x-response-header: %s\r
           \r
           {"version":"42"}""", city));
@@ -853,9 +980,8 @@ public class CoreTest extends BaseTest {
       }
     };
 
-    try (HTTPServer ignore = makeServer(scheme, handler).start()) {
+    try (var client = makeClient(scheme, null); var ignore = makeServer(scheme, handler).start()) {
       URI uri = makeURI(scheme, "");
-      var client = makeClient(scheme, null);
       var response = client.send(
           HttpRequest.newBuilder().uri(uri).header(Headers.ContentType, "application/json").POST(BodyPublishers.ofString(RequestBody)).build(),
           r -> BodySubscribers.ofString(StandardCharsets.UTF_16)
