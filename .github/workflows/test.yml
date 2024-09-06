@@ -17,7 +17,9 @@ jobs:
       - uses: actions/setup-java@v4
         with:
           distribution: 'temurin'
-          java-version: 21
+          java-version: |
+            17
+            21
       - name: Install Savant Build
         run: |
           mkdir -p ~/dev/savant
@@ -28,12 +30,14 @@ jobs:
           ln -s savant-2.0.0-RC.7 current
           rm savant.tar.gz
           cat <<EOF > ~/.savant/plugins/org.savantbuild.plugin.java.properties
+          17=${JAVA_HOME_17_X64}
           21=${JAVA_HOME_21_X64}
           EOF
         shell: bash
       - name: Run the build
         run: |
-          export PATH=~/dev/savant/current/bin:$PATH
+          export JAVA_HOME=${JAVA_HOME_17_X64}
+          export PATH=~/dev/savant/current/bin:${JAVA_HOME}/bin:$PATH
           sb clean int
         shell: bash
       - name: Archive TestNG reports
