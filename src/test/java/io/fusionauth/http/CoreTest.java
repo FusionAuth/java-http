@@ -252,7 +252,7 @@ public class CoreTest extends BaseTest {
     }
   }
 
-  @Test
+  @Test(groups = "timeouts")
   public void initialReadTimeout() {
     // This test simulates if the client doesn't send bytes for the initial timeout
     HTTPHandler handler = (req, res) -> fail("Should not be called");
@@ -279,7 +279,7 @@ public class CoreTest extends BaseTest {
     assertEquals(instrumenter.getClosedConnections(), 1);
   }
 
-  @Test
+  @Test(groups = "timeouts")
   public void keepAliveTimeout() {
     // This test only works with GET and the URLConnection because this setup will re-submit the same request if the Keep-Alive connection
     // is terminated by the server
@@ -541,7 +541,7 @@ public class CoreTest extends BaseTest {
     }
   }
 
-  @Test
+  @Test(groups = "timeouts")
   public void serverTimeout() throws Exception {
     // This test simulates if the server has a long-running thread that doesn't write fast enough
     HTTPHandler handler = (req, res) -> {
@@ -721,7 +721,7 @@ public class CoreTest extends BaseTest {
     }
   }
 
-  @Test(dataProvider = "schemes")
+  @Test(dataProvider = "schemes", groups = "timeouts")
   public void slowClient(String scheme) throws Exception {
     // Test a slow connection where the HTTP server is blocked because we cannot write to the output stream as fast as we'd like. The
     // default buffer on macOS seems to be 768k (from my testing). I set this to 8MB which should hopefully cause the writes to back up.
@@ -770,7 +770,7 @@ public class CoreTest extends BaseTest {
     }
   }
 
-  @Test
+  @Test(groups = "timeouts")
   public void slowHandler() {
     AtomicBoolean called = new AtomicBoolean(false);
     HTTPHandler handler = (req, res) -> {

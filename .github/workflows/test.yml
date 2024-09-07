@@ -38,7 +38,7 @@ jobs:
         run: |
           export JAVA_HOME=${JAVA_HOME_17_X64}
           export PATH=~/dev/savant/current/bin:${JAVA_HOME}/bin:$PATH
-          sb clean int
+          sb clean int --excludePerformance --excludeTimeouts
         shell: bash
       - name: Archive TestNG reports
         if: failure()

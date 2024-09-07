@@ -80,9 +80,12 @@ target(name: "jar", description: "Builds the project JARs", dependsOn: ["compile
 }
 
 target(name: "test", description: "Runs the project's tests", dependsOn: ["jar"]) {
-  var exclude = ["performance"]
-  if (switches.has("includePerformance")) {
-    exclude = []
+  var exclude = []
+  if (switches.has("excludePerformance")) {
+    exclude << "performance"
+  }
+  if (switches.has("excludeTimeouts")) {
+    exclude << "timeouts"
   }
 
   javaTestNG.test(exclude: exclude)

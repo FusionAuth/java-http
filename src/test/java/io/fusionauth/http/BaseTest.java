@@ -332,7 +332,7 @@ public abstract class BaseTest {
     }
   }
 
-  @AfterSuite(groups = "acceptance")
+  @AfterSuite
   public void tearDown() {
     System.out.println("\nTests began : " + hh_mm_ss_SSS.format(TestStarted));
     System.out.println("Tests ended : " + hh_mm_ss_SSS.format(ZonedDateTime.now()));
