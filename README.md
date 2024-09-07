@@ -2,7 +2,9 @@
 
 **NOTE:** This project is in progress.
 
-The goal of this project is to build a full-featured HTTP server and client in plain Java without the use of any libraries. The client and server will use non-blocking NIO in order to provide the highest performance possible.
+The goal of this project is to build a full-featured HTTP server and client in plain Java without the use of any libraries. The client and server will use Project Loom virtual threads and blocking I/O so that the Java VM will handle all the context switching between virtual threads as they block on I/O.
+
+For more information about Project Loom and virtual threads, here is a good article to read: https://blogs.oracle.com/javamagazine/post/java-virtual-threads
 
 ## Installation
 
@@ -12,20 +14,20 @@ To add this library to your project, you can include this dependency in your Mav
 <dependency>
   <groupId>io.fusionauth</groupId>
   <artifactId>java-http</artifactId>
-  <version>0.3.4</version>
+  <version>0.4.0-RC.2</version>
 </dependency>
 ```
 
 If you are using Gradle, you can add this to your build file:
 
 ```groovy
-implementation 'io.fusionauth:java-http:0.3.4'
+implementation 'io.fusionauth:java-http:0.4.0-RC.2'
 ```
 
 If you are using Savant, you can add this to your build file:
 
 ```groovy
-dependency(id: "io.fusionauth:java-http:0.3.4")
+dependency(id: "io.fusionauth:java-http:0.4.0-RC.2")
 ```
 
 ## Examples Usages:
@@ -43,7 +45,8 @@ public class Example {
       // Handler code goes here
     };
 
-    HTTPServer server = new HTTPServer().withHandler(handler).withListener(new HTTPListenerConfiguration(4242));
+    HTTPServer server = new HTTPServer().withHandler(handler)
+                                        .withListener(new HTTPListenerConfiguration(4242));
     server.start();
     // Use server
     server.close();
@@ -64,7 +67,8 @@ public class Example {
       // Handler code goes here
     };
 
-    try (HTTPServer server = new HTTPServer().withHandler(handler).withListener(new HTTPListenerConfiguration(4242))) {
+    try (HTTPServer server = new HTTPServer().withHandler(handler)
+                                             .withListener(new HTTPListenerConfiguration(4242))) {
       server.start();
       // When this block exits, the server will be shutdown
     }
@@ -88,7 +92,6 @@ public class Example {
     };
 
     HTTPServer server = new HTTPServer().withHandler(handler)
-                                        .withNumberOfWorkerThreads(42)
                                         .withShutdownDuration(Duration.ofSeconds(10L))
                                         .withListener(new HTTPListenerConfiguration(4242));
     server.start();
@@ -204,15 +207,9 @@ The general requirements and roadmap are as follows:
 
 ## FAQ
 
-### Why no Loom?
+### Why virtual threads and not NIO?
 
-Project Loom is an exciting development which brings a lot of great new features to Java, such as fibers, continuations and more.
-
-Loom is currently available in Java 19 as a preview feature. Therefore, you can't use it without compiled code that is difficult to use in future Java releases.
-
-This project is anchored to the Java LTS releases to ensure compatibility. Loom will be evaluated once it is out of preview, and available in an LTS version of Java.  
-
-The next scheduled LTS release will be Java 21 set to release in September 2023. We are looking forward to that release and to see if we can leverage the Loom features in this project. 
+Let's face it, NIO is insanely complex to write and maintain. The first 3 versions of `java-http` used NIO with non-blocking selectors, and we encountered numerous bugs, performance issues, etc. If you compare the `0.3-maintenance` branch with `main` of this project, you'll quickly see that switching to virtual threads and standard blocking I/O made our code **MUCH** simpler.
 
 ## Helping out
 
@@ -225,8 +222,8 @@ We are looking for Java developers that are interested in helping us build the c
 ```bash
 $ mkdir ~/savant
 $ cd ~/savant
-$ wget http://savant.inversoft.org/org/savantbuild/savant-core/2.0.0-RC.6/savant-2.0.0-RC.6.tar.gz
-$ tar xvfz savant-2.0.0-RC.6.tar.gz
-$ ln -s ./savant-2.0.0-RC.6 current
+$ wget http://savant.inversoft.org/org/savantbuild/savant-core/2.0.0-RC.6/savant-2.0.0-RC.7.tar.gz
+$ tar xvfz savant-2.0.0-RC.7.tar.gz
+$ ln -s ./savant-2.0.0-RC.7 current
 $ export PATH=$PATH:~/savant/current/bin/
 ```

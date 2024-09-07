@@ -15,115 +15,116 @@
  */
 package io.fusionauth.http.server;
 
+import java.util.concurrent.atomic.AtomicLong;
+
 /**
- * A simple counting instrumenter for the HTTPServer. This is not thread safe, so if you need accurate data, you'll want to use the
- * {@link ThreadSafeCountingInstrumenter}.
+ * A thread safe counting instrumenter for the HTTPServer, that ensures accurate data but could impact performance.
  *
  * @author Brian Pontarelli
  */
 @SuppressWarnings("unused")
-public class CountingInstrumenter implements Instrumenter {
-  private long badRequests;
+public class ThreadSafeCountingInstrumenter implements Instrumenter {
+  private final AtomicLong badRequests = new AtomicLong();
 
-  private long bytesRead;
+  private final AtomicLong bytesRead = new AtomicLong();
 
-  private long bytesWritten;
+  private final AtomicLong bytesWritten = new AtomicLong();
 
-  private long chunkedRequests;
+  private final AtomicLong chunkedRequests = new AtomicLong();
 
-  private long chunkedResponses;
+  private final AtomicLong chunkedResponses = new AtomicLong();
 
-  private long closedConnections;
+  private final AtomicLong closedConnections = new AtomicLong();
 
-  private long connections;
+  private final AtomicLong connections = new AtomicLong();
 
-  private long startedCount;
+  private final AtomicLong startedCount = new AtomicLong();
 
-  private long threadCount;
+  private final AtomicLong threadCount = new AtomicLong();
 
   @Override
   public void acceptedConnection() {
-    connections++;
+    connections.incrementAndGet();
   }
 
   @Override
   public void badRequest() {
-    badRequests++;
+    badRequests.incrementAndGet();
   }
 
   @Override
   public void chunkedRequest() {
-    chunkedRequests++;
+    chunkedRequests.incrementAndGet();
   }
 
   @Override
   public void chunkedResponse() {
-    chunkedResponses++;
+    chunkedResponses.incrementAndGet();
   }
 
   @Override
   public void connectionClosed() {
-    closedConnections++;
+    closedConnections.incrementAndGet();
   }
 
   public long getBadRequests() {
-    return badRequests;
+    return badRequests.get();
   }
 
   public long getBytesRead() {
-    return bytesRead;
+    return bytesRead.get();
   }
 
   public long getBytesWritten() {
-    return bytesWritten;
+    return bytesWritten.get();
   }
 
   public long getChunkedRequests() {
-    return chunkedRequests;
+    return chunkedRequests.get();
   }
 
   public long getChunkedResponses() {
-    return chunkedResponses;
+    return chunkedResponses.get();
   }
 
   public long getClosedConnections() {
-    return closedConnections;
+    return closedConnections.get();
   }
 
   public long getConnections() {
-    return connections;
+    return connections.get();
   }
 
   public long getStartedCount() {
-    return startedCount;
+    return startedCount.get();
   }
 
   public long getThreadCount() {
-    return threadCount;
+    return threadCount.get();
   }
 
   @Override
   public void readFromClient(long bytes) {
-    bytesRead += bytes;
+    bytesRead.addAndGet(bytes);
   }
 
   @Override
   public void serverStarted() {
-    startedCount++;
+    startedCount.incrementAndGet();
   }
 
   @Override
   public void threadExited() {
-    threadCount--;
+    threadCount.decrementAndGet();
   }
 
   @Override
   public void threadStarted() {
-    threadCount++;
+    threadCount.incrementAndGet();
   }
 
   @Override
   public void wroteToClient(long bytes) {
-    bytesWritten += bytes;
+    bytesWritten.addAndGet(bytes);
   }
 }

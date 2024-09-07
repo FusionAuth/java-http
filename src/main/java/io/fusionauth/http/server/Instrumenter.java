@@ -59,6 +59,16 @@ public interface Instrumenter {
   void serverStarted();
 
   /**
+   * Signals that a virtual thread has exited.
+   */
+  void threadExited();
+
+  /**
+   * Signals that a virtual thread has started.
+   */
+  void threadStarted();
+
+  /**
    * Called when bytes are written to a client.
    *
    * @param bytes The number of bytes written.

@@ -15,22 +15,19 @@
  */
 package io.fusionauth.http.load;
 
-import java.time.Duration;
-
 import io.fusionauth.http.log.Level;
 import io.fusionauth.http.log.SystemOutLoggerFactory;
-import io.fusionauth.http.server.CountingInstrumenter;
 import io.fusionauth.http.server.HTTPListenerConfiguration;
 import io.fusionauth.http.server.HTTPServer;
+import io.fusionauth.http.server.ThreadSafeCountingInstrumenter;
 
 public class Main {
   public static void main(String[] args) throws Exception {
     SystemOutLoggerFactory.FACTORY.getLogger(Object.class).setLevel(Level.Debug);
 
     System.out.println("Starting java-http server");
-    CountingInstrumenter instrumenter = new CountingInstrumenter();
+    var instrumenter = new ThreadSafeCountingInstrumenter();
     try (HTTPServer ignore = new HTTPServer().withHandler(new LoadHandler())
-                                             .withClientTimeout(Duration.ofSeconds(100L))
                                              .withCompressByDefault(false)
                                              .withInstrumenter(instrumenter)
                                              .withListener(new HTTPListenerConfiguration(8080))
@@ -39,9 +36,10 @@ public class Main {
 
       for (int i = 0; i < 1_000; i++) {
         Thread.sleep(10_000);
-        System.out.printf("Current stats. Bad requests [%s]. Bytes read [%s]. Bytes written [%s]. Chunked requests [%s]. Chunked responses [%s]. Closed connections [%s]. Connections [%s]. Started [%s].\n",
+        System.out.printf("Current stats. Bad requests [%s]. Bytes read [%s]. Bytes written [%s]. Chunked requests [%s]. Chunked responses [%s]. Closed connections [%s]. Connections [%s]. Started [%s]. Virtual threads [%s].\n",
             instrumenter.getBadRequests(), instrumenter.getBytesRead(), instrumenter.getBytesWritten(), instrumenter.getChunkedRequests(),
-            instrumenter.getChunkedResponses(), instrumenter.getClosedConnections(), instrumenter.getConnections(), instrumenter.getStartedCount());
+            instrumenter.getChunkedResponses(), instrumenter.getClosedConnections(), instrumenter.getConnections(), instrumenter.getStartedCount(),
+            instrumenter.getThreadCount());
       }
 
       System.out.println("Shutting down java-http server");

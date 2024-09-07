@@ -86,6 +86,10 @@ public class HTTPWorker implements Runnable {
     HTTPResponse response = null;
     boolean keepAlive = false;
     try {
+      if (instrumenter != null) {
+        instrumenter.threadStarted();
+      }
+
       while (true) {
         logger.debug("Running HTTP worker and preparing to read preamble");
         var request = new HTTPRequest(configuration.getContextPath(), configuration.getMultipartBufferSize(),
@@ -93,7 +97,7 @@ public class HTTPWorker implements Runnable {
 
         logger.debug("Reading preamble");
         var inputStream = new ThroughputInputStream(socket.getInputStream(), throughput);
-        var bodyBytes = HTTPTools.parseRequestPreamble(inputStream, request, buffers.requestBuffer(), () -> state = State.Read);
+        var bodyBytes = HTTPTools.parseRequestPreamble(inputStream, request, buffers.requestBuffer(), instrumenter, () -> state = State.Read);
         var httpInputStream = new HTTPInputStream(configuration, request, inputStream, bodyBytes);
         request.setInputStream(httpInputStream);
 
@@ -179,6 +183,10 @@ public class HTTPWorker implements Runnable {
       // Log the error and signal a failure
       logger.error("HTTP worker threw an exception while processing a request.", t);
       close(Result.Failure, response);
+    } finally {
+      if (instrumenter != null) {
+        instrumenter.threadExited();
+      }
     }
   }
 

@@ -39,6 +39,7 @@ import io.fusionauth.http.log.Logger;
 import io.fusionauth.http.log.LoggerFactory;
 import io.fusionauth.http.server.HTTPRequest;
 import io.fusionauth.http.server.HTTPResponse;
+import io.fusionauth.http.server.Instrumenter;
 
 public final class HTTPTools {
   private static Logger logger;
@@ -237,11 +238,13 @@ public final class HTTPTools {
    * @param inputStream   The input stream to read the preamble from.
    * @param request       The HTTP request to populate.
    * @param requestBuffer A buffer used for reading to help reduce memory thrashing.
+   * @param instrumenter  The Instrumenter that is informed of bytes read.
    * @param readObserver  An observer that is called once one byte has been read.
    * @return Any leftover body bytes from the last read from the InputStream.
    * @throws IOException If the read fails.
    */
-  public static byte[] parseRequestPreamble(InputStream inputStream, HTTPRequest request, byte[] requestBuffer, Runnable readObserver)
+  public static byte[] parseRequestPreamble(InputStream inputStream, HTTPRequest request, byte[] requestBuffer, Instrumenter instrumenter,
+                                            Runnable readObserver)
       throws IOException {
     RequestPreambleState state = RequestPreambleState.RequestMethod;
     var valueBuffer = new ByteArrayOutputStream(512);
@@ -257,6 +260,10 @@ public final class HTTPTools {
       }
 
       logger.trace("Read [{}] from client for preamble.", read);
+
+      if (instrumenter != null) {
+        instrumenter.readFromClient(read);
+      }
 
       // Tell the callback that we've read at least one byte
       readObserver.run();

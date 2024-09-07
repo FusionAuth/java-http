@@ -32,7 +32,7 @@ project(group: "io.fusionauth", name: "self", version: "0.1.0", licenses: ["Apac
 
   dependencies {
     group(name: "compile") {
-      dependency(id: "io.fusionauth:java-http:0.4.0-{integration}")
+      dependency(id: "io.fusionauth:java-http:0.4.0-RC.2.{integration}")
     }
   }
 
