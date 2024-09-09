@@ -179,35 +179,39 @@ public class HTTPOutputStream extends OutputStream {
 
     committed = true;
 
-    // +++++++++++ Step 1: Determine the extra headers first and add them +++++++++++
+    // +++++++++++ Step 1: Determine if there is content and set up the compression, encoding, chunking, and length headers +++++++++++
     boolean twoOhFour = response.getStatus() == 204;
+    boolean gzip = false;
+    boolean deflate = false;
     boolean chunked = false;
-    if (response.getContentLength() == null && !twoOhFour) { // 204 status is specifically "No Content" so we shouldn't write the transfer-encoding header if the status is 204
-      response.setHeader(Headers.TransferEncoding, TransferEncodings.Chunked);
-      chunked = true;
-    }
 
     // If the output stream is closing, but nothing has been written yet, we can safely set the Content-Length header to 0 to let the client
     // know nothing more is coming beyond the preamble
     if (closing && !twoOhFour) { // 204 status is specifically "No Content" so we shouldn't write the content-length header if the status is 204
       response.setContentLength(0L);
-    }
-
-    boolean gzip = false;
-    boolean deflate = false;
-    if (compress && !twoOhFour) { // 204 status is specifically "No Content" so we shouldn't write the content-encoding and vary headers if the status is 204
-      for (String encoding : acceptEncodings) {
-        if (encoding.equalsIgnoreCase(ContentEncodings.Gzip)) {
-          response.setHeader(Headers.ContentEncoding, ContentEncodings.Gzip);
-          response.setHeader(Headers.Vary, Headers.AcceptEncoding);
-          gzip = true;
-          break;
-        } else if (encoding.equalsIgnoreCase(ContentEncodings.Deflate)) {
-          response.setHeader(Headers.ContentEncoding, ContentEncodings.Deflate);
-          response.setHeader(Headers.Vary, Headers.AcceptEncoding);
-          deflate = true;
-          break;
+    } else {
+      // 204 status is specifically "No Content" so we shouldn't write the content-encoding and vary headers if the status is 204
+      if (compress && !twoOhFour) {
+        for (String encoding : acceptEncodings) {
+          if (encoding.equalsIgnoreCase(ContentEncodings.Gzip)) {
+            response.setHeader(Headers.ContentEncoding, ContentEncodings.Gzip);
+            response.setHeader(Headers.Vary, Headers.AcceptEncoding);
+            response.removeHeader(Headers.ContentLength); // Compression will change the length, so we'll chunk instead
+            gzip = true;
+            break;
+          } else if (encoding.equalsIgnoreCase(ContentEncodings.Deflate)) {
+            response.setHeader(Headers.ContentEncoding, ContentEncodings.Deflate);
+            response.setHeader(Headers.Vary, Headers.AcceptEncoding);
+            response.removeHeader(Headers.ContentLength); // Compression will change the length, so we'll chunk instead
+            deflate = true;
+            break;
+          }
         }
+      }
+
+      if (response.getContentLength() == null && !twoOhFour) { // 204 status is specifically "No Content" so we shouldn't write the transfer-encoding header if the status is 204
+        response.setHeader(Headers.TransferEncoding, TransferEncodings.Chunked);
+        chunked = true;
       }
     }
 

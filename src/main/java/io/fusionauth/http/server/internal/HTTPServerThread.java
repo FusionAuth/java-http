@@ -113,7 +113,7 @@ public class HTTPServerThread extends Thread {
         clients.add(new ClientInfo(client, runnable, throughput));
       } catch (SocketTimeoutException ignore) {
         // Completely smother since this is expected with the SO_TIMEOUT setting in the constructor
-        logger.trace("Nothing accepted. Cleaning up existing connections.");
+        logger.debug("Nothing accepted. Cleaning up existing connections.");
       } catch (SocketException e) {
         // This should only happen when the server is shutdown
         if (socket.isClosed()) {
@@ -164,7 +164,7 @@ public class HTTPServerThread extends Thread {
           ClientInfo client = iterator.next();
           Thread thread = client.thread();
           if (!thread.isAlive()) {
-            logger.info("Thread is dead. Removing.");
+            logger.debug("Thread is dead. Removing.");
             iterator.remove();
             continue;
           }

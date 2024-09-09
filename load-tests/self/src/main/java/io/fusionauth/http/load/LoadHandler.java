@@ -26,17 +26,32 @@ import io.fusionauth.http.server.HTTPResponse;
 public class LoadHandler implements HTTPHandler {
   @Override
   public void handle(HTTPRequest req, HTTPResponse res) {
-    try (InputStream is = req.getInputStream()) {
-      byte[] body = is.readAllBytes();
-      String result = Base64.getEncoder().encodeToString(body);
+    if (req.getPath().equals("/text")) {
+      System.out.println("Text");
       res.setStatus(200);
+      res.setContentType("text/plain");
 
-      OutputStream os = res.getOutputStream();
-      os.write(result.getBytes());
-      os.flush();
-      os.close();
-    } catch (Exception e) {
-      res.setStatus(500);
+      try (OutputStream os = res.getOutputStream()) {
+        System.out.println("Wrote");
+        os.write("Hello world".getBytes());
+        os.flush();
+      } catch (Exception e) {
+        System.out.println("Failed");
+        res.setStatus(500);
+      }
+    } else {
+      try (InputStream is = req.getInputStream()) {
+        byte[] body = is.readAllBytes();
+        String result = Base64.getEncoder().encodeToString(body);
+        res.setStatus(200);
+
+        try (OutputStream os = res.getOutputStream()) {
+          os.write(result.getBytes());
+          os.flush();
+        }
+      } catch (Exception e) {
+        res.setStatus(500);
+      }
     }
   }
 }

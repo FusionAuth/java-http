@@ -95,7 +95,6 @@ public class HTTPWorker implements Runnable {
         var request = new HTTPRequest(configuration.getContextPath(), configuration.getMultipartBufferSize(),
             listener.getCertificate() != null ? "https" : "http", listener.getPort(), socket.getInetAddress().getHostAddress());
 
-        logger.debug("Reading preamble");
         var inputStream = new ThroughputInputStream(socket.getInputStream(), throughput);
         var bodyBytes = HTTPTools.parseRequestPreamble(inputStream, request, buffers.requestBuffer(), instrumenter, () -> state = State.Read);
         var httpInputStream = new HTTPInputStream(configuration, request, inputStream, bodyBytes);

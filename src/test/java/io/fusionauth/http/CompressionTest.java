@@ -72,6 +72,7 @@ public class CompressionTest extends BaseTest {
       res.setHeader(Headers.ContentType, "text/plain");
       res.setStatus(200);
 
+      // Technically, this is ignored anytime compression is used, but we are testing if folks don't set it here
       if (!chunked) {
         res.setContentLength(Files.size(file));
       }
@@ -112,16 +113,13 @@ public class CompressionTest extends BaseTest {
     }
   }
 
-  @Test(dataProvider = "compressedChunkedSchemes")
-  public void compress_onByDefault(String encoding, boolean chunked, String scheme) throws Exception {
+  @Test
+  public void compressBadContentLength() throws Exception {
     HTTPHandler handler = (req, res) -> {
-      // Use case, do not call response.setCompress(true)
+      res.setCompress(true);
+      res.setContentLength(1_000_000); // Ignored
       res.setHeader(Headers.ContentType, "text/plain");
       res.setStatus(200);
-
-      if (!chunked) {
-        res.setContentLength(Files.size(file));
-      }
 
       try (InputStream is = Files.newInputStream(file)) {
         OutputStream outputStream = res.getOutputStream();
@@ -132,27 +130,22 @@ public class CompressionTest extends BaseTest {
       }
     };
 
-    CountingInstrumenter instrumenter = new CountingInstrumenter();
-    try (var client = makeClient(scheme, null); var ignore = makeServer(scheme, handler, instrumenter).start()) {
-      URI uri = makeURI(scheme, "");
-      var response = client.send(
-          HttpRequest.newBuilder().header(Headers.AcceptEncoding, encoding).uri(uri).GET().build(),
-          r -> BodySubscribers.ofInputStream()
-      );
-
-      var result = new String(
-          encoding.equals(ContentEncodings.Deflate)
-              ? new InflaterInputStream(response.body()).readAllBytes()
-              : new GZIPInputStream(response.body()).readAllBytes(), StandardCharsets.UTF_8);
-
-      assertEquals(response.headers().firstValue(Headers.ContentEncoding).orElse(null), encoding);
+    try (var client = makeClient("http", null); var ignore = makeServer("http", handler).withCompressByDefault(false).start()) {
+      URI uri = makeURI("http", "");
+      var response = client.send(HttpRequest.newBuilder()
+                                            .header(Headers.AcceptEncoding, ContentEncodings.Gzip)
+                                            .uri(uri)
+                                            .GET()
+                                            .build(),
+          r -> BodySubscribers.ofInputStream());
+      assertEquals(response.headers().firstValue(Headers.ContentEncoding).orElse(null), ContentEncodings.Gzip);
       assertEquals(response.statusCode(), 200);
-      assertEquals(result, Files.readString(file));
+      assertEquals(new String(new GZIPInputStream(response.body()).readAllBytes(), StandardCharsets.UTF_8), Files.readString(file));
     }
   }
 
-  @Test(enabled = false, groups = "performance")
-  public void compress_performance() throws Exception {
+  @Test(groups = "performance")
+  public void compressPerformance() throws Exception {
     HTTPHandler handler = (req, res) -> {
       // Use case, do not call response.setCompress(true)
       res.setHeader(Headers.ContentType, "text/plain");
@@ -202,7 +195,46 @@ public class CompressionTest extends BaseTest {
         System.out.println("[compression: " + mode + "][" + formatter.format(counter) + "] requests. Total time [" + (formatter.format(total)) + "] ms, Avg [" + avg + "] ms");
       }
     }
+  }
 
+  @Test(dataProvider = "compressedChunkedSchemes")
+  public void compress_onByDefault(String encoding, boolean chunked, String scheme) throws Exception {
+    HTTPHandler handler = (req, res) -> {
+      // Use case, do not call response.setCompress(true)
+      res.setHeader(Headers.ContentType, "text/plain");
+      res.setStatus(200);
+
+      // Technically, this is ignored anytime compression is used, but we are testing if folks don't set it here
+      if (!chunked) {
+        res.setContentLength(Files.size(file));
+      }
+
+      try (InputStream is = Files.newInputStream(file)) {
+        OutputStream outputStream = res.getOutputStream();
+        is.transferTo(outputStream);
+        outputStream.close();
+      } catch (IOException e) {
+        throw new RuntimeException(e);
+      }
+    };
+
+    CountingInstrumenter instrumenter = new CountingInstrumenter();
+    try (var client = makeClient(scheme, null); var ignore = makeServer(scheme, handler, instrumenter).start()) {
+      URI uri = makeURI(scheme, "");
+      var response = client.send(
+          HttpRequest.newBuilder().header(Headers.AcceptEncoding, encoding).uri(uri).GET().build(),
+          r -> BodySubscribers.ofInputStream()
+      );
+
+      var result = new String(
+          encoding.equals(ContentEncodings.Deflate)
+              ? new InflaterInputStream(response.body()).readAllBytes()
+              : new GZIPInputStream(response.body()).readAllBytes(), StandardCharsets.UTF_8);
+
+      assertEquals(response.headers().firstValue(Headers.ContentEncoding).orElse(null), encoding);
+      assertEquals(response.statusCode(), 200);
+      assertEquals(result, Files.readString(file));
+    }
   }
 
   @DataProvider(name = "compressedChunkedSchemes")
@@ -237,6 +269,7 @@ public class CompressionTest extends BaseTest {
       res.setHeader(Headers.ContentType, "text/plain");
       res.setStatus(200);
 
+      // Technically, this is ignored anytime compression is used, but we are testing if folks don't set it here
       if (!chunked) {
         res.setContentLength(Files.size(file));
       }
@@ -273,6 +306,7 @@ public class CompressionTest extends BaseTest {
       res.setHeader(Headers.ContentType, "text/plain");
       res.setStatus(200);
 
+      // Technically, this is ignored anytime compression is used, but we are testing if folks don't set it here
       if (!chunked) {
         res.setContentLength(Files.size(file));
       }
