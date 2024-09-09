@@ -82,8 +82,8 @@ public class ChunkedOutputStream extends OutputStream {
   public void write(byte[] b, int offset, int length) throws IOException {
     int index = offset;
     while (index < length) {
-      int wrote = Math.min(buffer.length - bufferIndex, length);
-      System.arraycopy(b, 0, buffer, bufferIndex, wrote);
+      int wrote = Math.min(buffer.length - bufferIndex, length - index);
+      System.arraycopy(b, index, buffer, bufferIndex, wrote);
       bufferIndex += wrote;
       index += wrote;
 

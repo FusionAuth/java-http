@@ -26,6 +26,8 @@ import java.net.http.HttpRequest;
 import java.net.http.HttpRequest.BodyPublishers;
 import java.net.http.HttpResponse.BodySubscribers;
 import java.nio.charset.StandardCharsets;
+import java.nio.file.Files;
+import java.nio.file.Paths;
 import java.security.SecureRandom;
 import java.security.cert.Certificate;
 import java.time.Duration;
@@ -316,6 +318,35 @@ public class CoreTest extends BaseTest {
         System.out.println(response.exception);
       }
       assertEquals(response.status, 200);
+    }
+  }
+
+  @Test(dataProvider = "schemes")
+  public void largeCSS(String scheme) throws Exception {
+    var css = Files.readString(Paths.get("src/test/resources/fontawesome-6.0.0.min.css"), StandardCharsets.UTF_8);
+
+    HTTPHandler handler = (req, res) -> {
+      res.setStatus(200);
+
+      try {
+        var out = res.getOutputStream();
+        out.write(css.getBytes(StandardCharsets.UTF_8));
+        out.close();
+      } catch (Throwable t) {
+        System.out.println(t);
+      }
+    };
+
+    try (var client = makeClient(scheme, null); var ignore = makeServer(scheme, handler).start()) {
+      URI uri = makeURI(scheme, "");
+      HttpRequest request = HttpRequest.newBuilder()
+                                       .uri(uri)
+                                       .GET()
+                                       .build();
+
+      var response = client.send(request, r -> BodySubscribers.ofString(StandardCharsets.UTF_8));
+      assertEquals(response.statusCode(), 200);
+      assertEquals(response.body(), css);
     }
   }
 
