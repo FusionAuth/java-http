@@ -1,5 +1,5 @@
 /*
- * Copyright (c) 2022-2024, FusionAuth, All Rights Reserved
+ * Copyright (c) 2022-2025, FusionAuth, All Rights Reserved
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -105,6 +105,36 @@ public class HTTPRequestTest {
   }
 
   @Test
+  public void getHost() {
+    // Single host
+    assertGetHost("acme.com", "acme.com");
+
+    // Single host with port
+    assertGetHost("acme.com:42", "acme.com");
+
+    // Multiple hosts
+    assertGetHost("acme.com, example.com", "acme.com");
+
+    // Multiple hosts with spacing
+    assertGetHost("acme.com ,  example.com ", "acme.com");
+
+    // Multiple hosts with spacing and ports
+    assertGetHost("acme.com:41 ,  example.com:42 ", "acme.com");
+  }
+
+  @Test
+  public void getIPAddress() {
+    // Single IP
+    assertGetIPAddress("192.168.1.1", "192.168.1.1");
+
+    // Multiple IPs
+    assertGetIPAddress("192.168.1.1, 192.168.1.2", "192.168.1.1");
+
+    // Multiple IPs with spacing
+    assertGetIPAddress("192.168.1.1 ,  192.168.1.2 ", "192.168.1.1");
+  }
+
+  @Test
   public void hostHeaderPortHandling() {
     // positive cases
     assertURLs("http", "myhost", "myhost", -1, "http://myhost");
@@ -201,6 +231,18 @@ public class HTTPRequestTest {
 
   private void assertBaseURL(String expected, String... headers) {
     assertBaseURL(expected, null, headers);
+  }
+
+  private void assertGetHost(String header, @SuppressWarnings("SameParameterValue") String expected) {
+    HTTPRequest request = new HTTPRequest();
+    request.setHeader(Headers.XForwardedHost, header);
+    assertEquals(request.getHost(), expected);
+  }
+
+  private void assertGetIPAddress(String header, @SuppressWarnings("SameParameterValue") String expected) {
+    HTTPRequest request = new HTTPRequest();
+    request.setHeader(Headers.XForwardedFor, header);
+    assertEquals(request.getIPAddress(), expected);
   }
 
   private void assertURLs(String scheme, String source, String host, int port, String baseURL) {

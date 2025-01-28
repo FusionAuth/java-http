@@ -1,5 +1,5 @@
 /*
- * Copyright (c) 2022-2024, FusionAuth, All Rights Reserved
+ * Copyright (c) 2022-2025, FusionAuth, All Rights Reserved
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -389,12 +389,17 @@ public class HTTPRequest implements Buildable<HTTPRequest> {
       return host;
     }
 
+    String[] xHosts = xHost.split(",");
+    if (xHosts.length > 1) {
+      xHost = xHosts[0];
+    }
+
     int colon = xHost.indexOf(':');
     if (colon > 0) {
       return xHost.substring(0, colon);
     }
 
-    return xHost;
+    return xHost.trim();
   }
 
   public void setHost(String host) {
