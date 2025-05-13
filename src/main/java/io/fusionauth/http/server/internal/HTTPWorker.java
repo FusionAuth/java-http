@@ -131,7 +131,7 @@ public class HTTPWorker implements Runnable {
 
         var handler = configuration.getHandler();
         state = State.Process; // Transition to processing
-        logger.debug("[{}] Set state [{}], calling the handler", Thread.currentThread().threadId(), state);
+        logger.debug("[{}] Set state [{}]. Call the request handler.", Thread.currentThread().threadId(), state);
         handler.handle(request, response);
         response.close();
         logger.trace("[{}] Handler completed successfully", Thread.currentThread().threadId());
