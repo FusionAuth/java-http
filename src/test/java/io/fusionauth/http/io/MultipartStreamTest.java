@@ -19,6 +19,7 @@ import java.io.ByteArrayInputStream;
 import java.io.IOException;
 import java.io.InputStream;
 import java.nio.file.Files;
+import java.util.ArrayList;
 import java.util.HashMap;
 import java.util.LinkedList;
 import java.util.List;
@@ -168,14 +169,14 @@ public class MultipartStreamTest {
         ------WebKitFormBoundaryTWfMVJErBoLURJIe--""";
     Object[][] invocations = new Object[body.length() - 1][];
     for (int i = 1; i < body.length(); i++) {
-      invocations[i - 1] = new Object[]{i, new byte[][]{body.substring(0, i).getBytes(), body.substring(i).getBytes()}};
+      invocations[i - 1] = new Object[]{i, new Parts(new byte[][]{body.substring(0, i).getBytes(), body.substring(i).getBytes()})};
     }
     return invocations;
   }
 
   @Test(dataProvider = "parts")
-  public void separateParts(@SuppressWarnings("unused") int index, byte[][] parts) throws IOException {
-    PartInputStream is = new PartInputStream(parts);
+  public void separateParts(@SuppressWarnings("unused") int index, Parts parts) throws IOException {
+    PartInputStream is = new PartInputStream(parts.parts);
     Map<String, List<String>> parameters = new HashMap<>();
     List<FileInfo> files = new LinkedList<>();
     MultipartStream stream = new MultipartStream(is, "----WebKitFormBoundaryTWfMVJErBoLURJIe".getBytes(), 1024);
@@ -223,6 +224,22 @@ public class MultipartStreamTest {
     @Override
     public int read() {
       throw new UnsupportedOperationException();
+    }
+  }
+
+  public static class Parts {
+    public byte[][] parts;
+
+    public Parts(byte[][] parts) {
+      this.parts = parts;
+    }
+
+    public String toString() {
+      List<String> result = new ArrayList<>();
+      for (byte[] part : parts) {
+        result.add("" + part.length);
+      }
+      return "{" + String.join(",", result) + "}";
     }
   }
 }

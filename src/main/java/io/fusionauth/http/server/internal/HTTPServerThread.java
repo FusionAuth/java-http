@@ -1,5 +1,5 @@
 /*
- * Copyright (c) 2022-2024, FusionAuth, All Rights Reserved
+ * Copyright (c) 2022-2025, FusionAuth, All Rights Reserved
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -157,14 +157,15 @@ public class HTTPServerThread extends Thread {
 
     public void run() {
       while (running) {
-        logger.debug("Cleaning things up");
+        logger.trace("Wake up. Clean up server threads.");
 
         Iterator<ClientInfo> iterator = clients.iterator();
         while (iterator.hasNext()) {
           ClientInfo client = iterator.next();
           Thread thread = client.thread();
+          long threadId = thread.threadId();
           if (!thread.isAlive()) {
-            logger.debug("Thread is dead. Removing.");
+            logger.debug("[{}] Thread is dead. Removing.", threadId);
             iterator.remove();
             continue;
           }
@@ -179,22 +180,33 @@ public class HTTPServerThread extends Thread {
           boolean timedOut = false;
           boolean badClient = false;
 
+          // -1 means we have not yet calculated these values
+          long readThroughput = -1;
+          long writeThroughput = -1;
+
+          String badClientReason = "[" + threadId + "] Checking worker in state [" + state + "]";
           if (state == HTTPWorker.State.Read) {
             // Here the SO_TIMEOUT set above or the Keep-Alive timeout in HTTPWorker will dictate if the socket has timed out. This prevents slow readers
             // or network issues where the client reads 1 byte per timeout value (i.e. 1 byte per 2 seconds or something like that)
-            badClient = throughput.readThroughput(now) < minimumReadThroughput;
+            readThroughput = throughput.readThroughput(now);
+            badClient = readThroughput < minimumReadThroughput;
             readingSlow = badClient;
+            badClientReason += " readingSlow=[" + readingSlow + "] readThroughput=[" + readThroughput + "] minimumReadThroughput=[" + minimumReadThroughput + "]";
           } else if (state == HTTPWorker.State.Write) {
             // Check for slow clients when writing (or network issues)
-            badClient = throughput.writeThroughput(now) < minimumWriteThroughput;
+            writeThroughput = throughput.writeThroughput(now);
+            badClient = writeThroughput < minimumWriteThroughput;
             writingSlow = badClient;
+            badClientReason += " writingSlow=[" + writingSlow + "] writeThroughput=[" + writeThroughput + "] minimumWriteThroughput=[" + minimumWriteThroughput + "]";
           } else if (state == HTTPWorker.State.Process) {
             // Here lastUsed was the instant the last byte was read, so we calculate distance between that and now to see if it is beyond the timeout
-            badClient = now - workerLastUsed > configuration.getProcessingTimeoutDuration().toMillis();
+            long waited = (now - workerLastUsed);
+            badClient = waited > configuration.getProcessingTimeoutDuration().toMillis();
             timedOut = badClient;
+            badClientReason += " timedOut=[" + timedOut + "] waited=[" + waited + "] processingTimeoutDuration=[" + configuration.getProcessingTimeoutDuration().toMillis() + "]";
           }
 
-          logger.debug("Checking client readingSlow=[{}] writingSlow=[{}] timedOut=[{}] writeThroughput=[{}] minWriteThroughput=[{}]", readingSlow, writingSlow, timedOut, throughput.writeThroughput(now), minimumWriteThroughput);
+          logger.debug(badClientReason);
 
           if (!badClient) {
             continue;
@@ -207,19 +219,19 @@ public class HTTPServerThread extends Thread {
             String message = "";
 
             if (readingSlow) {
-              message += String.format(" Min read throughput [%s], actual throughput [%s].", minimumReadThroughput, throughput.readThroughput(now));
+              message += String.format(" Min read throughput [%s], actual throughput [%s].", minimumReadThroughput, readThroughput);
             }
 
             if (writingSlow) {
-              message += String.format(" Min write throughput [%s], actual throughput [%s].", minimumWriteThroughput, throughput.writeThroughput(now));
+              message += String.format(" Min write throughput [%s], actual throughput [%s].", minimumWriteThroughput, writeThroughput);
             }
 
             if (timedOut) {
               message += String.format(" Connection timed out while processing. Last used [%s]ms ago. Configured client timeout [%s]ms.", (now - workerLastUsed), configuration.getProcessingTimeoutDuration().toMillis());
             }
 
-            logger.debug("Closing connection readingSlow=[{}] writingSlow=[{}] timedOut=[{}] {}", readingSlow, writingSlow, timedOut, message);
-            logger.debug("Closing client connection [{}] due to inactivity", worker.getSocket().getRemoteSocketAddress());
+            logger.debug("[{}] Closing connection readingSlow=[{}] writingSlow=[{}] timedOut=[{}] {}", threadId, readingSlow, writingSlow, timedOut, message);
+            logger.debug("[{}] Closing client connection [{}] due to inactivity", threadId, worker.getSocket().getRemoteSocketAddress());
 
             StringBuilder threadDump = new StringBuilder();
             for (Map.Entry<Thread, StackTraceElement[]> entry : Thread.getAllStackTraces().entrySet()) {
@@ -242,7 +254,7 @@ public class HTTPServerThread extends Thread {
             }
           } catch (IOException e) {
             // Log but ignore
-            logger.debug("Unable to close connection to client. [{}]", e);
+            logger.debug(String.format("[%s] Unable to close connection to client. [{}]", threadId), e);
           }
         }
 

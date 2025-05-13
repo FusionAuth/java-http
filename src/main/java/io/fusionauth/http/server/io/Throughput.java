@@ -1,5 +1,5 @@
 /*
- * Copyright (c) 2024, FusionAuth, All Rights Reserved
+ * Copyright (c) 2024-2025, FusionAuth, All Rights Reserved
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -73,16 +73,19 @@ public class Throughput {
       return Long.MAX_VALUE;
     }
 
+    // No bytes have been written
     if (numberOfBytesWritten == 0) {
       long millis = now - firstReadInstant;
+      // We are within the read delay and do not yet have enough data to make a meaningful calculation for actual throughput.
       if (millis < readThroughputDelay) {
         return Long.MAX_VALUE;
       }
 
-      double result = ((double) numberOfBytesRead / (double) millis) * 1_000;
-      return Math.round(result);
+      // Always zero
+      return numberOfBytesWritten;
     }
 
+    // The number of bytes read in seconds
     double result = ((double) numberOfBytesRead / (double) (lastReadInstant - firstReadInstant)) * 1_000;
     return Math.round(result);
   }

@@ -1,5 +1,5 @@
 /*
- * Copyright (c) 2022-2024, FusionAuth, All Rights Reserved
+ * Copyright (c) 2022-2025, FusionAuth, All Rights Reserved
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -74,7 +74,7 @@ public class HTTPWorker implements Runnable {
     this.buffers = new HTTPBuffers(configuration);
     this.logger = configuration.getLoggerFactory().getLogger(HTTPWorker.class);
     this.state = State.Read;
-    logger.debug("Starting HTTP worker virtual thread");
+    logger.debug("[{}] Starting HTTP worker virtual thread", Thread.currentThread().threadId());
   }
 
   public Socket getSocket() {
@@ -91,7 +91,7 @@ public class HTTPWorker implements Runnable {
       }
 
       while (true) {
-        logger.debug("Running HTTP worker and preparing to read preamble");
+        logger.trace("[{}] Running HTTP worker and preparing to read preamble", Thread.currentThread().threadId());
         var request = new HTTPRequest(configuration.getContextPath(), configuration.getMultipartBufferSize(),
             listener.getCertificate() != null ? "https" : "http", listener.getPort(), socket.getInetAddress().getHostAddress());
 
@@ -129,58 +129,61 @@ public class HTTPWorker implements Runnable {
           keepAlive = false;
         }
 
-        logger.debug("Calling the handler.");
         var handler = configuration.getHandler();
         state = State.Process; // Transition to processing
+        logger.debug("[{}] Set state [{}], calling the handler", Thread.currentThread().threadId(), state);
         handler.handle(request, response);
         response.close();
-        logger.debug("Handler completed successfully.");
+        logger.trace("[{}] Handler completed successfully", Thread.currentThread().threadId());
 
         // Since the Handler can change the Keep-Alive state, we use the response here
         if (!keepAlive) {
-          logger.debug("Closing because no Keep-Alive.");
+          logger.debug("[{}] Close socket. No Keep-Alive", Thread.currentThread().threadId());
           close(Result.Success, response);
           break;
         }
 
         // Transition to Keep-Alive state and reset the SO timeout
-        logger.debug("Keeping things alive.");
         state = State.KeepAlive;
+        logger.debug("[{}] Set state [{}]", Thread.currentThread().threadId(), state);
         socket.setSoTimeout((int) configuration.getKeepAliveTimeoutDuration().toMillis());
 
         // Purge the extra bytes in case the handler didn't read everything
         int purged = httpInputStream.purge();
-        logger.trace("Purged [{}] bytes.", purged);
+        if (purged > 0) {
+          logger.debug("[{}] Purged [{}] bytes.", purged, Thread.currentThread().threadId());
+        }
+
       }
     } catch (SocketTimeoutException | ConnectionClosedException e) {
       // This might be a read timeout or a Keep-Alive timeout. The failure state is based on that flag
       close(keepAlive ? Result.Success : Result.Failure, response);
 
       if (keepAlive) {
-        logger.debug("Closing because the Keep-Alive expired.", e);
+        logger.debug(String.format("[%s] Closing socket. Keep-Alive expired.", Thread.currentThread().threadId()), e);
       } else {
-        logger.debug("Closing because socket timed out.");
+        logger.debug("[{}] Closing socket. Socket timed out.", Thread.currentThread().threadId());
       }
     } catch (ParseException pe) {
       if (instrumenter != null) {
         instrumenter.badRequest();
       }
 
-      logger.debug("Closing because of a bad request.");
+      logger.debug("[{}] Closing socket. Bad request. Reason [{}]", Thread.currentThread().threadId(), pe.getMessage());
       close(Result.Failure, response);
     } catch (SocketException e) {
       // This should only happen when the server is shutdown and this thread is waiting to read or write. In that case, this will throw a
       // SocketException and the thread will be interrupted. Since the server is being shutdown, we should let the client know.
       if (Thread.currentThread().isInterrupted()) {
-        logger.debug("Closing because server was shutdown.");
+        logger.debug("[{}] Closing socket. Server is shutting down.", Thread.currentThread().threadId());
         close(Result.Success, response);
       }
     } catch (IOException io) {
-      logger.debug("An IO exception was thrown during processing. These are pretty common.", io);
+      logger.debug(String.format("[%s] Closing socket. An IO exception was thrown during processing. These are pretty common.", Thread.currentThread().threadId()), io);
       close(Result.Failure, response);
     } catch (Throwable t) {
       // Log the error and signal a failure
-      logger.error("HTTP worker threw an exception while processing a request.", t);
+      logger.error(String.format("[%s] Closing socket. An HTTP worker threw an exception while processing a request.", Thread.currentThread().threadId()), t);
       close(Result.Failure, response);
     } finally {
       if (instrumenter != null) {
@@ -209,7 +212,7 @@ public class HTTPWorker implements Runnable {
 
       socket.close();
     } catch (IOException e) {
-      logger.debug("Could not close the connection because the socket threw an exception.", e);
+      logger.debug(String.format("[%s] Could not close the connection because the socket threw an exception.", Thread.currentThread().threadId()), e);
     }
   }
 
