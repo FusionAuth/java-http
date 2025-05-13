@@ -184,7 +184,7 @@ public class HTTPServerThread extends Thread {
           long readThroughput = -1;
           long writeThroughput = -1;
 
-          String badClientReason = "[" + threadId + "] Checking worker in state [" + state + "]";
+          String badClientReason = "[" + threadId + "] Check worker in state [" + state + "]";
           if (state == HTTPWorker.State.Read) {
             // Here the SO_TIMEOUT set above or the Keep-Alive timeout in HTTPWorker will dictate if the socket has timed out. This prevents slow readers
             // or network issues where the client reads 1 byte per timeout value (i.e. 1 byte per 2 seconds or something like that)
