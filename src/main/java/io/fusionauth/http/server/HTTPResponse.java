@@ -1,5 +1,5 @@
 /*
- * Copyright (c) 2021-2022, FusionAuth, All Rights Reserved
+ * Copyright (c) 2021-2025, FusionAuth, All Rights Reserved
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -147,23 +147,6 @@ public class HTTPResponse {
     return null;
   }
 
-  /**
-   * Hard resets this response if it hasn't been committed yet. If the response has been committed back to the client, this throws up.
-   */
-  public void reset() {
-    if (outputStream.isCommitted()) {
-      throw new IllegalStateException("The HTTPResponse can't be reset after it has been committed, meaning at least one byte was written back to the client.");
-    }
-
-    cookies.clear();
-    headers.clear();
-    exception = null;
-    outputStream.reset();
-    status = 200;
-    statusMessage = null;
-    writer = null;
-  }
-
   public void setContentLength(long length) {
     setHeader(Headers.ContentLength, Long.toString(length));
   }
@@ -272,8 +255,10 @@ public class HTTPResponse {
    *     this method does.
    */
   public boolean isKeepAlive() {
-    String value = getHeader(Headers.Connection);
-    return value == null || value.equalsIgnoreCase(Connections.KeepAlive);
+    // TODO : Daniel Review : Should this have the same logic as HTTPRequest.isKeepAlive?
+    //        - The request says if null or != "close" then it is keep alive.
+    String connection = getHeader(Headers.Connection);
+    return connection == null || connection.equalsIgnoreCase(Connections.KeepAlive);
   }
 
   public void removeCookie(String name) {
@@ -289,6 +274,23 @@ public class HTTPResponse {
     if (name != null) {
       headers.remove(name.toLowerCase());
     }
+  }
+
+  /**
+   * Hard resets this response if it hasn't been committed yet. If the response has been committed back to the client, this throws up.
+   */
+  public void reset() {
+    if (outputStream.isCommitted()) {
+      throw new IllegalStateException("The HTTPResponse can't be reset after it has been committed, meaning at least one byte was written back to the client.");
+    }
+
+    cookies.clear();
+    headers.clear();
+    exception = null;
+    outputStream.reset();
+    status = 200;
+    statusMessage = null;
+    writer = null;
   }
 
   public void sendRedirect(String uri) {
