@@ -589,19 +589,28 @@ public class CoreTest extends BaseTest {
   public void serverTimeout() throws Exception {
     // This test simulates if the server has a long-running thread that doesn't write fast enough
     HTTPHandler handler = (req, res) -> {
-      System.out.println("Handling");
+      System.out.println("Handling ... (slowly)");
+      // Note that if you comment out the sleep, the test should fail.
       sleep(4_000L);
       res.setStatus(200);
-      res.setContentLength(0L);
+      var body = "I'm slow but I'm good.".getBytes(StandardCharsets.UTF_8);
+      res.setContentLength(body.length);
+      res.getOutputStream().write(body);
       res.getOutputStream().close();
       System.out.println("Closed");
     };
 
+    // TODO : Daniel Review : what are we trying to test here, this test isn't doing what we think.
+    //        It seems we are writing to the server as a client, and the server is slow to write back.
+    //        But this would be a client timeout and not a server timeout?
+    //       Seems like we should use withProcessingTimeoutDuration instead of withInitialReadTimeout?
     var instrumenter = new CountingInstrumenter();
-    try (var ignore = makeServer("http", handler, instrumenter).withInitialReadTimeout(Duration.ofSeconds(1)).start(); Socket socket = new Socket("127.0.0.1", 4242)) {
+    try (var ignore = makeServer("http", handler, instrumenter).withProcessingTimeoutDuration(Duration.ofSeconds(1)).start(); Socket socket = new Socket("127.0.0.1", 4242)) {
       var out = socket.getOutputStream();
+      // 1. Write a body to the server
       out.write("""
           GET / HTTP/1.1\r
+          Host: localhost:42\r
           Connection: close\r
           Content-Length: 4\r
           \r
@@ -609,9 +618,12 @@ public class CoreTest extends BaseTest {
           """.getBytes());
       out.flush();
 
-      var in = socket.getInputStream();
-      var body = in.readAllBytes();
-      assertEquals(body.length, 0, new String(body));
+      // 2. Read from the server, assuming you will receive a response.
+      //   However, the server is very slow, it is going to wait 4s before it writes the response.
+      //    - We have configured the server with a 1s read timeout.
+      //    - Expect that we will have received a SocketTimeoutException and as such the response will be empty.
+      var response = socket.getInputStream().readAllBytes();
+      assertEquals(response.length, 0, new String(response));
       assertEquals(instrumenter.getClosedConnections(), 1);
     }
   }
