@@ -1,5 +1,5 @@
 /*
- * Copyright (c) 2022-2024, FusionAuth, All Rights Reserved
+ * Copyright (c) 2022-2025, FusionAuth, All Rights Reserved
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -325,8 +325,19 @@ public abstract class BaseTest {
 
       // Sockets are pretty resilient, so this will be closed by the server, but we'll just see that close are zero bytes read. If we were
       // to continue writing above, then that likely would throw an exception because the pipe would be broken
+
+      // TODO : Daniel :
+      //        In many cases we still return a 400 to the client when a request is invalid. So there will be bytes to read.
+      //        We could require the caller to provide and expect status code, and or response body.
+      //        Currently, this is just used by one test, so I have hard coded the expected response.
+
       byte[] buffer = is.readAllBytes();
-      assertEquals(buffer.length, 0);
+      assertEquals(new String(buffer), """
+          HTTP/1.1 400 \r
+          connection: close\r
+          content-length: 0\r
+          \r
+          """);
     } catch (Exception e) {
       fail(e.getMessage());
     }
@@ -392,12 +403,12 @@ public abstract class BaseTest {
       }
 
       System.out.println("""
-
+          
           Test failure
           -----------------
           Exception: {{exception}}
           Message: {{message}}
-
+          
           Stack traces (client side):
           {{threadDump}}
           -----------------

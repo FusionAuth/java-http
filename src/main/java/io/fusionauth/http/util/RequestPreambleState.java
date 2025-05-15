@@ -1,5 +1,5 @@
 /*
- * Copyright (c) 2022-2024, FusionAuth, All Rights Reserved
+ * Copyright (c) 2022-2025, FusionAuth, All Rights Reserved
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -98,7 +98,9 @@ public enum RequestPreambleState {
   RequestProtocol {
     @Override
     public RequestPreambleState next(byte ch) {
-      if (ch == 'H' || ch == 'T' || ch == 'P' || ch == '/' || ch == '1' || ch == '.') {
+      // While this server only supports HTTP/1.1, allow the request protocol to be parsed for any valid version.
+      // - The supported version will be validated elsewhere.
+      if (ch == 'H' || ch == 'T' || ch == 'P' || ch == '/' || ch == '.' || (ch >= '0' && ch <= '9')) {
         return RequestProtocol;
       } else if (ch == '\r') {
         return RequestCR;
@@ -268,6 +270,6 @@ public enum RequestPreambleState {
   public abstract boolean store();
 
   ParseException makeParseException(char ch) {
-    return new ParseException("Invalid character [" + ch + "] in state [" + this + "]");
+    return new ParseException("Invalid character [" + ch + "] in state [" + this + "]", this.name());
   }
 }

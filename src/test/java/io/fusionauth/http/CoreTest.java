@@ -1,5 +1,5 @@
 /*
- * Copyright (c) 2022-2024, FusionAuth, All Rights Reserved
+ * Copyright (c) 2022-2025, FusionAuth, All Rights Reserved
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -99,11 +99,14 @@ public class CoreTest extends BaseTest {
 
     var instrumenter = new CountingInstrumenter();
     try (var client = HttpClient.newHttpClient(); var ignore = makeServer("http", handler, instrumenter).start()) {
+      // Invalid request, missing Host header
+      // - This should cause the socket to be reset
       sendBadRequest("""
           GET / HTTP/1.1\r
           X-Bad-Header: Bad-Header\r\r
           """);
 
+      // TODO : Daniel : Review : What is this test doing? If I comment out reset() in HTTPWorker.close() the test still passes.
       URI uri = makeURI("http", "");
       HttpRequest request = HttpRequest.newBuilder()
                                        .uri(uri)
