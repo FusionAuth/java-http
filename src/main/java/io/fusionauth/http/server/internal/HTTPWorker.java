@@ -220,7 +220,7 @@ public class HTTPWorker implements Runnable {
       // If the conditions are perfect, we can still write back a 500
       if (error && response != null && !response.isCommitted()) {
         // Note that reset() clears the Connection response header.
-//        response.reset();
+        response.reset();
         response.setStatus(status);
         // TODO: Daniel : Should we always be sending back a Connection: close on an error such as this?
         //      - I think this is correct since we are calling socket.close() below?

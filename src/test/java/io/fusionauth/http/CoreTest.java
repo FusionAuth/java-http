@@ -62,11 +62,21 @@ import static org.testng.Assert.fail;
  */
 @SuppressWarnings({"UastIncorrectHttpHeaderInspection", "OptionalGetWithoutIsPresent", "ThrowablePrintedToSystemOut"})
 public class CoreTest extends BaseTest {
-  public static final String ExpectedResponse = "{\"version\":\"42\"}";
+  public static final String ExpectedResponse = """
+      {
+        "version": "42"
+      }
+      """
+      .replaceAll("\\s", "");
 
-  public static final String LongString = "12345678901234567890123456789012345678901234567890123456789012345678901234567890123456789012345678901234567890123456789012345678901234567890123456789012345678901234567890123456789012345678901234567890123456789012345678901234567890123456789012345678901234567890".repeat(64);
+  // This string is 16,640 characters long
+  public static final String LongString = "1234567890".repeat(1_664);
 
-  public static final String RequestBody = "{\"message\":\"Hello World\"";
+  public static final String RequestBody = """
+      {
+        "message": "Hello World"
+      }
+      """;
 
   @Test(dataProvider = "schemes")
   public void badLanguage(String scheme) throws Exception {
