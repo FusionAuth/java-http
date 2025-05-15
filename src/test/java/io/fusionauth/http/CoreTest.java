@@ -272,12 +272,16 @@ public class CoreTest extends BaseTest {
     // This test simulates if the client doesn't send bytes for the initial timeout
     HTTPHandler handler = (req, res) -> fail("Should not be called");
 
+    // TODO : Daniel : Flaky test, need to review timeouts?, try invoking 5 or more times.
+    //                 Assuming that the socket gets re-used and that may be the difference in testing.
+    //        Maybe in the "timeouts" group we need to be sure to tear down the socket all the way in between tests?
     var instrumenter = new CountingInstrumenter();
     try (var ignore = makeServer("http", handler, instrumenter).withInitialReadTimeout(Duration.ofMillis(250)).start(); var socket = new Socket("127.0.0.1", 4242)) {
       var out = socket.getOutputStream();
       sleep(2_000);
       out.write("""
           GET / HTTP/1.1\r
+          Host: localhost:42\r
           Connection: close\r
           Content-Length: 4\r
           \r
