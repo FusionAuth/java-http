@@ -784,6 +784,7 @@ public class CoreTest extends BaseTest {
     byte[] bytes = new byte[1024 * 1024 * 8];
     new SecureRandom().nextBytes(bytes);
 
+    // The server will write this back to the client
     HTTPHandler handler = (req, res) -> {
       res.setContentType("application/octet-stream");
       res.setContentLength(bytes.length);
@@ -798,10 +799,17 @@ public class CoreTest extends BaseTest {
       out.close();
     };
 
+    // TODO : Daniel Review : What are we testing here? Is this testing the "reader too slow" which is the read throughput calculation?
+    //        Or the initial read timeout?
+    //        Neither were being changed from the defaults. Default bytes / second on the read is 16k.
+    //        The test comments below mention waiting for 2 seconds, so assuming that is referring to the initialReadTimeoutDuration?
+    //        This test is flaky, adding Connection: close on the client doesn't seem to help either.
+    //        It does seem to fail on http, but pass on https for some reason. Needs investigation.
     AtomicBoolean slept = new AtomicBoolean(false);
     try (var client = makeClient(scheme, null); var ignore = makeServer(scheme, handler).start()) {
       URI uri = makeURI(scheme, "");
       client.send(
+          // Don't keep this connection open because the timeouts aren't the same on a keep alive.
           HttpRequest.newBuilder().uri(uri).GET().build(),
           r -> BodySubscribers.ofByteArrayConsumer(optional -> {
             byte[] actual = optional.orElse(null);
