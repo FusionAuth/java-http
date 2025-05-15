@@ -83,17 +83,23 @@ public class ExpectTest extends BaseTest {
       res.setStatusMessage("Continue");
     };
 
+    // Test w/ and w/out a custom expect validator. The default behavior should be to approve the payload.
     CountingInstrumenter instrumenter = new CountingInstrumenter();
-    try (HTTPServer ignore = makeServer(scheme, handler, instrumenter, validator).start(); var client = makeClient(scheme, null)) {
-      URI uri = makeURI(scheme, "");
-      var response = client.send(
-          HttpRequest.newBuilder().uri(uri).header(Headers.ContentType, "application/json").expectContinue(true).POST(BodyPublishers.ofString(RequestBody)).build(),
-          r -> BodySubscribers.ofString(StandardCharsets.UTF_8)
-      );
+    boolean[] validationOptions = {true, false};
+    for (boolean validation : validationOptions) {
+      ExpectValidator expectValidator = validation ? validator : null;
 
-      assertEquals(response.statusCode(), 200);
-      assertEquals(response.body(), ExpectedResponse);
-      assertTrue(validated.get());
+      try (HTTPServer ignore = makeServer(scheme, handler, instrumenter, expectValidator).start(); var client = makeClient(scheme, null)) {
+        URI uri = makeURI(scheme, "");
+        var response = client.send(
+            HttpRequest.newBuilder().uri(uri).header(Headers.ContentType, "application/json").expectContinue(true).POST(BodyPublishers.ofString(RequestBody)).build(),
+            r -> BodySubscribers.ofString(StandardCharsets.UTF_8)
+        );
+
+        assertEquals(response.statusCode(), 200);
+        assertEquals(response.body(), ExpectedResponse);
+        assertTrue(validated.get());
+      }
     }
   }
 

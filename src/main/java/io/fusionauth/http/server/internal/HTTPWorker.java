@@ -25,6 +25,7 @@ import io.fusionauth.http.ConnectionClosedException;
 import io.fusionauth.http.HTTPValues;
 import io.fusionauth.http.HTTPValues.Connections;
 import io.fusionauth.http.HTTPValues.Headers;
+import io.fusionauth.http.HTTPValues.Protocols;
 import io.fusionauth.http.ParseException;
 import io.fusionauth.http.log.Logger;
 import io.fusionauth.http.server.HTTPHandler;
@@ -130,7 +131,7 @@ public class HTTPWorker implements Runnable {
 
           // If the "expect" wasn't accepted, close the socket and exit
           if (!expectContinue(request)) {
-            close(Status.OK, response);
+            closeSocketOnly();
             return;
           }
 
@@ -148,7 +149,7 @@ public class HTTPWorker implements Runnable {
         // Since the Handler can change the Keep-Alive state, we use the response here
         if (!keepAlive) {
           logger.debug("[{}] Close socket. No Keep-Alive", Thread.currentThread().threadId());
-          close(Status.OK, response);
+          closeSocketOnly();
           break;
         }
 
@@ -211,7 +212,7 @@ public class HTTPWorker implements Runnable {
   }
 
   private void close(int status, HTTPResponse response) {
-    boolean error = status != 200;
+    boolean error = status > 299;
     if (error && instrumenter != null) {
       instrumenter.connectionClosed();
     }
@@ -235,11 +236,28 @@ public class HTTPWorker implements Runnable {
     }
   }
 
+  private void closeSocketOnly() {
+    try {
+      socket.close();
+    } catch (IOException e) {
+      logger.debug(String.format("[%s] Could not close the connection because the socket threw an exception.", Thread.currentThread().threadId()), e);
+    }
+  }
+
   private boolean expectContinue(HTTPRequest request) throws IOException {
     var expectResponse = new HTTPResponse();
+    // Default to 100, the validator is optional. The HTTP response will default to 200.
+    expectResponse.setStatus(100);
+
+    // Invoke the optional validator
     var validator = configuration.getExpectValidator();
     if (validator != null) {
       validator.validate(request, expectResponse);
+    }
+
+    // Ignore the status message if set by the validator. A status code of 100 should always have a message of Continue.
+    if (expectResponse.getStatus() == 100) {
+      expectResponse.setStatusMessage("Continue");
     }
 
     // Write directly to the socket because the HTTPOutputStream does a lot of extra work that we don't want
@@ -247,6 +265,7 @@ public class HTTPWorker implements Runnable {
     HTTPTools.writeResponsePreamble(expectResponse, out);
     out.flush();
 
+    // A status code of 100 means go for it.
     return expectResponse.getStatus() == 100;
   }
 
@@ -262,14 +281,14 @@ public class HTTPWorker implements Runnable {
 
     if (!protocol.startsWith("HTTP/")) {
       if (logger.isTraceEnabled()) {
-        logger.trace("Invalid request. Invalid protocol [{}]. Supported versions [HTTP/1.1].", protocol);
+        logger.trace("Invalid request. Invalid protocol [{}]. Supported versions [{}].", protocol, Protocols.HTTTP1_1);
       }
       return Status.BadRequest;
     }
 
-    if (!"HTTP/1.1".equals(protocol)) {
+    if (!Protocols.HTTTP1_1.equals(protocol)) {
       if (logger.isTraceEnabled()) {
-        logger.trace("Invalid request. Unsupported HTTP version [{}]. Supported versions [HTTP/1.1].", protocol);
+        logger.trace("Invalid request. Unsupported HTTP version [{}]. Supported versions [{}].", protocol, Protocols.HTTTP1_1);
       }
       return Status.HTTPVersionNotSupported;
     }
