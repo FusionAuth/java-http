@@ -17,7 +17,7 @@ jackson5Version = "3.0.1"
 restifyVersion = "4.2.1"
 testngVersion = "7.10.2"
 
-project(group: "io.fusionauth", name: "java-http", version: "0.4.0-RC.6", licenses: ["ApacheV2_0"]) {
+project(group: "io.fusionauth", name: "java-http", version: "0.4.0-RC.7", licenses: ["ApacheV2_0"]) {
   workflow {
     fetch {
       // Dependency resolution order:

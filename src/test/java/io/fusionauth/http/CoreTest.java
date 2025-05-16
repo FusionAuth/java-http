@@ -35,6 +35,7 @@ import java.util.List;
 import java.util.Locale;
 import java.util.Map;
 import java.util.concurrent.atomic.AtomicBoolean;
+import java.util.concurrent.atomic.AtomicInteger;
 import java.util.zip.InflaterInputStream;
 
 import com.inversoft.net.ssl.SSLTools;
@@ -830,6 +831,7 @@ public class CoreTest extends BaseTest {
   public void slowClient(String scheme) throws Exception {
     // Test a slow connection where the HTTP server is blocked because we cannot write to the output stream as fast as we'd like. The
     // default buffer on macOS seems to be 768k (from my testing). I set this to 8MB which should hopefully cause the writes to back up.
+    // - This tests the minimumWriteThroughput and writeThroughputCalculationDelayDuration
     byte[] bytes = new byte[1024 * 1024 * 8];
     new SecureRandom().nextBytes(bytes);
 
@@ -839,23 +841,23 @@ public class CoreTest extends BaseTest {
       res.setContentLength(bytes.length);
       res.setStatus(200);
 
-      int interation = 1;
+      int iteration = 1;
       var out = res.getOutputStream();
-      for (int i = 0; i < bytes.length; i += 1024 * 16) {
-        out.write(bytes, i, 1024 * 16);
-        System.out.println("Wrote " + (interation++ * 16) + "k");
+      for (int i = 0; i < bytes.length; i += 1024 * 8) {
+        out.write(bytes, i, 1024 * 8);
+        System.out.println("> Wrote    [" + (8 * 1024) + "] bytes. Total bytes written  [" + (iteration++ * 8 * 1024) + "].");
       }
       out.close();
     };
 
-    // TODO : Daniel Review : What are we testing here? Is this testing the "reader too slow" which is the read throughput calculation?
-    //        Or the initial read timeout?
-    //        Neither were being changed from the defaults. Default bytes / second on the read is 16k.
-    //        The test comments below mention waiting for 2 seconds, so assuming that is referring to the initialReadTimeoutDuration?
-    //        This test is flaky, adding Connection: close on the client doesn't seem to help either.
-    //        It does seem to fail on http, but pass on https for some reason. Needs investigation.
+    // Set the min write throughput to 1 Megabit / second
+    // - In this case the server is trying to write the client, and it cannot do so fast enough.
     AtomicBoolean slept = new AtomicBoolean(false);
-    try (var client = makeClient(scheme, null); var ignore = makeServer(scheme, handler).start()) {
+    AtomicInteger totalBytesReceived = new AtomicInteger();
+    try (var client = makeClient(scheme, null); var ignore = makeServer(scheme, handler)
+        // By default, we will wait 5 seconds before we calculate write throughput, reduce to this to 1 ms for this test.
+        .withWriteThroughputCalculationDelayDuration(Duration.ofMillis(1))
+        .withMinimumWriteThroughput(1024* 1024 * 1024).start()) {
       URI uri = makeURI(scheme, "");
       client.send(
           // Don't keep this connection open because the timeouts aren't the same on a keep alive.
@@ -866,9 +868,9 @@ public class CoreTest extends BaseTest {
               // Sleep once since the server should fail after the first batch, but since Java or the OS might cache a lot of bytes it
               // read from the socket, we can't sleep for too long, otherwise, this test will never complete
               if (!slept.get()) {
-                int sleep = 5 * 1_000;
-                System.out.println("Received [" + actual.length + "] bytes. Sleep [" + sleep + "]");
-                sleep(sleep); // We expect to only wait for 2,000 ms
+                int sleep = 5_000;
+                System.out.println("> Received [" + actual.length + "] bytes. Total bytes received [" + totalBytesReceived.addAndGet(actual.length) + "]. Sleep [" + sleep + "] ms.");
+                sleep(sleep); // We expect to only wait for 2,000 ms until the cleaner runs to find slow clients.
                 slept.set(true);
               }
             } else {

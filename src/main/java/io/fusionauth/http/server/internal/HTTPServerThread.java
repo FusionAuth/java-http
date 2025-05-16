@@ -232,7 +232,9 @@ public class HTTPServerThread extends Thread {
 
             logger.debug("[{}] Closing connection readingSlow=[{}] writingSlow=[{}] timedOut=[{}] {}", threadId, readingSlow, writingSlow, timedOut, message);
             logger.debug("[{}] Closing client connection [{}] due to inactivity", threadId, worker.getSocket().getRemoteSocketAddress());
+          }
 
+          if (logger.isTraceEnabled()) {
             StringBuilder threadDump = new StringBuilder();
             for (Map.Entry<Thread, StackTraceElement[]> entry : Thread.getAllStackTraces().entrySet()) {
               threadDump.append(entry.getKey()).append(" ").append(entry.getKey().getState()).append("\n");
@@ -242,7 +244,7 @@ public class HTTPServerThread extends Thread {
               threadDump.append("\n");
             }
 
-            logger.debug("Thread dump from server side.\n" + threadDump);
+            logger.trace("Thread dump from server side.\n" + threadDump);
           }
 
           try {
