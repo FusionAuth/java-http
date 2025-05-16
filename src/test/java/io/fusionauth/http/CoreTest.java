@@ -279,7 +279,7 @@ public class CoreTest extends BaseTest {
     var instrumenter = new CountingInstrumenter();
     try (var ignore = makeServer("http", handler, instrumenter).withInitialReadTimeout(Duration.ofMillis(250)).start(); var socket = new Socket("127.0.0.1", 4242)) {
       var out = socket.getOutputStream();
-      sleep(2_000);
+      sleep(2_500);
       out.write("""
           GET / HTTP/1.1\r
           Host: localhost:42\r
@@ -386,6 +386,9 @@ public class CoreTest extends BaseTest {
 
       // This will hose up the works - or it did until we fixed it.
       req.getFormData();
+
+      // Ensure you can call this method and get the same value in return each time.
+      assertEquals(req.getBodyBytes(), req.getBodyBytes());
     };
 
     var instrumenter = new CountingInstrumenter();

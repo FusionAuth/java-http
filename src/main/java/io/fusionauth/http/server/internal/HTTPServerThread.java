@@ -157,7 +157,7 @@ public class HTTPServerThread extends Thread {
 
     public void run() {
       while (running) {
-        logger.trace("Wake up. Clean up server threads.");
+        logger.trace("Wake up. Clean up client worker threads.");
 
         Iterator<ClientInfo> iterator = clients.iterator();
         while (iterator.hasNext()) {
