@@ -1,5 +1,5 @@
 /*
- * Copyright (c) 2022-2023, FusionAuth, All Rights Reserved
+ * Copyright (c) 2022-2025, FusionAuth, All Rights Reserved
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -298,6 +298,7 @@ public final class HTTPTools {
     byte[] leftover = null;
     if (index < read) {
       logger.trace("Had [{}] body bytes from the preamble read.", (read - index));
+      // TODO : Daniel : Performance - can we just return an offset into the requestBuffer instead of copying these bytes?
       leftover = Arrays.copyOfRange(requestBuffer, index, read);
     }
 

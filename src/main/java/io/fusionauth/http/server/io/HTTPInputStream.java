@@ -1,5 +1,5 @@
 /*
- * Copyright (c) 2024, FusionAuth, All Rights Reserved
+ * Copyright (c) 2024-2025, FusionAuth, All Rights Reserved
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -89,6 +89,8 @@ public class HTTPInputStream extends InputStream {
     }
 
     int b;
+    // If bodyBytes exist, they are left over bytes from parsing the preamble.
+    // - Process these bytes first before reading from the delegate InputStream.
     if (bodyBytes != null) {
       b = bodyBytes[bodyBytesIndex++];
 
@@ -124,6 +126,8 @@ public class HTTPInputStream extends InputStream {
     }
 
     int read;
+    // If bodyBytes exist, they are left over bytes from parsing the preamble.
+    // - Process these bytes first before reading from the delegate InputStream.
     if (bodyBytes != null) {
       read = Math.min(bodyBytes.length, length);
       System.arraycopy(bodyBytes, bodyBytesIndex, buffer, offset, read);
@@ -133,7 +137,7 @@ public class HTTPInputStream extends InputStream {
         bodyBytes = null;
       }
     } else {
-      read = delegate.read(buffer);
+      read = delegate.read(buffer, offset, length);
     }
 
     if (instrumenter != null) {

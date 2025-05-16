@@ -264,14 +264,16 @@ public class HTTPRequest implements Buildable<HTTPRequest> {
   }
 
   public byte[] getBodyBytes() throws BodyException {
-    if (bodyBytes == null && inputStream != null) {
-      try {
-        bodyBytes = inputStream.readAllBytes();
-      } catch (IOException e) {
-        throw new BodyException("Unable to read the HTTP request body bytes", e);
+    if (bodyBytes == null) {
+      if (inputStream != null) {
+        try {
+          bodyBytes = inputStream.readAllBytes();
+        } catch (IOException e) {
+          throw new BodyException("Unable to read the HTTP request body bytes", e);
+        }
+      } else {
+        bodyBytes = new byte[0];
       }
-    } else {
-      bodyBytes = new byte[0];
     }
 
     return bodyBytes;

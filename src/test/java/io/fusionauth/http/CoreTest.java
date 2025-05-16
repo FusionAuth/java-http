@@ -368,6 +368,51 @@ public class CoreTest extends BaseTest {
   }
 
   @Test
+  public void large_body() throws Exception {
+    // Ensure that when the body bytes overflow from the initial "left over" bytes read
+    // during reading of the preamble, the remaining bytes read from the HTTPInputStream
+    // properly use offset and lengths when reading.
+
+    var payload = "foo=" + "1234567890".repeat(12 * 1024);
+    byte[] bytes = payload.getBytes(StandardCharsets.UTF_8);
+
+    HTTPHandler handler = (req, res) -> {
+      res.setStatus(200);
+      res.setContentType("application/x-www-form-urlencoded");
+      res.setContentLength(req.getBodyBytes().length);
+      res.getOutputStream().write(req.getBodyBytes());
+      res.getOutputStream().close();
+
+      // This will hose up the works - or it did until we fixed it.
+      req.getFormData();
+    };
+
+    var instrumenter = new CountingInstrumenter();
+    try (var ignore = makeServer("http", handler, instrumenter).start(); var socket = new Socket("127.0.0.1", 4242)) {
+      var out = socket.getOutputStream();
+      var request = """
+          GET / HTTP/1.1\r
+          Host: localhost:42\r
+          Content-Type: application/x-www-form-urlencoded\r
+          Content-Length: {contentLength}\r
+          \r
+          {body}
+          """.replace("{contentLength}", "" + bytes.length)
+             .replace("{body}", payload);
+      out.write(request.getBytes());
+      out.flush();
+      var in = socket.getInputStream();
+
+      var responseBytes = in.readAllBytes();
+      var responseString = new String(responseBytes);
+
+      assertEquals(responseBytes.length, 122_999);
+      var payloadIndex = responseString.indexOf("\r\n\r\n") + 4;
+      assertEquals(responseString.substring(payloadIndex, responseBytes.length - 1), payload);
+    }
+  }
+
+  @Test
   public void logger() {
     // Test replacement values and ensure we are handling special regex characters.
     AccumulatingLogger logger = new AccumulatingLogger();
