@@ -266,6 +266,10 @@ public class HTTPWorker implements Runnable {
       // - If the response is committed, someone already wrote to the client so we can't affect the response status, headers, etc.
       if (closeOption == CloseOption.TryToWriteFinalResponse && response != null && !response.isCommitted()) {
         // Ensure we have emptied the input stream before trying to write back a response.
+        // TODO : Daniel : Note that it may not actually be required to drain this... we can still write a response. Now... the client may not
+        //        be able to read it. Maybe that is ok. Not having to read the entire payload may be nice... and could avoid some potential DOS attacks.
+        //        In testing, I am able to read the HTTP response even w/out draining it.. it just requires the you reconnect the socket because upon
+        //        reading you will catch a SocketException due to the reset.
         boolean drainIt = false;
         if (inputStream != null) {
           try {
