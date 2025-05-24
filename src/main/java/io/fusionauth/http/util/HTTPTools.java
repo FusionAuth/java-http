@@ -254,6 +254,10 @@ public final class HTTPTools {
     int index = 0;
     while (state != RequestPreambleState.Complete) {
       read = inputStream.read(requestBuffer);
+      System.out.println(" > read [" + read + "] bytes");
+      System.out.println("\n" + new String(requestBuffer, 0, read));
+      // We have not yet reached the end of the preamble. If there are no more bytes to read, the connection must have been closed.
+      // - The request has been truncate.
       if (read < 0) {
         logger.trace("Read [{}] signal from client. Closing the socket.", read);
         throw new ConnectionClosedException();

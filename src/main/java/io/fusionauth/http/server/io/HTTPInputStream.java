@@ -64,22 +64,35 @@ public class HTTPInputStream extends InputStream {
   @Override
   public void close() throws IOException {
     // Ignore because we don't know if we should close the socket's InputStream
+
+    // TODO : Daniel : Review : Should this be revisited? This could be a good location to call drain?
+    //        See LeftOverInputStream.drain()
+    //        See FixedLengthInputStream
+    //        In some similar code, it seems that close calls drain - so in theory by closing the InputStream you can then
+    //        safely write to the output stream. Maybe this is the same difference that we are doing by directly calling drain().
+    //        Seems like there should be a better way, but maybe not - maybe it is only solved in HTTP2.
   }
 
-  public int purge() throws IOException {
-    if (bodyBytes != null) {
-      bytesRemaining -= (bodyBytes.length - bodyBytesIndex);
+  public long purge() throws IOException {
+    // Would this work?
+    // - Note: Please don't call delegate.skipNBytes(Long.MAX_VALUE)
+    // TODO : Daniel : Review : Try the above and see what happens - we may swap out the pointer on delegate during commit()
+    try {
+      System.out.println("   > skip [" + Long.MAX_VALUE + "] bytes...");
+      var result = skip(Long.MAX_VALUE);
+      System.out.println("   > purged [" + result + "] bytes");
+      return result;
+    } finally {
+      // Note that skip calls read, read honors bytesRemaining. Set this to 0 last.
+      bytesRemaining = 0;
     }
-
-    long purged = bytesRemaining;
-    delegate.skipNBytes(bytesRemaining);
-    bytesRemaining = 0;
-    return (int) purged;
   }
 
   @Override
   public int read() throws IOException {
     // Signal end of the stream
+    // TODO : Daniel : Review : What about chunked encoding, we will not have a Content-Length.
+    //        Should this also check if chunked, or does chunked never call this method?
     if (bytesRemaining <= 0) {
       return -1;
     }
@@ -117,6 +130,7 @@ public class HTTPInputStream extends InputStream {
   @Override
   public int read(byte[] buffer, int offset, int length) throws IOException {
     // Signal end of the stream if there is no more to read and the request isn't chunked
+    // TODO : Daniel : Review : When we drain to be able to write a response --- how does Transfer-Encoding work into this?
     if (bytesRemaining <= 0 && !request.isChunked()) {
       return -1;
     }
@@ -129,7 +143,7 @@ public class HTTPInputStream extends InputStream {
     // If bodyBytes exist, they are left over bytes from parsing the preamble.
     // - Process these bytes first before reading from the delegate InputStream.
     if (bodyBytes != null) {
-      read = Math.min(bodyBytes.length, length);
+      read = Math.min(bodyBytes.length - bodyBytesIndex, length);
       System.arraycopy(bodyBytes, bodyBytesIndex, buffer, offset, read);
       bodyBytesIndex += read;
 

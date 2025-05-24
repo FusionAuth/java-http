@@ -84,14 +84,17 @@ public class HTTPWorker implements Runnable {
 
   @Override
   public void run() {
+    HTTPInputStream httpInputStream = null;
     HTTPResponse response = null;
-    boolean keepAlive = false;
+
     try {
       if (instrumenter != null) {
         instrumenter.threadStarted();
       }
 
       while (true) {
+        var now = System.currentTimeMillis();
+        System.out.println("[" + now + "] Handle a new request.");
         logger.trace("[{}] Running HTTP worker and preparing to read preamble", Thread.currentThread().threadId());
         var request = new HTTPRequest(configuration.getContextPath(), configuration.getMultipartBufferSize(),
             listener.getCertificate() != null ? "https" : "http", listener.getPort(), socket.getInetAddress().getHostAddress());
@@ -104,25 +107,54 @@ public class HTTPWorker implements Runnable {
         response.setOutputStream(outputStream);
 
         var inputStream = new ThroughputInputStream(socket.getInputStream(), throughput);
-        var bodyBytes = HTTPTools.parseRequestPreamble(inputStream, request, buffers.requestBuffer(), instrumenter, () -> state = State.Read);
-        var httpInputStream = new HTTPInputStream(configuration, request, inputStream, bodyBytes);
+
+        byte[] bodyBytes;
+//        try {
+        // TODO : Daniel : Review since this is single threaded - can the bodyBytes just be a pointer into buffers.requestBuffer?
+        //        Or is it critical that we are done with the requestBuffer after this method returns to be used for another request?
+        //        If the default requestBuffer is 8k, then each virtual thread that is spun up to handle a request requires at least 8k?
+        //        Example: 200 virtual threads, 1,638,400 bytes in request buffer.
+        System.out.println(" > Wait for the preamble.... (blocking)");
+        // Not this line of code will block
+        // - When a client is using Keep-Alive - we will loop and block here while we wait for the client to send us bytes.
+        bodyBytes = HTTPTools.parseRequestPreamble(inputStream, request, buffers.requestBuffer(), instrumenter, () -> state = State.Read);
+
+//        } finally {
+        System.out.println(" > Read the preamble, build an HTTP InputStream....");
+        // parseRequestPreamble may throw a ParseException, but we want to be sure we have set the HTTPInputStream in all cases.
+        httpInputStream = new HTTPInputStream(configuration, request, inputStream, bodyBytes);
         request.setInputStream(httpInputStream);
+        System.out.println(" > set the InputStream on the HTTP request....");
+//        }
+
+        System.out.println(" > Handle keep-alive headers");
 
         // Set the Connection response header as soon as possible
-        if (request.isKeepAlive()) {
-          response.setHeader(Headers.Connection, Connections.KeepAlive);
-          keepAlive = true;
-        } else {
-          response.setHeader(Headers.Connection, Connections.Close);
-          keepAlive = false;
-        }
+        // - This needs to occur after we have parsed the pre-amble so we can read the request headers
+        response.setHeader(Headers.Connection, request.isKeepAlive() ? Connections.KeepAlive : Connections.Close);
+
+        System.out.println(" > validate the preamble");
 
         // Ensure the preamble is valid
+        // TODO : Daniel : Review : Write a test that sends in a large payload that will fail this check and see what happens.
+        //                 Expect this to hang? We have not yet read the input stream.
+        //        Daniel : Review : Write a test that uses transfer encoding with a large payload, try and validate the payload read that is too large and
+        //                          see if we can fail nicely to the client.
+        //                 .
+        //        Daniel : Review : If Content-Length !=0 OR Transfer-Encoding is NON null - then only option may be to close socket and not write back status?
+        //                 .
+        //                 How does Apache validate max payload size.. once they read n bytes, how do they bail?
+        //                 Do you have to read the entire input stream before we write to the output stream? Which means you either need to read to the end
+        //                 of the Content-Length, or parse the body per Transfer-Encoding and wait until you see the end of the request.
+        //
         Integer status = validatePreamble(request);
         if (status != null) {
-          close(status, response);
+          System.out.println(" > validatePreamble failed. Return status [" + status + "]");
+          closeSocket(CloseOption.TryToWriteFinalResponse, CloseOptionReason.Failure, httpInputStream, response, status);
           return;
         }
+
+        System.out.println(" > handle Expect headers....");
 
         // Handle the "expect" response
         String expect = request.getHeader(Headers.Expect);
@@ -131,9 +163,13 @@ public class HTTPWorker implements Runnable {
 
           // If the "expect" wasn't accepted, close the socket and exit
           if (!expectContinue(request)) {
+            // TODO : Daniel : Review : Call closeSocket instead.
             closeSocketOnly();
+//            closeSocket(CloseOption.CloseSocketOnly, CloseOptionReason.Ok, request, response, -1);
             return;
           }
+          // TODO : Daniel : Review : If we flush the status code in the expectContinue code.. does that mean the client starts writing a new request right away?
+          //        - And we just go back to the while(true) code?
 
           // Otherwise, transition the state to Read
           state = State.Read;
@@ -142,13 +178,25 @@ public class HTTPWorker implements Runnable {
         var handler = configuration.getHandler();
         state = State.Process; // Transition to processing
         logger.debug("[{}] Set state [{}]. Call the request handler.", Thread.currentThread().threadId(), state);
+        System.out.println(" > Handle the request...");
         handler.handle(request, response);
+        System.out.println(" > Close the response...");
         response.close();
         logger.trace("[{}] Handler completed successfully", Thread.currentThread().threadId());
 
-        // Since the Handler can change the Keep-Alive state, we use the response here
-        if (!keepAlive) {
+        // Purge the extra bytes in case the handler didn't read everything
+        System.out.println(" > Drain the input stream");
+        long purged = httpInputStream.purge();
+        if (purged > 0) {
+          logger.debug("[{}] Purged [{}] bytes.", purged, Thread.currentThread().threadId());
+        }
+
+        // The HTTP Request Handler may have modified the Connection header, so verify using the HTTP Response here.
+        // TODO : Daniel : Review : Write a test where the request handler sets Connection: close to ensure this is honored.
+        // - Note that we may nave not purged the InputStream in this case.
+        if (!response.isKeepAlive()) {
           logger.debug("[{}] Close socket. No Keep-Alive", Thread.currentThread().threadId());
+          System.out.println("> No keep alive.. close socket here! Assume the response has already been written.");
           closeSocketOnly();
           break;
         }
@@ -158,48 +206,44 @@ public class HTTPWorker implements Runnable {
         logger.debug("[{}] Set state [{}]", Thread.currentThread().threadId(), state);
         socket.setSoTimeout((int) configuration.getKeepAliveTimeoutDuration().toMillis());
 
-        // Purge the extra bytes in case the handler didn't read everything
-        int purged = httpInputStream.purge();
-        if (purged > 0) {
-          logger.debug("[{}] Purged [{}] bytes.", purged, Thread.currentThread().threadId());
-        }
 
       }
     } catch (SocketTimeoutException | ConnectionClosedException e) {
+      boolean socketTimeoutException = e instanceof SocketTimeoutException;
       // This might be a read timeout or a Keep-Alive timeout. The failure state is based on that flag
-      var status = keepAlive ? Status.OK : Status.InternalServerError; // 200 or 500
-      close(status, response);
+      closeSocket(CloseOption.CloseSocketOnly, CloseOptionReason.Failure, httpInputStream, response, -1);
 
-      if (keepAlive) {
-        logger.debug(String.format("[%s] Closing socket with status [%d]. Keep-Alive expired.", Thread.currentThread().threadId(), status), e);
+      if (socketTimeoutException) {
+        logger.debug(String.format("[%s] Closing socket. Keep-Alive expired.", Thread.currentThread().threadId()), e);
       } else {
-        logger.debug("[{}] Closing socket with status [{}]. Socket timed out.", Thread.currentThread().threadId(), status);
+        logger.debug("[{}] Closing socket. Connection closed by the client.", Thread.currentThread().threadId());
       }
     } catch (ParseException pe) {
       if (instrumenter != null) {
         instrumenter.badRequest();
       }
 
-      int status = 400;
-      logger.debug("[{}] Closing socket with status [{}]. Bad request, failed to parse request. Reason [{}] Parser state [{}]", Thread.currentThread().threadId(), status, pe.getMessage(), pe.getState());
-      close(status, response);
+      logger.debug("[{}] Closing socket with status [{}]. Bad request, failed to parse request. Reason [{}] Parser state [{}]", Thread.currentThread().threadId(), Status.BadRequest, pe.getMessage(), pe.getState());
+//      closeSocket(CloseOption.CloseSocketOnly, CloseOptionReason.Failure, httpInputStream, response, Status.BadRequest);
+      // TODO : Daniel : This seems to cause two response headers to be written? Or we are getting a 200 written prior to this and then we end up
+      //  a      with 200 and 400?
+      closeSocket(CloseOption.TryToWriteFinalResponse, CloseOptionReason.Failure, httpInputStream, response, Status.BadRequest);
     } catch (SocketException e) {
       // This should only happen when the server is shutdown and this thread is waiting to read or write. In that case, this will throw a
       // SocketException and the thread will be interrupted. Since the server is being shutdown, we should let the client know.
       if (Thread.currentThread().isInterrupted()) {
-        var status = Status.OK;
-        logger.debug("[{}] Closing socket with status [{}]. Server is shutting down.", Thread.currentThread().threadId(), status);
-        close(status, response);
+        // Close socket only. We do not want to potentially delay the shutdown at all.
+        logger.debug("[{}] Closing socket. Server is shutting down.", Thread.currentThread().threadId());
+        closeSocket(CloseOption.CloseSocketOnly, CloseOptionReason.Failure, httpInputStream, response, -1);
       }
     } catch (IOException io) {
-      var status = Status.InternalServerError;
-      logger.debug(String.format("[%s] Closing socket with status [%d]. An IO exception was thrown during processing. These are pretty common.", Thread.currentThread().threadId(), status), io);
-      close(status, response);
+      logger.debug(String.format("[%s] Closing socket with status [%d]. An IO exception was thrown during processing. These are pretty common.", Thread.currentThread().threadId(), Status.InternalServerError), io);
+      closeSocket(CloseOption.TryToWriteFinalResponse, CloseOptionReason.Failure, httpInputStream, response, Status.InternalServerError);
     } catch (Throwable t) {
       // Log the error and signal a failure
       var status = Status.InternalServerError;
       logger.error(String.format("[%s] Closing socket with status [%d]. An HTTP worker threw an exception while processing a request.", Thread.currentThread().threadId(), status), t);
-      close(status, response);
+      closeSocket(CloseOption.TryToWriteFinalResponse, CloseOptionReason.Failure, httpInputStream, response, status);
     } finally {
       if (instrumenter != null) {
         instrumenter.threadExited();
@@ -211,28 +255,56 @@ public class HTTPWorker implements Runnable {
     return state;
   }
 
-  private void close(int status, HTTPResponse response) {
-    boolean error = status > 299;
-    if (error && instrumenter != null) {
+  private void closeSocket(CloseOption closeOption, CloseOptionReason reason, HTTPInputStream inputStream, HTTPResponse response,
+                           int status) {
+    if (reason == CloseOptionReason.Failure && instrumenter != null) {
       instrumenter.connectionClosed();
     }
 
     try {
-      // If the conditions are perfect, we can still write back a 500
-      if (error && response != null && !response.isCommitted()) {
+      // If the conditions are perfect, we can still write back a status code.
+      // - If the response is committed, someone already wrote to the client so we can't affect the response status, headers, etc.
+      if (closeOption == CloseOption.TryToWriteFinalResponse && response != null && !response.isCommitted()) {
+        // Ensure we have emptied the input stream before trying to write back a response.
+        boolean drainIt = false;
+        if (inputStream != null) {
+          try {
+            if (drainIt) {
+              // TODO : Daniel : Review : this is essentially skip. Can we use that instead?
+              //        - It is also very similar to HTTPInputStream.purge() but it looks like that will not
+              //          do anything with a chunked InputStream.
+              //        - Seems like purge should also handle Chunked InputStream, or is it not intended to do that?
+              //noinspection ResultOfMethodCallIgnored
+
+              inputStream.purge();
+//              inputStream.purge();
+//              socket.getInputStream().close(); // THis causes a SocketClosed Exception when closing the response.
+            }
+          } catch (IOException e) {
+            // TODO : Daniel : Review : Can I write a test to force this condition?
+            logger.debug(String.format("[%s] Could not drain the HTTP InputStream.", Thread.currentThread().threadId()), e);
+          }
+        }
+
         // Note that reset() clears the Connection response header.
-        response.reset();
-        response.setStatus(status);
-        // TODO: Daniel : Should we always be sending back a Connection: close on an error such as this?
-        //      - I think this is correct since we are calling socket.close() below?
-        response.setHeader(Headers.Connection, Connections.Close);
-        response.setContentLength(0L);
-        response.close();
+        try {
+          response.reset();
+          response.setHeader(Headers.Connection, Connections.Close);
+          response.setStatus(status);
+          response.setContentLength(0L);
+          response.close();
+        } catch (Exception e) {
+          System.out.println("\n\nFailed to close the response!!!");
+          throw e;
+        }
       }
 
-      socket.close();
     } catch (IOException e) {
-      logger.debug(String.format("[%s] Could not close the connection because the socket threw an exception.", Thread.currentThread().threadId()), e);
+      logger.debug(String.format("[%s] Could not close the HTTP response.", Thread.currentThread().threadId()), e);
+    } finally {
+      // It is plausible that calling response.close() could throw an exception. We must ensure we close the socket.
+      // TODO : Daniel : Review : Can I write a test to force this condition?
+      closeSocketOnly();
     }
   }
 
@@ -240,24 +312,26 @@ public class HTTPWorker implements Runnable {
     try {
       socket.close();
     } catch (IOException e) {
-      logger.debug(String.format("[%s] Could not close the connection because the socket threw an exception.", Thread.currentThread().threadId()), e);
+      logger.debug(String.format("[%s] Could not close the socket.", Thread.currentThread().threadId()), e);
     }
   }
 
   private boolean expectContinue(HTTPRequest request) throws IOException {
     var expectResponse = new HTTPResponse();
-    // Default to 100, the validator is optional. The HTTP response will default to 200.
-    expectResponse.setStatus(100);
 
-    // Invoke the optional validator
+    // Invoke the optional validator. If the validator is not provided, default to 100 Continue.
     var validator = configuration.getExpectValidator();
     if (validator != null) {
       validator.validate(request, expectResponse);
+    } else {
+      expectResponse.setStatus(100);
+      expectResponse.setStatusMessage("Continue");
     }
 
-    // Ignore the status message if set by the validator. A status code of 100 should always have a message of Continue.
-    if (expectResponse.getStatus() == 100) {
-      expectResponse.setStatusMessage("Continue");
+    // If we are not continuing, do not re-use this connection.
+    boolean expectContinue = expectResponse.getStatus() == 100;
+    if (!expectContinue && !expectResponse.containsHeader(Headers.Connection)) {
+      expectResponse.setHeader(Headers.Connection, Connections.Close);
     }
 
     // Write directly to the socket because the HTTPOutputStream does a lot of extra work that we don't want
@@ -265,56 +339,78 @@ public class HTTPWorker implements Runnable {
     HTTPTools.writeResponsePreamble(expectResponse, out);
     out.flush();
 
-    // A status code of 100 means go for it.
-    return expectResponse.getStatus() == 100;
+    return expectContinue;
   }
 
   private Integer validatePreamble(HTTPRequest request) {
-    // Validate protocol. Only HTTP/1.1 is supported
+    var debugEnabled = logger.isDebugEnabled();
+
+    // Validate protocol. Protocol version is required.
     String protocol = request.getProtocol();
     if (protocol == null) {
-      if (logger.isTraceEnabled()) {
-        logger.trace("Invalid request. Missing HTTP Protocol");
-      }
+      logger.debug("Invalid request. Missing HTTP Protocol");
       return Status.BadRequest;
     }
 
+    // Only HTTP/ protocol is supported.
     if (!protocol.startsWith("HTTP/")) {
-      if (logger.isTraceEnabled()) {
-        logger.trace("Invalid request. Invalid protocol [{}]. Supported versions [{}].", protocol, Protocols.HTTTP1_1);
+      if (debugEnabled) {
+        logger.debug("Invalid request. Invalid protocol [{}]. Supported versions [{}].", protocol, Protocols.HTTTP1_1);
       }
+
       return Status.BadRequest;
     }
 
-    if (!Protocols.HTTTP1_1.equals(protocol)) {
-      if (logger.isTraceEnabled()) {
-        logger.trace("Invalid request. Unsupported HTTP version [{}]. Supported versions [{}].", protocol, Protocols.HTTTP1_1);
+    // Minor versions less than 1 are allowed per spec. For example, HTTP/1.0 should be allowed and is considered to be compatible enough.
+    if (!protocol.equals("HTTP/1.0") && !protocol.equals("HTTP/1.1")) {
+      if (debugEnabled) {
+        logger.debug("Invalid request. Unsupported HTTP version [{}]. Supported versions [{}].", protocol, Protocols.HTTTP1_1);
       }
+
       return Status.HTTPVersionNotSupported;
     }
 
     // Host header is required
     var host = request.getRawHost();
     if (host == null) {
-      logger.trace("Invalid request. Missing Host header.");
+      logger.debug("Invalid request. Missing Host header.");
       return Status.BadRequest;
     }
 
     var hostHeaders = request.getHeaders(Headers.Host);
     if (hostHeaders.size() != 1) {
-      if (logger.isTraceEnabled()) {
-        logger.trace("Invalid request. Duplicate Host headers. [{}]", String.join(", ", hostHeaders));
+      if (debugEnabled) {
+        logger.debug("Invalid request. Duplicate Host headers. [{}]", String.join(", ", hostHeaders));
       }
+
       return Status.BadRequest;
     }
 
-    // Content-Length cannot be negative
-    var contentLength = request.getContentLength();
-    if (contentLength != null && contentLength < 0) {
-      if (logger.isTraceEnabled()) {
-        logger.trace("Invalid request. The Content-Length cannot be negative. [{}]", contentLength);
+    // If Transfer-Encoding is present, ignore Content-Length
+    // - In theory it is an error to send both the Transfer-Encoding and the Content-Length headers.
+    //   However, as long as we ignore Content-Length we should be ok.
+    if (request.getHeader(Headers.TransferEncoding) == null) {
+      var contentLength = request.getContentLength();
+      var requestedContentLengthHeaders = request.getHeaders(Headers.ContentLength);
+      if (requestedContentLengthHeaders != null) {
+        if (requestedContentLengthHeaders.size() != 1) {
+          if (debugEnabled) {
+            logger.debug("Invalid request. Duplicate Content-Length headers. [{}]", String.join(", ", requestedContentLengthHeaders));
+          }
+
+          // If we cannot trust the Content-Length it is unlikely we can correctly drain the InputStream in order for the client to read our response.
+          return Status.BadRequest;
+        }
+
+        if (contentLength == null || contentLength < 0) {
+          if (debugEnabled) {
+            logger.debug("Invalid request. The Content-Length must be >= 0 and <= 9,223,372,036,854,775,807. [{}]", requestedContentLengthHeaders.getFirst());
+          }
+
+          // If we cannot trust the Content-Length it is unlikely we can correctly drain the InputStream in order for the client to read our response.
+          return Status.BadRequest;
+        }
       }
-      return Status.BadRequest;
     }
 
     return null;
@@ -327,13 +423,23 @@ public class HTTPWorker implements Runnable {
     KeepAlive
   }
 
+  // TODO : Daniel : Review : Do we need this or can we just call closeSocketOnly?
+  private enum CloseOption {
+    CloseSocketOnly,
+    TryToWriteFinalResponse
+  }
+
+  // TODO : Daniel : Review : Do I need this?
+  private enum CloseOptionReason {
+    Ok,
+    Failure
+  }
+
   private static class Status {
     public static final int BadRequest = 400;
 
     public static final int HTTPVersionNotSupported = 505;
 
     public static final int InternalServerError = 500;
-
-    public static final int OK = 200;
   }
 }

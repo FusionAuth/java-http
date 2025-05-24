@@ -38,6 +38,7 @@ public class HTTPServerConfiguration implements Configurable<HTTPServerConfigura
 
   private String contextPath = "";
 
+  // TODO : Daniel : Add new validator that does the default.
   private ExpectValidator expectValidator;
 
   private HTTPHandler handler;

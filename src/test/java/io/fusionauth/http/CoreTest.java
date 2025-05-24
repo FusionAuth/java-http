@@ -50,6 +50,7 @@ import io.fusionauth.http.server.CountingInstrumenter;
 import io.fusionauth.http.server.HTTPHandler;
 import io.fusionauth.http.server.HTTPListenerConfiguration;
 import io.fusionauth.http.server.HTTPServer;
+import io.fusionauth.http.server.HTTPServerConfiguration;
 import org.testng.annotations.Test;
 import static org.testng.Assert.assertEquals;
 import static org.testng.Assert.assertNull;
@@ -112,6 +113,8 @@ public class CoreTest extends BaseTest {
     try (var client = HttpClient.newHttpClient(); var ignore = makeServer("http", handler, instrumenter).start()) {
       // Invalid request, missing Host header
       // - This should cause the socket to be reset
+      // TODO : If we return a 400 since this is a client error and not a server error we are not currently resetting the request.
+      //        Do we need to?
       sendBadRequest("""
           GET / HTTP/1.1\r
           X-Bad-Header: Bad-Header\r\r
@@ -374,7 +377,9 @@ public class CoreTest extends BaseTest {
     // during reading of the preamble, the remaining bytes read from the HTTPInputStream
     // properly use offset and lengths when reading.
 
-    var payload = "foo=" + "1234567890".repeat(12 * 1024);
+    var value = "1234567890";
+    var valueLength = (new HTTPServerConfiguration().getRequestBufferSize() / value.length()) + 42;
+    var payload = "foo=" + value.repeat(valueLength);
     byte[] bytes = payload.getBytes(StandardCharsets.UTF_8);
 
     HTTPHandler handler = (req, res) -> {
@@ -410,7 +415,7 @@ public class CoreTest extends BaseTest {
       var responseBytes = in.readAllBytes();
       var responseString = new String(responseBytes);
 
-      assertEquals(responseBytes.length, 122_999);
+      assertEquals(responseBytes.length, 16918);
       var payloadIndex = responseString.indexOf("\r\n\r\n") + 4;
       assertEquals(responseString.substring(payloadIndex, responseBytes.length - 1), payload);
     }
@@ -580,7 +585,11 @@ public class CoreTest extends BaseTest {
       throw e;
     }
 
+    // Because we are not re-using the connections, we expect this to equal the iteration count.
     assertEquals(instrumenter.getConnections(), iterations);
+
+    // getClosedConnections() should only represent closed connections due to errors.
+    assertEquals(instrumenter.getClosedConnections(), 0);
   }
 
   /**
@@ -860,7 +869,7 @@ public class CoreTest extends BaseTest {
     try (var client = makeClient(scheme, null); var ignore = makeServer(scheme, handler)
         // By default, we will wait 5 seconds before we calculate write throughput, reduce to this to 1 ms for this test.
         .withWriteThroughputCalculationDelayDuration(Duration.ofMillis(1))
-        .withMinimumWriteThroughput(1024* 1024 * 1024).start()) {
+        .withMinimumWriteThroughput(1024 * 1024 * 1024).start()) {
       URI uri = makeURI(scheme, "");
       client.send(
           // Don't keep this connection open because the timeouts aren't the same on a keep alive.
@@ -1039,13 +1048,13 @@ public class CoreTest extends BaseTest {
 
     HTTPHandler handler = (req, res) -> {
       res.setHeader(Headers.ContentType, "text/plain");
-      res.setHeader(Headers.ContentLength, "" + ExpectedResponse.length());
+      res.setHeader(Headers.ContentLength, "" + ExpectedResponse.getBytes().length);
       res.setHeader("X-Response-Header", city);
       res.setStatus(200);
 
       try {
         OutputStream outputStream = res.getOutputStream();
-        outputStream.write(ExpectedResponse.getBytes());
+        outputStream.write((ExpectedResponse).getBytes());
         outputStream.close();
       } catch (IOException e) {
         throw new RuntimeException(e);
@@ -1054,10 +1063,9 @@ public class CoreTest extends BaseTest {
 
     // Java HttpClient only supports ASCII header values, so send request directly
     try (HTTPServer ignore = makeServer(scheme, handler).start();
-         Socket sock = makeClientSocket(scheme)) {
+         Socket socket = makeClientSocket(scheme)) {
 
-      var os = sock.getOutputStream();
-      var is = sock.getInputStream();
+      var os = socket.getOutputStream();
       os.write(String.format("""
                          GET /api/status HTTP/1.1\r
                          Host: localhost:42\r
@@ -1067,16 +1075,16 @@ public class CoreTest extends BaseTest {
                      .getBytes(StandardCharsets.UTF_8));
       os.flush();
 
-      var resp = new String(is.readAllBytes(), StandardCharsets.UTF_8);
-
-      assertEquals(resp, String.format("""
+      var expectedResponse = String.format("""
           HTTP/1.1 200 \r
           connection: keep-alive\r
           content-type: text/plain\r
           content-length: 16\r
           x-response-header: %s\r
           \r
-          {"version":"42"}""", city));
+          {"version":"42"}""", city);
+
+      assertHTTPResponseEquals(socket, expectedResponse);
     }
   }
 

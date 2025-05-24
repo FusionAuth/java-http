@@ -32,7 +32,7 @@ public enum RequestPreambleState {
         return RequestMethod;
       }
 
-      throw makeParseException((char) ch);
+      throw makeParseException(ch);
     }
 
     @Override
@@ -50,7 +50,7 @@ public enum RequestPreambleState {
         return RequestPath;
       }
 
-      throw makeParseException((char) ch);
+      throw makeParseException(ch);
     }
 
     @Override
@@ -68,7 +68,7 @@ public enum RequestPreambleState {
         return RequestPath;
       }
 
-      throw makeParseException((char) ch);
+      throw makeParseException(ch);
     }
 
     @Override
@@ -86,7 +86,7 @@ public enum RequestPreambleState {
         return RequestProtocol;
       }
 
-      throw makeParseException((char) ch);
+      throw makeParseException(ch);
     }
 
     @Override
@@ -106,7 +106,7 @@ public enum RequestPreambleState {
         return RequestCR;
       }
 
-      throw makeParseException((char) ch);
+      throw makeParseException(ch);
     }
 
     @Override
@@ -122,7 +122,7 @@ public enum RequestPreambleState {
         return RequestLF;
       }
 
-      throw makeParseException((char) ch);
+      throw makeParseException(ch);
     }
 
     @Override
@@ -140,7 +140,7 @@ public enum RequestPreambleState {
         return HeaderName;
       }
 
-      throw makeParseException((char) ch);
+      throw makeParseException(ch);
     }
 
     @Override
@@ -158,7 +158,7 @@ public enum RequestPreambleState {
         return HeaderColon;
       }
 
-      throw makeParseException((char) ch);
+      throw makeParseException(ch);
     }
 
     @Override
@@ -194,7 +194,7 @@ public enum RequestPreambleState {
         return HeaderValue;
       }
 
-      throw makeParseException((char) ch);
+      throw makeParseException(ch);
     }
 
     @Override
@@ -210,7 +210,7 @@ public enum RequestPreambleState {
         return HeaderLF;
       }
 
-      throw makeParseException((char) ch);
+      throw makeParseException(ch);
     }
 
     @Override
@@ -228,7 +228,7 @@ public enum RequestPreambleState {
         return HeaderName;
       }
 
-      throw makeParseException((char) ch);
+      throw makeParseException(ch);
     }
 
     @Override
@@ -244,7 +244,7 @@ public enum RequestPreambleState {
         return Complete;
       }
 
-      throw makeParseException((char) ch);
+      throw makeParseException(ch);
     }
 
     @Override
@@ -269,7 +269,8 @@ public enum RequestPreambleState {
 
   public abstract boolean store();
 
-  ParseException makeParseException(char ch) {
+  ParseException makeParseException(byte b) {
+    char ch = (char) b;
     return new ParseException("Invalid character [" + ch + "] in state [" + this + "]", this.name());
   }
 }

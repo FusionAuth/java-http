@@ -599,6 +599,9 @@ public class HTTPRequest implements Buildable<HTTPRequest> {
   }
 
   public boolean isChunked() {
+    // TODO : Daniel : Review : We could also check to see the request does not contain Content-Length
+    //        or when we validate the preamble, we should perhaps remove the Transfer-Encoding if we encounter a Content-Length
+    //        because it has to be one or the other.
     return getTransferEncoding() != null && getTransferEncoding().equalsIgnoreCase(TransferEncodings.Chunked);
   }
 

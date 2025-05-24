@@ -1,5 +1,5 @@
 /*
- * Copyright (c) 2022, FusionAuth, All Rights Reserved
+ * Copyright (c) 2022-2025, FusionAuth, All Rights Reserved
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -143,7 +143,7 @@ public class ChunkedInputStream extends InputStream {
           return ChunkSize;
         }
 
-        throw new ParseException();
+        throw makeParseException(ch);
       }
     },
 
@@ -153,7 +153,7 @@ public class ChunkedInputStream extends InputStream {
           return ChunkSizeLF;
         }
 
-        throw new ParseException();
+        throw makeParseException(ch);
       }
     },
 
@@ -172,7 +172,7 @@ public class ChunkedInputStream extends InputStream {
           return ChunkCR;
         }
 
-        throw new ParseException();
+        throw makeParseException(ch);
       }
     },
 
@@ -183,7 +183,7 @@ public class ChunkedInputStream extends InputStream {
           return length == 0 ? Complete : ChunkLF;
         }
 
-        throw new ParseException();
+        throw makeParseException(ch);
       }
     },
 
@@ -196,7 +196,7 @@ public class ChunkedInputStream extends InputStream {
           return ChunkSize;
         }
 
-        throw new ParseException();
+        throw makeParseException(ch);
       }
     },
 
@@ -208,5 +208,10 @@ public class ChunkedInputStream extends InputStream {
     };
 
     public abstract ChunkedBodyState next(byte ch, long length, long bytesRead);
+
+    ParseException makeParseException(byte b) {
+      char ch = (char) b;
+      return new ParseException("Invalid byte [" + ch + "] in state [" + this + "]", this.name());
+    }
   }
 }

@@ -689,6 +689,7 @@
       <codeStyleSettings language="JAVA">
         <option name="BLANK_LINES_AROUND_FIELD" value="1" />
         <option name="ALIGN_MULTILINE_CHAINED_METHODS" value="true" />
+        <option name="ALIGN_MULTILINE_BINARY_OPERATION" value="true" />
         <option name="METHOD_PARAMETERS_WRAP" value="1" />
         <option name="THROWS_KEYWORD_WRAP" value="1" />
         <option name="WRAP_COMMENTS" value="true" />

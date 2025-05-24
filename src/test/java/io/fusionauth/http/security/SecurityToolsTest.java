@@ -34,12 +34,11 @@ import static org.testng.Assert.assertEquals;
  * @author Mark Manes
  */
 public class SecurityToolsTest extends BaseTest {
-
-  static Path projectDir;
+  private static Path projectDir;
 
   @BeforeClass
   public static void setUp() {
-    projectDir = Path.of("");
+    projectDir = java.nio.file.Path.of("");
   }
 
   @Test
@@ -50,7 +49,7 @@ public class SecurityToolsTest extends BaseTest {
 
     try (var client = HttpClient.newHttpClient()) {
       HttpRequest request = HttpRequest.newBuilder()
-                                       .uri(URI.create("https://login.fusionauth.io"))
+                                       .uri(URI.create("https://fusionauth.io"))
                                        .GET()
                                        .build();
       var response = client.send(request, r -> BodySubscribers.ofString(StandardCharsets.UTF_8));

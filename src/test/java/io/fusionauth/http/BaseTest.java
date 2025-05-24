@@ -21,8 +21,10 @@ import java.io.OutputStream;
 import java.math.BigInteger;
 import java.net.CookieHandler;
 import java.net.Socket;
+import java.net.SocketException;
 import java.net.URI;
 import java.net.http.HttpClient;
+import java.nio.charset.StandardCharsets;
 import java.nio.file.Paths;
 import java.security.GeneralSecurityException;
 import java.security.InvalidAlgorithmParameterException;
@@ -95,13 +97,13 @@ public abstract class BaseTest {
    * This timeout is used for the HttpClient during each test. If you are in a debugger, you will need to change this timeout to be much
    * larger, otherwise, the client might truncate the request to the server.
    */
-  public static final Duration ClientTimeout = Duration.ofSeconds(2);
+  public static final Duration ClientTimeout = Duration.ofSeconds(30);
 
   /**
    * This timeout is used for the HTTPServer during each test. If you are in a debugger, you will need to change this timeout to be much
    * larger, otherwise, the server will toss out the request.
    */
-  public static final Duration ServerTimeout = Duration.ofSeconds(2);
+  public static final Duration ServerTimeout = Duration.ofSeconds(30);
 
   private static final ZonedDateTime TestStarted = ZonedDateTime.now();
 
@@ -271,9 +273,9 @@ public abstract class BaseTest {
 
     FileLoggerFactory factory = FileLoggerFactory.FACTORY;
     return new HTTPServer().withHandler(handler)
-                           .withKeepAliveTimeoutDuration(ServerTimeout)
-                           .withInitialReadTimeout(ServerTimeout)
-                           .withProcessingTimeoutDuration(ServerTimeout)
+                           .withKeepAliveTimeoutDuration(Duration.ofSeconds(3))
+                           .withInitialReadTimeout(Duration.ofSeconds(21))
+                           .withProcessingTimeoutDuration(Duration.ofSeconds(27))
                            .withExpectValidator(expectValidator)
                            .withInstrumenter(instrumenter)
                            .withLoggerFactory(factory)
@@ -351,6 +353,44 @@ public abstract class BaseTest {
   }
 
   /**
+   * This is a "faster" wait to assert on an HTTP response using only the socket w/out necessarily having to wait for the socket keep-alive
+   * timeout.
+   * <p>
+   * We start by assuming the number of bytes to read will be equal to the expected response. If that is not the case, then we try to read
+   * the remaining bytes from the socket knowing that we will block until we reach the socket timeout.
+   * <p>
+   * This way we can provide an accurate assertion on the actual response body vs the expected but as long as the test passes, we do not
+   * have to wait for the socket timeout.
+   *
+   * @param socket           the socket used to read the HTTP response
+   * @param expectedResponse the expected HTTP response
+   */
+  protected void assertHTTPResponseEquals(Socket socket, String expectedResponse) throws Exception {
+    var is = socket.getInputStream();
+    var expectedResponseLength = expectedResponse.getBytes(StandardCharsets.UTF_8).length;
+    var actualResponse = new String(is.readNBytes(expectedResponseLength), StandardCharsets.UTF_8);
+
+    // Perform an initial equality check, this is fast. If it fails, it may because there are remaining bytes left to read. This is slower.
+    if (!actualResponse.equals(expectedResponse)) {
+      // Note this is going to block until the socket keep-alive times out.
+      try {
+        assertResponseEquals(is, actualResponse, expectedResponse);
+      } catch (SocketException se) {
+        // If the server has not read the entire request, trying to read from the InputStream will cause a SocketException due to Connection reset.
+        // - Attempt to recover from this condition and read the response.
+        // - Note that "normal" HTTP clients won't do this, so this isn't to show what a client would normally see, but it is to show what the server
+        //   is returning regardless if the client is smart enough or cares enough to read the response.
+        if (se.getMessage().equals("Connection reset")) {
+          var addr = socket.getRemoteSocketAddress();
+          socket.close();
+          socket.connect(addr);
+          assertResponseEquals(socket.getInputStream(), actualResponse, expectedResponse);
+        }
+      }
+    }
+  }
+
+  /**
    * Verifies that the chain certificates can be validated up to the supplied root certificate. See
    * {@link CertPathValidator#validate(CertPath, CertPathParameters)} for details.
    */
@@ -378,6 +418,13 @@ public abstract class BaseTest {
     }
     // validate() will throw an exception if any check fails.
     validator.validate(certPath, pkixParameters);
+  }
+
+  private void assertResponseEquals(InputStream is, String actualResponse, String expectedResponse) throws IOException {
+    var remainingBytes = is.readAllBytes();
+    String fullResponse = actualResponse + new String(remainingBytes, StandardCharsets.UTF_8);
+    // Use assertEquals so we can get Eclipse error formatting
+    assertEquals(expectedResponse, fullResponse);
   }
 
   @SuppressWarnings("unused")

@@ -144,6 +144,13 @@ public final class HTTPValues {
     public static final String name = "name";
   }
 
+  public static final class HeaderBytes {
+    public static final byte[] SetCookie = Headers.SetCookie.getBytes();
+
+    private HeaderBytes() {
+    }
+  }
+
   /**
    * Header names.
    */
@@ -265,13 +272,6 @@ public final class HTTPValues {
     public static final String XForwardedProto = "X-Forwarded-Proto";
 
     private Headers() {
-    }
-  }
-
-  public static final class HeaderBytes {
-    public static final byte[] SetCookie = Headers.SetCookie.getBytes();
-
-    private HeaderBytes() {
     }
   }
 
