@@ -173,7 +173,7 @@ public class HTTPWorker implements Runnable {
         Integer status = validatePreamble(request);
         if (status != null) {
           // System.out.println(" > validatePreamble failed. Return status [" + status + "]");
-          closeSocket(CloseOption.TryToWriteFinalResponse, CloseOptionReason.Failure, httpInputStream, response, status);
+          closeSocketOnError(response, status);
           return;
         }
 
@@ -188,8 +188,7 @@ public class HTTPWorker implements Runnable {
           if (!expectContinue(request)) {
             // TODO : Daniel : Review : Call closeSocket instead.
             System.out.println("Expect continue - no, close socket.");
-            closeSocketOnly();
-//            closeSocket(CloseOption.CloseSocketOnly, CloseOptionReason.Ok, request, response, -1);
+            closeSocketOnly(CloseSockerReason.Expected);
             return;
           }
           // TODO : Daniel : Review : If we flush the status code in the expectContinue code.. does that mean the client starts writing a new request right away?
@@ -223,7 +222,7 @@ public class HTTPWorker implements Runnable {
 
         if (!keepSocketAlive) {
           logger.trace("[{}] Closing socket. No Keep-Alive.", Thread.currentThread().threadId());
-          closeSocketOnly();
+          closeSocketOnly(CloseSockerReason.Expected);
           break;
         }
 
@@ -233,45 +232,38 @@ public class HTTPWorker implements Runnable {
         logger.trace("[{}] Enter Keep-Alive state [{}] Reset socket timeout [{}].", Thread.currentThread().threadId(), state, soTimeout);
         socket.setSoTimeout(soTimeout);
       }
-    } catch (SocketTimeoutException | ConnectionClosedException e) {
-      boolean socketTimeoutException = e instanceof SocketTimeoutException;
-      if (socketTimeoutException) {
-        logger.debug(String.format("[%s] Closing socket. Keep-Alive expired.", Thread.currentThread().threadId()), e);
-      } else {
-        logger.debug("[{}] Closing socket. Client closed the connection. Reason [{}].", Thread.currentThread().threadId(), e.getMessage());
-      }
-
-      // This might be a read timeout or a Keep-Alive timeout. The failure state is based on that flag
-      closeSocket(CloseOption.CloseSocketOnly, CloseOptionReason.Failure, httpInputStream, response, -1);
+    } catch (ConnectionClosedException e) {
+      logger.debug("[{}] Closing socket. Client closed the connection. Reason [{}].", Thread.currentThread().threadId(), e.getMessage());
+      System.out.println("\n\n\nConnection closed!!!!!!! Don't increment the close connection counter.\n\n\n");
+      closeSocketOnly(CloseSockerReason.Expected);
+    } catch (SocketTimeoutException e) {
+      String message = state == State.Read ? "Initial read timeout" : "Keep-Alive expired";
+      logger.debug(String.format("[%s] Closing socket [%s]. %s.", Thread.currentThread().threadId(), state, message), e);
+      // This might be a read timeout or a Keep-Alive timeout. The reason is based on the worker state.
+      CloseSockerReason reason = state == State.KeepAlive ? CloseSockerReason.Expected : CloseSockerReason.Unexpected;
+      closeSocketOnly(reason);
     } catch (ParseException pe) {
-      if (instrumenter != null) {
-        instrumenter.badRequest();
-      }
-
       logger.debug("[{}] Closing socket with status [{}]. Bad request, failed to parse request. Reason [{}] Parser state [{}]", Thread.currentThread().threadId(), Status.BadRequest, pe.getMessage(), pe.getState());
-//      closeSocket(CloseOption.CloseSocketOnly, CloseOptionReason.Failure, httpInputStream, response, Status.BadRequest);
-      // TODO : Daniel : This seems to cause two response headers to be written? Or we are getting a 200 written prior to this and then we end up
-      //  a      with 200 and 400?
-      closeSocket(CloseOption.TryToWriteFinalResponse, CloseOptionReason.Failure, httpInputStream, response, Status.BadRequest);
+      closeSocketOnError(response, Status.BadRequest);
     } catch (SocketException e) {
       // This should only happen when the server is shutdown and this thread is waiting to read or write. In that case, this will throw a
       // SocketException and the thread will be interrupted. Since the server is being shutdown, we should let the client know.
       if (Thread.currentThread().isInterrupted()) {
         // Close socket only. We do not want to potentially delay the shutdown at all.
         logger.debug("[{}] Closing socket. Server is shutting down.", Thread.currentThread().threadId());
-//        System.out.println("SocketException: shutting down the server. Close the socket.");
-        closeSocket(CloseOption.CloseSocketOnly, CloseOptionReason.Failure, httpInputStream, response, -1);
+        // TODO : Daniel : if I call closeSocketOnly, I am not calling instrumenter.connectionClosed is that ok?
+        closeSocketOnly(CloseSockerReason.Expected);
       }
     } catch (IOException io) {
       logger.debug(String.format("[%s] Closing socket with status [%d]. An IO exception was thrown during processing. These are pretty common.", Thread.currentThread().threadId(), Status.InternalServerError), io);
       System.out.println("IOException: close the socket.");
-      closeSocket(CloseOption.TryToWriteFinalResponse, CloseOptionReason.Failure, httpInputStream, response, Status.InternalServerError);
+      closeSocketOnError(response, Status.InternalServerError);
     } catch (Throwable t) {
       // Log the error and signal a failure
       var status = Status.InternalServerError;
       logger.error(String.format("[%s] Closing socket with status [%d]. An HTTP worker threw an exception while processing a request.", Thread.currentThread().threadId(), status), t);
       System.out.println("Throwable: close the socket.\n" + t.getMessage());
-      closeSocket(CloseOption.TryToWriteFinalResponse, CloseOptionReason.Failure, httpInputStream, response, status);
+      closeSocketOnError(response, status);
     } finally {
       // TODO : Daniel : Review : Is this true? If we are using a keep-alive and we have not caught an exception, we have not yet exited the thread.
       if (instrumenter != null) {
@@ -284,64 +276,42 @@ public class HTTPWorker implements Runnable {
     return state;
   }
 
-  private void closeSocket(CloseOption closeOption, CloseOptionReason reason, HTTPInputStream inputStream, HTTPResponse response,
-                           int status) {
-    if (reason == CloseOptionReason.Failure && instrumenter != null) {
-      instrumenter.connectionClosed();
+  private void closeSocketOnError(HTTPResponse response, int status) {
+    if (status >= 400 && status <= 499 && instrumenter != null) {
+      instrumenter.badRequest();
     }
 
     try {
       // If the conditions are perfect, we can still write back a status code.
       // - If the response is committed, someone already wrote to the client so we can't affect the response status, headers, etc.
-      if (closeOption == CloseOption.TryToWriteFinalResponse && response != null && !response.isCommitted()) {
-        // Ensure we have emptied the input stream before trying to write back a response.
-        // TODO : Daniel : Note that it may not actually be required to drain this... we can still write a response. Now... the client may not
-        //        be able to read it. Maybe that is ok. Not having to read the entire payload may be nice... and could avoid some potential DOS attacks.
-        //        In testing, I am able to read the HTTP response even w/out draining it.. it just requires the you reconnect the socket because upon
-        //        reading you will catch a SocketException due to the reset.
-        boolean drainIt = false;
-        if (inputStream != null) {
-          try {
-            if (drainIt) {
-              // TODO : Daniel : Review : this is essentially skip. Can we use that instead?
-              //        - It is also very similar to HTTPInputStream.purge() but it looks like that will not
-              //          do anything with a chunked InputStream.
-              //        - Seems like purge should also handle Chunked InputStream, or is it not intended to do that?
-              //noinspection ResultOfMethodCallIgnored
-
-              inputStream.purge();
-//              inputStream.purge();
-//              socket.getInputStream().close(); // THis causes a SocketClosed Exception when closing the response.
-            }
-          } catch (IOException e) {
-            // TODO : Daniel : Review : Can I write a test to force this condition?
-            logger.debug(String.format("[%s] Could not drain the HTTP InputStream.", Thread.currentThread().threadId()), e);
-          }
-        }
+      if (response != null && !response.isCommitted()) {
+        // Note that we are intentionally not purging the InputStream prior to writing the response. In the most ideal sense, purging
+        // the input stream would allow the client to read this response more easily. However, most of the error conditions that would cause
+        // this path are malformed requests or potentially malicious payloads.
+        // It is still possible to read a response, the client simply needs to handle the socket reset, and reconnect to read the response.
+        // - Perhaps this is not common, but it is possible.
 
         // Note that reset() clears the Connection response header.
-        try {
-          response.reset();
-          response.setHeader(Headers.Connection, Connections.Close);
-          response.setStatus(status);
-          response.setContentLength(0L);
-          response.close();
-        } catch (Exception e) {
-          System.out.println("\n\nFailed to close the response!!!");
-          throw e;
-        }
+        response.reset();
+        response.setHeader(Headers.Connection, Connections.Close);
+        response.setStatus(status);
+        response.setContentLength(0L);
+        response.close();
       }
-
     } catch (IOException e) {
       logger.debug(String.format("[%s] Could not close the HTTP response.", Thread.currentThread().threadId()), e);
     } finally {
       // It is plausible that calling response.close() could throw an exception. We must ensure we close the socket.
       // TODO : Daniel : Review : Can I write a test to force this condition?
-      closeSocketOnly();
+      closeSocketOnly(CloseSockerReason.Unexpected);
     }
   }
 
-  private void closeSocketOnly() {
+  private void closeSocketOnly(CloseSockerReason reason) {
+    if (reason == CloseSockerReason.Unexpected && instrumenter != null) {
+      instrumenter.connectionClosed();
+    }
+
     try {
       socket.close();
     } catch (IOException e) {
@@ -456,16 +426,9 @@ public class HTTPWorker implements Runnable {
     KeepAlive
   }
 
-  // TODO : Daniel : Review : Do we need this or can we just call closeSocketOnly?
-  private enum CloseOption {
-    CloseSocketOnly,
-    TryToWriteFinalResponse
-  }
-
-  // TODO : Daniel : Review : Do I need this?
-  private enum CloseOptionReason {
-    Ok,
-    Failure
+  private enum CloseSockerReason {
+    Expected,
+    Unexpected
   }
 
   private static class Status {

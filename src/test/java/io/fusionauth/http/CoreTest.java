@@ -230,82 +230,29 @@ public class CoreTest extends BaseTest {
     }
   }
 
-  @SuppressWarnings("ExtractMethodRecommender")
-  @Test(dataProvider = "schemes")
-  public void large_headers(String scheme) throws Exception {
-    // Use case: Ensure we can read headers from the request, and send headers on the response that exceed the default request and repsonse buffer lengths.
-
-    // Ensure the headers in total exceed the response buffer sizes.
-    var requestBufferLength = new HTTPServerConfiguration().getRequestBufferSize();
-    var headersRequiredToExceedRequestBufferLength = (requestBufferLength / LongString.length()) + 1;
-
-    // Ensure the headers in total exceed the response buffer sizes.
-    var responseBufferLength = new HTTPServerConfiguration().getResponseBufferSize();
-    var headersRequiredToExceedResponseBufferLength = (responseBufferLength / LongString.length()) + 1;
-
-    // The server will return these larger headers on the HTTP response
-    HTTPHandler handler = (req, res) -> {
-
-      // Expect the headers sent by the client
-      for (int i = 0; i < headersRequiredToExceedRequestBufferLength; i++) {
-        assertEquals(req.getHeader("X-Huge-Header-" + i), LongString);
-      }
-
-      // Now write large headers back on the response
-      res.setHeader(Headers.ContentType, "text/plain");
-      res.setHeader(Headers.ContentLength, ExpectedResponse.getBytes().length + "");
-      for (int i = 0; i < headersRequiredToExceedResponseBufferLength; i++) {
-        res.setHeader("X-Huge-Header-" + i, LongString);
-      }
-      res.setStatus(200);
-
-      try {
-        OutputStream outputStream = res.getOutputStream();
-        outputStream.write(ExpectedResponse.getBytes());
-        outputStream.close();
-      } catch (IOException e) {
-        throw new RuntimeException(e);
-      }
-    };
-
-    try (var client = makeClient(scheme, null); var ignore = makeServer(scheme, handler).start()) {
-      URI uri = makeURI(scheme, "");
-      var builder = HttpRequest.newBuilder()
-                               .uri(uri);
-
-
-      // The client is going to send these large headers on the request
-      for (int i = 0; i < headersRequiredToExceedRequestBufferLength; i++) {
-        builder.setHeader("X-Huge-Header-" + i, LongString);
-      }
-
-      var response = client.send(builder
-              .POST(BodyPublishers.ofString(RequestBody))
-              .build(),
-          r -> BodySubscribers.ofString(StandardCharsets.UTF_8)
-      );
-
-      assertEquals(response.statusCode(), 200);
-
-      // Ensure each header came back on the response
-      for (int i = 0; i < headersRequiredToExceedResponseBufferLength; i++) {
-        assertEquals(response.headers().firstValue("X-Huge-Header-" + i).get(), LongString);
-      }
-    }
-  }
-
   @Test(groups = "timeouts")
   public void initialReadTimeout() {
     // This test simulates if the client doesn't send bytes for the initial timeout
-    HTTPHandler handler = (req, res) -> fail("Should not be called");
+    HTTPHandler handler = (req, res) -> {
+      byte[] response = "Hey, looks like the timeout didn't work!".getBytes(StandardCharsets.UTF_8);
+      res.setHeader(Headers.ContentLength,  response.length + "");
+      res.setHeader(Headers.ContentType, "text/plain");
+      var os = res.getOutputStream();
+      os.write(response);
+      os.close();
+    };
 
-    // TODO : Daniel : Flaky test, need to review timeouts?, try invoking 5 or more times.
-    //                 Assuming that the socket gets re-used and that may be the difference in testing.
-    //        Maybe in the "timeouts" group we need to be sure to tear down the socket all the way in between tests?
     var instrumenter = new CountingInstrumenter();
-    try (var ignore = makeServer("http", handler, instrumenter).withInitialReadTimeout(Duration.ofMillis(250)).start(); var socket = new Socket("127.0.0.1", 4242)) {
+    try (var ignore = makeServer("http", handler, instrumenter)
+        .withInitialReadTimeout(Duration.ofMillis(250))
+        .start();
+         var socket = new Socket("127.0.0.1", 4242)) {
+
+      // Open a socket to the server and then wait to write any bytes.
+      sleep(1_000);
       var out = socket.getOutputStream();
-      sleep(2_500);
+
+      // Now write something for the server to read
       out.write("""
           GET / HTTP/1.1\r
           Host: localhost:42\r
@@ -315,13 +262,16 @@ public class CoreTest extends BaseTest {
           body
           """.getBytes());
       out.flush();
-      var in = socket.getInputStream();
-      var body = in.readAllBytes();
-        fail("Should have failed but instead got\n\n" + new String(body));
+
+      var response = socket.getInputStream().readAllBytes();
+      assertEquals(response.length, 0, new String(response, StandardCharsets.UTF_8));
     } catch (Exception ignore) {
       // Expected
     }
 
+    // Expect to have seen one connection closed due to a timeout.
+    // - Because we were not able to ready any bytes from the client, we have 0 accepted requests.
+    assertEquals(instrumenter.getAcceptedRequests(), 0);
     assertEquals(instrumenter.getClosedConnections(), 1);
   }
 
@@ -441,6 +391,70 @@ public class CoreTest extends BaseTest {
       assertEquals(responseBytes.length, 16918);
       var payloadIndex = responseString.indexOf("\r\n\r\n") + 4;
       assertEquals(responseString.substring(payloadIndex, responseBytes.length - 1), payload);
+    }
+  }
+
+  @SuppressWarnings("ExtractMethodRecommender")
+  @Test(dataProvider = "schemes")
+  public void large_headers(String scheme) throws Exception {
+    // Use case: Ensure we can read headers from the request, and send headers on the response that exceed the default request and repsonse buffer lengths.
+
+    // Ensure the headers in total exceed the response buffer sizes.
+    var requestBufferLength = new HTTPServerConfiguration().getRequestBufferSize();
+    var headersRequiredToExceedRequestBufferLength = (requestBufferLength / LongString.length()) + 1;
+
+    // Ensure the headers in total exceed the response buffer sizes.
+    var responseBufferLength = new HTTPServerConfiguration().getResponseBufferSize();
+    var headersRequiredToExceedResponseBufferLength = (responseBufferLength / LongString.length()) + 1;
+
+    // The server will return these larger headers on the HTTP response
+    HTTPHandler handler = (req, res) -> {
+
+      // Expect the headers sent by the client
+      for (int i = 0; i < headersRequiredToExceedRequestBufferLength; i++) {
+        assertEquals(req.getHeader("X-Huge-Header-" + i), LongString);
+      }
+
+      // Now write large headers back on the response
+      res.setHeader(Headers.ContentType, "text/plain");
+      res.setHeader(Headers.ContentLength, ExpectedResponse.getBytes().length + "");
+      for (int i = 0; i < headersRequiredToExceedResponseBufferLength; i++) {
+        res.setHeader("X-Huge-Header-" + i, LongString);
+      }
+      res.setStatus(200);
+
+      try {
+        OutputStream outputStream = res.getOutputStream();
+        outputStream.write(ExpectedResponse.getBytes());
+        outputStream.close();
+      } catch (IOException e) {
+        throw new RuntimeException(e);
+      }
+    };
+
+    try (var client = makeClient(scheme, null); var ignore = makeServer(scheme, handler).start()) {
+      URI uri = makeURI(scheme, "");
+      var builder = HttpRequest.newBuilder()
+                               .uri(uri);
+
+
+      // The client is going to send these large headers on the request
+      for (int i = 0; i < headersRequiredToExceedRequestBufferLength; i++) {
+        builder.setHeader("X-Huge-Header-" + i, LongString);
+      }
+
+      var response = client.send(builder
+              .POST(BodyPublishers.ofString(RequestBody))
+              .build(),
+          r -> BodySubscribers.ofString(StandardCharsets.UTF_8)
+      );
+
+      assertEquals(response.statusCode(), 200);
+
+      // Ensure each header came back on the response
+      for (int i = 0; i < headersRequiredToExceedResponseBufferLength; i++) {
+        assertEquals(response.headers().firstValue("X-Huge-Header-" + i).get(), LongString);
+      }
     }
   }
 
