@@ -258,14 +258,14 @@ public class ChunkedTest extends BaseTest {
         if (System.currentTimeMillis() - lastLog > 5_000) {
           long now = System.currentTimeMillis();
           double currentAverage = (now - start) / (double) i;
-          System.out.printf("Chunked Performance: Iterations [%,d] Response body [%,d] bytes. Running average is [%f] ms.\n", i, responseBodyBytes.length, currentAverage);
+          printf("Chunked Performance: Iterations [%,d] Response body [%,d] bytes. Running average is [%f] ms.\n", i, responseBodyBytes.length, currentAverage);
           lastLog = System.currentTimeMillis();
         }
       }
 
       long end = System.currentTimeMillis();
       double average = (end - start) / (double) iterations;
-      System.out.printf("Chunked Performance: Iterations [%,d] Response body [%,d] bytes. Final average is [%f] ms.\n", iterations,  responseBodyBytes.length, average);
+      printf("Chunked Performance: Iterations [%,d] Response body [%,d] bytes. Final average is [%f] ms.\n", iterations, responseBodyBytes.length, average);
 
       // HTTP
       // Chunked Performance: Iterations [15,000] Response body [608,000] bytes. Final average is [0.563467] ms.

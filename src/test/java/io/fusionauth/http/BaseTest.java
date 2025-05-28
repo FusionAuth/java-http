@@ -55,8 +55,6 @@ import java.util.stream.Collectors;
 import io.fusionauth.http.log.FileLogger;
 import io.fusionauth.http.log.FileLoggerFactory;
 import io.fusionauth.http.log.Level;
-import io.fusionauth.http.log.LoggerFactory;
-import io.fusionauth.http.log.SystemOutLoggerFactory;
 import io.fusionauth.http.security.SecurityTools;
 import io.fusionauth.http.server.ExpectValidator;
 import io.fusionauth.http.server.HTTPHandler;
@@ -95,6 +93,10 @@ import static org.testng.Assert.fail;
  * @author Brian Pontarelli
  */
 public abstract class BaseTest {
+
+  protected void printf(String format, Object... args) {
+    System.out.printf(SystemOutPrefix + format, args);
+  }
   /**
    * This timeout is used for the HttpClient during each test. If you are in a debugger, you will need to change this timeout to be much
    * larger, otherwise, the client might truncate the request to the server.
@@ -110,6 +112,8 @@ public abstract class BaseTest {
   private static final ZonedDateTime TestStarted = ZonedDateTime.now();
 
   private static final DateTimeFormatter hh_mm_ss_SSS = DateTimeFormatter.ofPattern("hh:mm:ss.SSS");
+
+  public static String SystemOutPrefix = "     | ";
 
   /*
    * Keypairs and certificates for a 3-level CA chain (root->intermediate->server).
@@ -273,7 +277,7 @@ public abstract class BaseTest {
       listenerConfiguration = new HTTPListenerConfiguration(4242);
     }
 
-    LoggerFactory factory = SystemOutLoggerFactory.FACTORY;
+    FileLoggerFactory factory = FileLoggerFactory.FACTORY;
     return new HTTPServer().withHandler(handler)
                            .withKeepAliveTimeoutDuration(Duration.ofSeconds(3))
                            .withInitialReadTimeout(Duration.ofSeconds(21))
