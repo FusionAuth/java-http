@@ -117,7 +117,6 @@ public class HTTPServerThread extends Thread {
       } catch (SocketTimeoutException ignore) {
         // Completely smother since this is expected with the SO_TIMEOUT setting in the constructor
         logger.debug("Nothing accepted. Cleaning up existing connections.");
-        System.out.println("Server caught SocketTimeoutException");
       } catch (SocketException e) {
         // This should only happen when the server is shutdown
         if (socket.isClosed()) {
@@ -127,12 +126,10 @@ public class HTTPServerThread extends Thread {
           logger.error("An exception was thrown while accepting incoming connections.", e);
         }
       } catch (IOException ignore) {
-        System.out.println("Server caught IOException");
         // Completely smother since most IO exceptions are common during the connection phase
         logger.debug("IO exception. Likely a fuzzer or a bad client or a TLS issue, all of which are common and can mostly be ignored.");
       } catch (Throwable t) {
         logger.error("An exception was thrown during server processing. This is a fatal issue and we need to shutdown the server.", t);
-        System.out.println("Server caught Throwable, shutdown.");
         break;
       }
     }

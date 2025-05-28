@@ -15,6 +15,8 @@
  */
 package io.fusionauth.http.load;
 
+import java.time.Duration;
+
 import io.fusionauth.http.log.Level;
 import io.fusionauth.http.log.SystemOutLoggerFactory;
 import io.fusionauth.http.server.HTTPListenerConfiguration;
@@ -29,22 +31,26 @@ public class Main {
     var instrumenter = new ThreadSafeCountingInstrumenter();
     try (HTTPServer ignore = new HTTPServer().withHandler(new LoadHandler())
                                              .withCompressByDefault(false)
+                                             .withInitialReadTimeout(Duration.ofSeconds(10))
                                              .withInstrumenter(instrumenter)
                                              .withListener(new HTTPListenerConfiguration(8080))
                                              .withLoggerFactory(SystemOutLoggerFactory.FACTORY)
                                              .start()) {
 
-      long lastMeasuredAcceptedRequests = instrumenter.getRequests();
+      long lastMeasuredAcceptedRequests = instrumenter.getAcceptedRequests();
+      long lastMeasuredConnectionsClosed = instrumenter.getClosedConnections();
 
       for (int i = 0; i < 1_000; i++) {
         Thread.sleep(30_000);
-        long acceptedRequests = instrumenter.getRequests();
+        long acceptedRequests = instrumenter.getAcceptedRequests();
+        long connectionsClosed = instrumenter.getClosedConnections();
         // Cut down on noise if we are not running any requests.
-        if (instrumenter.getRequests() > lastMeasuredAcceptedRequests) {
+        if (acceptedRequests > lastMeasuredAcceptedRequests || connectionsClosed > lastMeasuredConnectionsClosed) {
           System.out.printf("""
                   %s Current stats
                    - Servers started:    [%,d]
                    - Active workers:     [%,d]
+                   - Accepted requests:  [%,d]
                    - Bad requests:       [%,d]
                    - Bytes read:         [%,d]
                    - Bytes written:      [%,d]
@@ -56,6 +62,7 @@ public class Main {
               System.currentTimeMillis(),
               instrumenter.getStartedCount(),
               instrumenter.getThreadCount(),
+              acceptedRequests,
               instrumenter.getBadRequests(),
               instrumenter.getBytesRead(),
               instrumenter.getBytesWritten(),
@@ -66,6 +73,7 @@ public class Main {
         }
 
         lastMeasuredAcceptedRequests = acceptedRequests;
+        lastMeasuredConnectionsClosed = connectionsClosed;
       }
 
       System.out.println("Shutting down java-http server");

@@ -234,11 +234,10 @@ public class HTTPWorker implements Runnable {
       }
     } catch (ConnectionClosedException e) {
       logger.debug("[{}] Closing socket. Client closed the connection. Reason [{}].", Thread.currentThread().threadId(), e.getMessage());
-      System.out.println("\n\n\nConnection closed!!!!!!! Don't increment the close connection counter.\n\n\n");
       closeSocketOnly(CloseSockerReason.Expected);
     } catch (SocketTimeoutException e) {
       String message = state == State.Read ? "Initial read timeout" : "Keep-Alive expired";
-      logger.debug(String.format("[%s] Closing socket [%s]. %s.", Thread.currentThread().threadId(), state, message), e);
+      logger.debug("[{}] Closing socket [{}]. {}.", Thread.currentThread().threadId(), state, message);
       // This might be a read timeout or a Keep-Alive timeout. The reason is based on the worker state.
       CloseSockerReason reason = state == State.KeepAlive ? CloseSockerReason.Expected : CloseSockerReason.Unexpected;
       closeSocketOnly(reason);

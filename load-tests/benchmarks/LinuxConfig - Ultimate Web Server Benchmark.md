@@ -16,214 +16,32 @@ The test was conducted using Apache Benchmark (`ab`) with the following command:
 
 
 ```sh
-ab -n 10000 -c 100 http://localhost:4242/
+ab -n 100000 -c 50 http://localhost:8080/
 ```
 
-- -n 10000 → Total number of requests (10,000)
-- -c 100 → Number of concurrent users (100)
-- http://localhost:4242/ → URL of the static test page
-
-Sometimes this will fail to start with the following error
-```text
-Benchmarking localhost (be patient)
-apr_socket_recv: Connection reset by peer (54)
-```
-
-When it does run, it fails to complete. Needs investigation. It seems to finish with a lower number of concurrent tests. 
-
-```text
-This is ApacheBench, Version 2.3 <$Revision: 1913912 $>
-Copyright 1996 Adam Twiss, Zeus Technology Ltd, http://www.zeustech.net/
-Licensed to The Apache Software Foundation, http://www.apache.org/
-
-Benchmarking localhost (be patient)
-Completed 1000 requests
-Completed 2000 requests
-apr_socket_recv: Connection reset by peer (54)
-Total of 2900 requests completed
-```
-
-It has completed with 50 concurrent requests.
-
-```text
-This is ApacheBench, Version 2.3 <$Revision: 1913912 $>
-Copyright 1996 Adam Twiss, Zeus Technology Ltd, http://www.zeustech.net/
-Licensed to The Apache Software Foundation, http://www.apache.org/
-
-Benchmarking localhost (be patient)
-Completed 1000 requests
-Completed 2000 requests
-Completed 3000 requests
-Completed 4000 requests
-Completed 5000 requests
-Completed 6000 requests
-Completed 7000 requests
-Completed 8000 requests
-Completed 9000 requests
-Completed 10000 requests
-Finished 10000 requests
+- -n 100000 → Total number of requests (100,000)
+- -c 50 → Number of concurrent users (50)
+- http://localhost:8080/ → URL of the static test page
 
 
-Server Software:
-Server Hostname:        localhost
-Server Port:            4242
+### Results
 
-Document Path:          /
-Document Length:        0 bytes
+Test run on:
+- MacBook Pro 16-inch 2021, Apple M1 Max, 64 GB
 
-Concurrency Level:      50
-Time taken for tests:   602.010 seconds
-Complete requests:      10000
-Failed requests:        0
-Total transferred:      600000 bytes
-HTML transferred:       0 bytes
-Requests per second:    16.61 [#/sec] (mean)
-Time per request:       3010.051 [ms] (mean)
-Time per request:       60.201 [ms] (mean, across all concurrent requests)
-Transfer rate:          0.97 [Kbytes/sec] received
-
-Connection Times (ms)
-              min  mean[+/-sd] median   max
-Connect:        0    2   1.5      2      12
-Processing:  3000 3008   3.6   3008    3021
-Waiting:        0    2   1.5      2      11
-Total:       3001 3010   3.5   3010    3023
-
-Percentage of the requests served within a certain time (ms)
-  50%   3010
-  66%   3011
-  75%   3012
-  80%   3013
-  90%   3015
-  95%   3016
-  98%   3018
-  99%   3018
- 100%   3023 (longest request)
-```
-
-Changed: Remove purge during keep alive.
-
-```text
-This is ApacheBench, Version 2.3 <$Revision: 1913912 $>
-Copyright 1996 Adam Twiss, Zeus Technology Ltd, http://www.zeustech.net/
-Licensed to The Apache Software Foundation, http://www.apache.org/
-
-Benchmarking localhost (be patient)
-Completed 1000 requests
-Completed 2000 requests
-Completed 3000 requests
-Completed 4000 requests
-Completed 5000 requests
-Completed 6000 requests
-Completed 7000 requests
-Completed 8000 requests
-Completed 9000 requests
-Completed 10000 requests
-Finished 10000 requests
+| Server    | Requests per second (RPS) | Latency (ms) | Normalized Performance (%) |
+| --------- |---------------------------|--------------| -------------------------- |
+| java-http | 18,648                    | 2.681        | 0                          | 
 
 
-Server Software:
-Server Hostname:        localhost
-Server Port:            4242
+Note that I believe the results found at the above link were generated w/out using the `-k` parameter of `ab` which would enable HTTP 1.0 Keep-Alive. So this test is actually testing true discrete users where each socket handles a single HTTP request from a client.
 
-Document Path:          /
-Document Length:        0 bytes
-
-Concurrency Level:      50
-Time taken for tests:   602.062 seconds
-Complete requests:      10000
-Failed requests:        0
-Total transferred:      600000 bytes
-HTML transferred:       0 bytes
-Requests per second:    16.61 [#/sec] (mean)
-Time per request:       3010.309 [ms] (mean)
-Time per request:       60.206 [ms] (mean, across all concurrent requests)
-Transfer rate:          0.97 [Kbytes/sec] received
-
-Connection Times (ms)
-              min  mean[+/-sd] median   max
-Connect:        0    2   1.7      2      12
-Processing:  3000 3008   3.9   3008    3030
-Waiting:        0    2   2.0      2      25
-Total:       3001 3010   3.9   3010    3037
-
-Percentage of the requests served within a certain time (ms)
-  50%   3010
-  66%   3011
-  75%   3012
-  80%   3013
-  90%   3014
-  95%   3016
-  98%   3021
-  99%   3026
- 100%   3037 (longest request)
-```
-
-Note that by default `ab` is not using `keep-alive`. Enabling this is drastic. 
-
-Using 10 workers, with `10,000,000` requests, we can get `85,608` requests per second. 
-
-```sh
-ab -n 10000000 -c 10 -k http://localhost:8080/
-```
-
-```text
-
-This is ApacheBench, Version 2.3 <$Revision: 1913912 $>
-Copyright 1996 Adam Twiss, Zeus Technology Ltd, http://www.zeustech.net/
-Licensed to The Apache Software Foundation, http://www.apache.org/
-
-Benchmarking localhost (be patient)
-Completed 1000000 requests
-Completed 2000000 requests
-Completed 3000000 requests
-Completed 4000000 requests
-Completed 5000000 requests
-Completed 6000000 requests
-Completed 7000000 requests
-Completed 8000000 requests
-Completed 9000000 requests
-Completed 10000000 requests
-Finished 10000000 requests
+For fun, here is the same test using the `-k` parameter. In practice this may be the better test because most web services sit behind an HTTP proxy that will almost certainly use persistent connections in a pool to the HTTP server even if the connection to the client is not using Keep Alive. 
 
 
-Server Software:
-Server Hostname:        localhost
-Server Port:            8080
-
-Document Path:          /
-Document Length:        5 bytes
-
-Concurrency Level:      10
-Time taken for tests:   116.811 seconds
-Complete requests:      10000000
-Failed requests:        0
-Keep-Alive requests:    10000000
-Total transferred:      740000000 bytes
-HTML transferred:       50000000 bytes
-Requests per second:    85608.64 [#/sec] (mean)
-Time per request:       0.117 [ms] (mean)
-Time per request:       0.012 [ms] (mean, across all concurrent requests)
-Transfer rate:          6186.56 [Kbytes/sec] received
-
-Connection Times (ms)
-              min  mean[+/-sd] median   max
-Connect:        0    0   0.0      0       0
-Processing:     0    0   0.0      0      21
-Waiting:        0    0   0.0      0      21
-Total:          0    0   0.0      0      21
-
-Percentage of the requests served within a certain time (ms)
-  50%      0
-  66%      0
-  75%      0
-  80%      0
-  90%      0
-  95%      0
-  98%      0
-  99%      0
- 100%     21 (longest request)
-```
+| Server    | Requests per second (RPS) | Latency (ms) | Normalized Performance (%) |
+| --------- |---------------------------|--------------| -------------------------- |
+| java-http | 82,443                    | 0.606        | 0                          | 
 
 ## Test 2: Large File Transfers
 
@@ -235,9 +53,43 @@ Percentage of the requests served within a certain time (ms)
 The test was conducted using Apache Benchmark (`ab`) with the following command:
 
 ```sh
-ab -n 500 -c 10 http://server-ip/testfile10M.bin
+ab -n 500 -c 10 http://localhost:8080/file?size=10485760
 ```
 
 - -n 500 → Total number of requests (500)
 - -c 10 → Number of concurrent users (10)
-- http://server-ip/testfile10M.bin → URL of the 10MB test file
+- http://localhost:8080/file?size=10485760 → URL of the 10MB test file
+
+### Results
+
+Test run on:
+- MacBook Pro 16-inch 2021, Apple M1 Max, 64 GB
+
+| Server    | Requests per second (RPS) | Latency (ms) | Transfer Rate (MB/sec) | Normalized Performance (%) |
+| --------- |---------------------------|--------------|------------------------|----------------------------|
+| java-http | 625                       | 15.998       | 6,251                  |                            | 
+
+Same test with `-k` which assumes we are using an HTTP proxy with Keep Alive.
+
+
+| Server    | Requests per second (RPS) | Latency (ms) | Transfer Rate (MB/sec) | Normalized Performance (%) |
+| --------- |---------------------------|--------------|------------------------|----------------------------|
+| java-http | 682                       | 14.647       | 6,632                  |                            | 
+
+
+## Test 2: High Concurrency Performance
+
+### Purpose of the Test
+
+> Web servers must efficiently handle high traffic volumes, especially during peak loads. This test measures how well each server performs when faced with 1,000 simultaneous users making requests to a simple HTML page. A well-optimized server should maintain a high request rate with minimal latency and avoid excessive CPU and memory consumption. This test is crucial for sites experiencing traffic spikes, such as e-commerce platforms, news websites, and online services.
+
+### Command
+The test was conducted using Apache Benchmark (`ab`) with the following command:
+
+```sh
+ab -n 20000 -c 1000 http://localhost:8080/
+```
+
+- -n 20000 → Total number of requests (20,000)
+- -c 1000 → Number of concurrent users (1,000)
+- http://localhost:8080/ → URL of the test page

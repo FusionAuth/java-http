@@ -33,4 +33,6 @@ if [[ $# -gt 1 && $1 == "--suspend" ]]; then
   shift
 fi
 
+# TBD if this is necessary. I think the issues I'm seeing are with Apache benchmark itself.
+ulimit -n 10240
 ~/dev/java/current21/bin/java ${suspend} -cp "${CLASSPATH}" io.fusionauth.http.load.Main
