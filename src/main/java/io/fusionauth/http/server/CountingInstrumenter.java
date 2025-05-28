@@ -37,7 +37,7 @@ public class CountingInstrumenter implements Instrumenter {
 
   private long connections;
 
-  private long requests;
+  private long acceptedRequests;
 
   private long startedCount;
 
@@ -50,7 +50,7 @@ public class CountingInstrumenter implements Instrumenter {
 
   @Override
   public void acceptedRequests() {
-    requests++;
+    acceptedRequests++;
   }
 
   @Override
@@ -101,8 +101,8 @@ public class CountingInstrumenter implements Instrumenter {
     return connections;
   }
 
-  public long getRequests() {
-    return requests;
+  public long getAcceptedRequests() {
+    return acceptedRequests;
   }
 
   public long getStartedCount() {

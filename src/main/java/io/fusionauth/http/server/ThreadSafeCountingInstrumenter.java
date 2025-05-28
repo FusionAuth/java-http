@@ -38,7 +38,7 @@ public class ThreadSafeCountingInstrumenter implements Instrumenter {
 
   private final AtomicLong connections = new AtomicLong();
 
-  private final AtomicLong requests = new AtomicLong();
+  private final AtomicLong acceptedRequests = new AtomicLong();
 
   private final AtomicLong startedCount = new AtomicLong();
 
@@ -51,7 +51,7 @@ public class ThreadSafeCountingInstrumenter implements Instrumenter {
 
   @Override
   public void acceptedRequests() {
-    requests.incrementAndGet();
+    acceptedRequests.incrementAndGet();
   }
 
   @Override
@@ -102,8 +102,8 @@ public class ThreadSafeCountingInstrumenter implements Instrumenter {
     return connections.get();
   }
 
-  public long getRequests() {
-    return requests.get();
+  public long getAcceptedRequests() {
+    return acceptedRequests.get();
   }
 
   public long getStartedCount() {
