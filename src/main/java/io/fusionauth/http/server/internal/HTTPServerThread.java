@@ -98,8 +98,10 @@ public class HTTPServerThread extends Thread {
       try {
         Socket clientSocket = socket.accept();
         clientSocket.setSoTimeout((int) configuration.getInitialReadTimeoutDuration().toMillis());
-        logger.debug("Accepted inbound connection with [{}] existing connections and initial read timeout of [{}]", clients.size(),
-            configuration.getInitialReadTimeoutDuration().toMillis());
+        if (logger.isTraceEnabled()) {
+          String listenerAddress = listener.getBindAddress().toString() + ":" + listener.getPort();
+          logger.trace("[{}] Accepted inbound connection. [{}] existing connections.", listenerAddress, clients.size());
+        }
 
         if (instrumenter != null) {
           instrumenter.acceptedConnection();
@@ -110,11 +112,14 @@ public class HTTPServerThread extends Thread {
         Thread client = Thread.ofVirtual()
                               .name("HTTP client [" + clientSocket.getRemoteSocketAddress() + "]")
                               .start(runnable);
+
         clients.add(new ClientInfo(client, runnable, throughput));
       } catch (SocketTimeoutException ignore) {
         // Completely smother since this is expected with the SO_TIMEOUT setting in the constructor
         logger.debug("Nothing accepted. Cleaning up existing connections.");
+        System.out.println("Server caught SocketTimeoutException");
       } catch (SocketException e) {
+        System.out.println("Server caught SocketException");
         // This should only happen when the server is shutdown
         if (socket.isClosed()) {
           running = false;
@@ -123,10 +128,12 @@ public class HTTPServerThread extends Thread {
           logger.error("An exception was thrown while accepting incoming connections.", e);
         }
       } catch (IOException ignore) {
+        System.out.println("Server caught IOException");
         // Completely smother since most IO exceptions are common during the connection phase
         logger.debug("IO exception. Likely a fuzzer or a bad client or a TLS issue, all of which are common and can mostly be ignored.");
       } catch (Throwable t) {
         logger.error("An exception was thrown during server processing. This is a fatal issue and we need to shutdown the server.", t);
+        System.out.println("Server caught Throwable, shutdown.");
         break;
       }
     }
@@ -140,6 +147,7 @@ public class HTTPServerThread extends Thread {
   public void shutdown() {
     running = false;
     try {
+      System.out.println("shutdown()");
       cleaner.interrupt();
       socket.close();
     } catch (IOException ignore) {
@@ -147,7 +155,20 @@ public class HTTPServerThread extends Thread {
     }
   }
 
+  // - In theory we could hold onto some meta-data here that keeps track of how many requests we have processed on this thread and then exit.
   record ClientInfo(Thread thread, HTTPWorker runnable, Throughput throughput) {
+
+    public long getAge() {
+      return System.currentTimeMillis() - runnable().getStartInstant();
+    }
+
+    public long getHandledRequests() {
+      return runnable().getHandledRequests();
+    }
+
+    public long getStartInstant() {
+      return runnable().getStartInstant();
+    }
   }
 
   private class HTTPServerCleanerThread extends Thread {
@@ -157,7 +178,10 @@ public class HTTPServerThread extends Thread {
 
     public void run() {
       while (running) {
-        logger.trace("Wake up. Clean up client worker threads.");
+
+        int currentClientCount = clients.size();
+        int removedClientCount = 0;
+        logger.trace("Wake up. Review [{}] client worker threads for cleanup.", currentClientCount);
 
         Iterator<ClientInfo> iterator = clients.iterator();
         while (iterator.hasNext()) {
@@ -165,8 +189,10 @@ public class HTTPServerThread extends Thread {
           Thread thread = client.thread();
           long threadId = thread.threadId();
           if (!thread.isAlive()) {
-            logger.debug("[{}] Thread is dead. Removing.", threadId);
+            // TODO : Daniel : Review : Outside of debugging some issues, this should probably be trace.
+            logger.trace("[{}] Remove dead client worker. Born [{}]. Died at age [{}] ms. Requests handled [{}].", threadId, client.getStartInstant(), client.getAge(), client.getHandledRequests());
             iterator.remove();
+            removedClientCount++;
             continue;
           }
 
@@ -206,17 +232,20 @@ public class HTTPServerThread extends Thread {
             badClientReason += " timedOut=[" + timedOut + "] waited=[" + waited + "] processingTimeoutDuration=[" + configuration.getProcessingTimeoutDuration().toMillis() + "]";
           }
 
-          logger.debug(badClientReason);
-
           if (!badClient) {
+            logger.trace("[{}] Check worker in state [{}]", threadId, state);
             continue;
           }
 
+          // If the client was bad, debug log it.
+          logger.debug(badClientReason);
+
           // Bad client, first things first, remove the client from the list
           iterator.remove();
+          removedClientCount++;
 
+          String message = "";
           if (logger.isDebugEnabled()) {
-            String message = "";
 
             if (readingSlow) {
               message += String.format(" Min read throughput [%s], actual throughput [%s].", minimumReadThroughput, readThroughput);
@@ -248,6 +277,7 @@ public class HTTPServerThread extends Thread {
           }
 
           try {
+            System.out.println(" > socket.close() due to [" + message + "]");
             var socket = worker.getSocket();
             socket.close();
 
@@ -258,6 +288,11 @@ public class HTTPServerThread extends Thread {
             // Log but ignore
             logger.debug(String.format("[%s] Unable to close connection to client. [{}]", threadId), e);
           }
+        }
+
+        // Only bother tracing this if we started with greater than 0
+        if (currentClientCount > 0) {
+          logger.trace("Cleanup removed [{}] clients", removedClientCount);
         }
 
         // Take a break

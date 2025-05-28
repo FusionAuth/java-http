@@ -1,7 +1,7 @@
 import java.nio.file.Paths
 
 /*
- * Copyright (c) 2018-2022, FusionAuth, All Rights Reserved
+ * Copyright (c) 2022-2025, FusionAuth, All Rights Reserved
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -48,13 +48,13 @@ project(group: "io.fusionauth", name: "tomcat", version: "0.1.10", licenses: ["A
 }
 
 // Plugins
-java = loadPlugin(id: "org.savantbuild.plugin:java:2.0.0-RC.4")
-idea = loadPlugin(id: "org.savantbuild.plugin:idea:2.0.0-RC.4")
-tomcat = loadPlugin(id: "org.savantbuild.plugin:tomcat:2.0.0-RC.4")
-webapp = loadPlugin(id: "org.savantbuild.plugin:webapp:2.0.0-RC.5.{integration}")
+java = loadPlugin(id: "org.savantbuild.plugin:java:2.0.0")
+idea = loadPlugin(id: "org.savantbuild.plugin:idea:2.0.0")
+tomcat = loadPlugin(id: "org.savantbuild.plugin:tomcat:2.0.0")
+webapp = loadPlugin(id: "org.savantbuild.plugin:webapp:2.0.0")
 
 java.settings.javaVersion = "17"
-java.settings.compilerArguments = "--add-exports java.base/sun.security.x509=ALL-UNNAMED --add-exports java.base/sun.security.util=ALL-UNNAMED -XDignore.symbol.file"
+java.settings.compilerArguments = ""
 tomcat.settings.buildDirectory = Paths.get("build/dist/tomcat")
 tomcat.settings.buildWebDirectory = Paths.get("build/dist/tomcat/web")
 webapp.settings.dependencies = []

@@ -1,7 +1,7 @@
 #!/usr/bin/env bash
 
 #
-# Copyright (c) 2022, FusionAuth, All Rights Reserved
+# Copyright (c) 2022-2025, FusionAuth, All Rights Reserved
 #
 # Licensed under the Apache License, Version 2.0 (the "License");
 # you may not use this file except in compliance with the License.
@@ -18,7 +18,7 @@
 
 # Grab the path
 if [[ ! -d lib ]]; then
-  echo "Unable to locate library files needed to run the load tests. [lib]"
+  echo "Unable to locate library files needed to run the load tests. [lib]. Ensure you run this from build/dist."
   exit 1
 fi
 

@@ -23,7 +23,6 @@ import java.net.URLDecoder;
 import java.nio.charset.Charset;
 import java.nio.charset.IllegalCharsetNameException;
 import java.nio.charset.StandardCharsets;
-import java.util.Arrays;
 import java.util.HashMap;
 import java.util.LinkedList;
 import java.util.List;
@@ -84,8 +83,8 @@ public final class HTTPTools {
    */
   public static boolean isTokenCharacter(byte ch) {
     return ch == '!' || ch == '#' || ch == '$' || ch == '%' || ch == '&' || ch == '\'' || ch == '*' || ch == '+' || ch == '-' || ch == '.' ||
-        ch == '^' || ch == '_' || ch == '`' || ch == '|' || ch == '~' || (ch >= 'A' && ch <= 'Z') || (ch >= 'a' && ch <= 'z') ||
-        (ch >= '0' && ch <= '9');
+           ch == '^' || ch == '_' || ch == '`' || ch == '|' || ch == '~' || (ch >= 'A' && ch <= 'Z') || (ch >= 'a' && ch <= 'z') ||
+           (ch >= '0' && ch <= '9');
   }
 
   /**
@@ -243,8 +242,9 @@ public final class HTTPTools {
    * @return Any leftover body bytes from the last read from the InputStream.
    * @throws IOException If the read fails.
    */
-  public static byte[] parseRequestPreamble(InputStream inputStream, HTTPRequest request, byte[] requestBuffer, Instrumenter instrumenter,
-                                            Runnable readObserver)
+  public static BodyBytes parseRequestPreamble(InputStream inputStream, HTTPRequest request, byte[] requestBuffer,
+                                               Instrumenter instrumenter,
+                                               Runnable readObserver)
       throws IOException {
     RequestPreambleState state = RequestPreambleState.RequestMethod;
     var valueBuffer = new ByteArrayOutputStream(512);
@@ -253,14 +253,13 @@ public final class HTTPTools {
     int read = 0;
     int index = 0;
     while (state != RequestPreambleState.Complete) {
+      long start = System.currentTimeMillis();
       read = inputStream.read(requestBuffer);
-      System.out.println(" > read [" + read + "] bytes");
-      System.out.println("\n" + new String(requestBuffer, 0, read));
-      // We have not yet reached the end of the preamble. If there are no more bytes to read, the connection must have been closed.
-      // - The request has been truncate.
+
+      // We have not yet reached the end of the preamble. If there are no more bytes to read, the connection must have been closed by the client.
       if (read < 0) {
-        logger.trace("Read [{}] signal from client. Closing the socket.", read);
-        throw new ConnectionClosedException();
+        long waited = System.currentTimeMillis() - start;
+        throw new ConnectionClosedException(String.format("Read returned [%d] after waiting [%d] ms", read, waited));
       }
 
       logger.trace("Read [{}] from client for preamble.", read);
@@ -299,14 +298,14 @@ public final class HTTPTools {
       }
     }
 
-    byte[] leftover = null;
     if (index < read) {
       logger.trace("Had [{}] body bytes from the preamble read.", (read - index));
       // TODO : Daniel : Performance - can we just return an offset into the requestBuffer instead of copying these bytes?
-      leftover = Arrays.copyOfRange(requestBuffer, index, read);
+      //        Review with Brian, seems to be safe so far and removes extra IO.
+      return new BodyBytes(requestBuffer, index, read);
     }
 
-    return leftover;
+    return null;
   }
 
   /**
@@ -415,6 +414,9 @@ public final class HTTPTools {
       out.write(response.getStatusMessage().getBytes());
     }
     out.write(ControlBytes.CRLF);
+  }
+
+  public record BodyBytes(byte[] byteBuffer, int fromIndex, int toIndex) {
   }
 
   /**

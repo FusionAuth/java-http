@@ -27,6 +27,11 @@ public interface Instrumenter {
   void acceptedConnection();
 
   /**
+   * Called when a new request is accepted by an HTTP worker.
+   */
+  void acceptedRequests();
+
+  /**
    * Called when a client sends in a bad HTTP request.
    */
   void badRequest();

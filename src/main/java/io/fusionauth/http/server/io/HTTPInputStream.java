@@ -23,6 +23,7 @@ import io.fusionauth.http.log.Logger;
 import io.fusionauth.http.server.HTTPRequest;
 import io.fusionauth.http.server.HTTPServerConfiguration;
 import io.fusionauth.http.server.Instrumenter;
+import io.fusionauth.http.util.HTTPTools.BodyBytes;
 
 /**
  * An InputStream that handles the HTTP body, including body bytes that were read while the preamble was processed. This class also handles
@@ -41,6 +42,7 @@ public class HTTPInputStream extends InputStream {
   private byte[] bodyBytes;
 
   private int bodyBytesIndex;
+  private int bodyBytesLength;
 
   private long bytesRemaining;
 
@@ -48,12 +50,16 @@ public class HTTPInputStream extends InputStream {
 
   private InputStream delegate;
 
-  public HTTPInputStream(HTTPServerConfiguration configuration, HTTPRequest request, InputStream delegate, byte[] bodyBytes) {
+  public HTTPInputStream(HTTPServerConfiguration configuration, HTTPRequest request, InputStream delegate, BodyBytes bodyBytes) {
     this.logger = configuration.getLoggerFactory().getLogger(HTTPInputStream.class);
     this.instrumenter = configuration.getInstrumenter();
     this.request = request;
     this.delegate = delegate;
-    this.bodyBytes = bodyBytes;
+    if (bodyBytes != null) {
+      this.bodyBytes = bodyBytes.byteBuffer();
+      this.bodyBytesIndex = bodyBytes.fromIndex();
+      this.bodyBytesLength = bodyBytes.toIndex()-bodyBytes.fromIndex();
+    }
 
     // Start the countdown
     if (request.getContentLength() != null) {
@@ -78,9 +84,9 @@ public class HTTPInputStream extends InputStream {
     // - Note: Please don't call delegate.skipNBytes(Long.MAX_VALUE)
     // TODO : Daniel : Review : Try the above and see what happens - we may swap out the pointer on delegate during commit()
     try {
-      System.out.println("   > skip [" + Long.MAX_VALUE + "] bytes...");
+      // System.out.println("   > skip [" + Long.MAX_VALUE + "] bytes...");
       var result = skip(Long.MAX_VALUE);
-      System.out.println("   > purged [" + result + "] bytes");
+      // System.out.println("   > purged [" + result + "] bytes");
       return result;
     } finally {
       // Note that skip calls read, read honors bytesRemaining. Set this to 0 last.
@@ -94,6 +100,7 @@ public class HTTPInputStream extends InputStream {
     // TODO : Daniel : Review : What about chunked encoding, we will not have a Content-Length.
     //        Should this also check if chunked, or does chunked never call this method?
     if (bytesRemaining <= 0) {
+      System.out.println("-1 on read(), no bytesRemaining because no ContentLength header.");
       return -1;
     }
 
@@ -107,7 +114,7 @@ public class HTTPInputStream extends InputStream {
     if (bodyBytes != null) {
       b = bodyBytes[bodyBytesIndex++];
 
-      if (bodyBytesIndex >= bodyBytes.length) {
+      if (bodyBytesIndex >= bodyBytesLength) {
         bodyBytes = null;
       }
     } else {
@@ -119,6 +126,9 @@ public class HTTPInputStream extends InputStream {
     }
 
     bytesRemaining--;
+    if (b == -1) {
+      System.out.println("-1 on read() due to delegate InputStream");
+    }
     return b;
   }
 

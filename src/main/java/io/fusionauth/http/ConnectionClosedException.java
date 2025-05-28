@@ -21,4 +21,7 @@ package io.fusionauth.http;
  * @author Daniel DeGroff
  */
 public class ConnectionClosedException extends RuntimeException {
+  public ConnectionClosedException(String message) {
+    super(message);
+  }
 }

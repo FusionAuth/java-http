@@ -40,6 +40,7 @@ import io.fusionauth.http.server.io.Throughput;
 import io.fusionauth.http.server.io.ThroughputInputStream;
 import io.fusionauth.http.server.io.ThroughputOutputStream;
 import io.fusionauth.http.util.HTTPTools;
+import io.fusionauth.http.util.HTTPTools.BodyBytes;
 import io.fusionauth.http.util.ThreadPool;
 
 /**
@@ -61,7 +62,13 @@ public class HTTPWorker implements Runnable {
 
   private final Socket socket;
 
+  private final long startInstant;
+
   private final Throughput throughput;
+
+  // TODO : Daniel : Review : Services such as Apache Tomcat have a maximum number of requests per keep-alive to protect against DOS attacks.
+  //        Needs more investigation, but we could cap the duration of worker by time or number of requests.
+  private long handledRequests;
 
   private volatile State state;
 
@@ -75,11 +82,20 @@ public class HTTPWorker implements Runnable {
     this.buffers = new HTTPBuffers(configuration);
     this.logger = configuration.getLoggerFactory().getLogger(HTTPWorker.class);
     this.state = State.Read;
-    logger.debug("[{}] Starting HTTP worker virtual thread", Thread.currentThread().threadId());
+    this.startInstant = System.currentTimeMillis();
+    logger.trace("[{}] Starting HTTP worker.", Thread.currentThread().threadId());
+  }
+
+  public long getHandledRequests() {
+    return handledRequests;
   }
 
   public Socket getSocket() {
     return socket;
+  }
+
+  public long getStartInstant() {
+    return startInstant;
   }
 
   @Override
@@ -94,8 +110,9 @@ public class HTTPWorker implements Runnable {
 
       while (true) {
         var now = System.currentTimeMillis();
-        System.out.println("[" + now + "] Handle a new request.");
-        logger.trace("[{}] Running HTTP worker and preparing to read preamble", Thread.currentThread().threadId());
+        // System.out.println("[" + now + "] Handle a new request.");
+        // TODO : Daniel : Review : Separate from some debugging efforts, this should be a trace
+        logger.trace("[{}] Running HTTP worker. Block while we wait to read the preamble", Thread.currentThread().threadId());
         var request = new HTTPRequest(configuration.getContextPath(), configuration.getMultipartBufferSize(),
             listener.getCertificate() != null ? "https" : "http", listener.getPort(), socket.getInetAddress().getHostAddress());
 
@@ -108,32 +125,39 @@ public class HTTPWorker implements Runnable {
 
         var inputStream = new ThroughputInputStream(socket.getInputStream(), throughput);
 
-        byte[] bodyBytes;
+        BodyBytes bodyBytes = null;
 //        try {
         // TODO : Daniel : Review since this is single threaded - can the bodyBytes just be a pointer into buffers.requestBuffer?
         //        Or is it critical that we are done with the requestBuffer after this method returns to be used for another request?
         //        If the default requestBuffer is 8k, then each virtual thread that is spun up to handle a request requires at least 8k?
         //        Example: 200 virtual threads, 1,638,400 bytes in request buffer.
-        System.out.println(" > Wait for the preamble.... (blocking)");
+        // System.out.println(" > Wait for the preamble.... (blocking)");
         // Not this line of code will block
         // - When a client is using Keep-Alive - we will loop and block here while we wait for the client to send us bytes.
-        bodyBytes = HTTPTools.parseRequestPreamble(inputStream, request, buffers.requestBuffer(), instrumenter, () -> state = State.Read);
+        byte[] requestBuffer = buffers.requestBuffer();
+        bodyBytes = HTTPTools.parseRequestPreamble(inputStream, request, requestBuffer, instrumenter, () -> state = State.Read);
+
+        // Once we have performed an initial read, we can count this as a handled request.
+        handledRequests++;
+        if (instrumenter != null) {
+          instrumenter.acceptedRequests();
+        }
 
 //        } finally {
-        System.out.println(" > Read the preamble, build an HTTP InputStream....");
+        // System.out.println(" > Read the preamble, build an HTTP InputStream....");
         // parseRequestPreamble may throw a ParseException, but we want to be sure we have set the HTTPInputStream in all cases.
         httpInputStream = new HTTPInputStream(configuration, request, inputStream, bodyBytes);
         request.setInputStream(httpInputStream);
-        System.out.println(" > set the InputStream on the HTTP request....");
+        // System.out.println(" > set the InputStream on the HTTP request....");
 //        }
 
-        System.out.println(" > Handle keep-alive headers");
+        // System.out.println(" > Handle keep-alive headers");
 
         // Set the Connection response header as soon as possible
         // - This needs to occur after we have parsed the pre-amble so we can read the request headers
         response.setHeader(Headers.Connection, request.isKeepAlive() ? Connections.KeepAlive : Connections.Close);
 
-        System.out.println(" > validate the preamble");
+        // System.out.println(" > validate the preamble");
 
         // Ensure the preamble is valid
         // TODO : Daniel : Review : Write a test that sends in a large payload that will fail this check and see what happens.
@@ -149,12 +173,12 @@ public class HTTPWorker implements Runnable {
         //
         Integer status = validatePreamble(request);
         if (status != null) {
-          System.out.println(" > validatePreamble failed. Return status [" + status + "]");
+          // System.out.println(" > validatePreamble failed. Return status [" + status + "]");
           closeSocket(CloseOption.TryToWriteFinalResponse, CloseOptionReason.Failure, httpInputStream, response, status);
           return;
         }
 
-        System.out.println(" > handle Expect headers....");
+        // System.out.println(" > handle Expect headers....");
 
         // Handle the "expect" response
         String expect = request.getHeader(Headers.Expect);
@@ -164,6 +188,7 @@ public class HTTPWorker implements Runnable {
           // If the "expect" wasn't accepted, close the socket and exit
           if (!expectContinue(request)) {
             // TODO : Daniel : Review : Call closeSocket instead.
+            System.out.println("Expect continue - no, close socket.");
             closeSocketOnly();
 //            closeSocket(CloseOption.CloseSocketOnly, CloseOptionReason.Ok, request, response, -1);
             return;
@@ -176,48 +201,49 @@ public class HTTPWorker implements Runnable {
         }
 
         var handler = configuration.getHandler();
-        state = State.Process; // Transition to processing
-        logger.debug("[{}] Set state [{}]. Call the request handler.", Thread.currentThread().threadId(), state);
-        System.out.println(" > Handle the request...");
+        // Transition to processing
+        state = State.Process;
+        logger.trace("[{}] Set state [{}]. Call the request handler.", Thread.currentThread().threadId(), state);
         handler.handle(request, response);
-        System.out.println(" > Close the response...");
         response.close();
         logger.trace("[{}] Handler completed successfully", Thread.currentThread().threadId());
 
         // Purge the extra bytes in case the handler didn't read everything
-        System.out.println(" > Drain the input stream");
         long purged = httpInputStream.purge();
-        if (purged > 0) {
-          logger.debug("[{}] Purged [{}] bytes.", purged, Thread.currentThread().threadId());
+        if (purged > 0 && logger.isTraceEnabled()) {
+          logger.trace("[{}] Purged [{}] bytes.", purged, Thread.currentThread().threadId());
         }
 
         // The HTTP Request Handler may have modified the Connection header, so verify using the HTTP Response here.
         // TODO : Daniel : Review : Write a test where the request handler sets Connection: close to ensure this is honored.
         // - Note that we may nave not purged the InputStream in this case.
-        if (!response.isKeepAlive()) {
-          logger.debug("[{}] Close socket. No Keep-Alive", Thread.currentThread().threadId());
-          System.out.println("> No keep alive.. close socket here! Assume the response has already been written.");
+        var connectionHeader = response.getHeader(Headers.Connection);
+        boolean keepSocketAlive = request.getProtocol().equals(Protocols.HTTTP1_1)
+            ? !Connections.Close.equalsIgnoreCase(connectionHeader)
+            : Connections.KeepAlive.equalsIgnoreCase(connectionHeader);
+
+        if (!keepSocketAlive) {
+          logger.trace("[{}] Closing socket. No Keep-Alive.", Thread.currentThread().threadId());
           closeSocketOnly();
           break;
         }
 
         // Transition to Keep-Alive state and reset the SO timeout
         state = State.KeepAlive;
-        logger.debug("[{}] Set state [{}]", Thread.currentThread().threadId(), state);
-        socket.setSoTimeout((int) configuration.getKeepAliveTimeoutDuration().toMillis());
-
-
+        int soTimeout = (int) configuration.getKeepAliveTimeoutDuration().toMillis();
+        logger.trace("[{}] Enter Keep-Alive state [{}] Reset socket timeout [{}].", Thread.currentThread().threadId(), state, soTimeout);
+        socket.setSoTimeout(soTimeout);
       }
     } catch (SocketTimeoutException | ConnectionClosedException e) {
       boolean socketTimeoutException = e instanceof SocketTimeoutException;
-      // This might be a read timeout or a Keep-Alive timeout. The failure state is based on that flag
-      closeSocket(CloseOption.CloseSocketOnly, CloseOptionReason.Failure, httpInputStream, response, -1);
-
       if (socketTimeoutException) {
         logger.debug(String.format("[%s] Closing socket. Keep-Alive expired.", Thread.currentThread().threadId()), e);
       } else {
-        logger.debug("[{}] Closing socket. Connection closed by the client.", Thread.currentThread().threadId());
+        logger.debug("[{}] Closing socket. Client closed the connection. Reason [{}].", Thread.currentThread().threadId(), e.getMessage());
       }
+
+      // This might be a read timeout or a Keep-Alive timeout. The failure state is based on that flag
+      closeSocket(CloseOption.CloseSocketOnly, CloseOptionReason.Failure, httpInputStream, response, -1);
     } catch (ParseException pe) {
       if (instrumenter != null) {
         instrumenter.badRequest();
@@ -234,17 +260,21 @@ public class HTTPWorker implements Runnable {
       if (Thread.currentThread().isInterrupted()) {
         // Close socket only. We do not want to potentially delay the shutdown at all.
         logger.debug("[{}] Closing socket. Server is shutting down.", Thread.currentThread().threadId());
+        System.out.println("SocketException: shutting down the server. Close the socket.");
         closeSocket(CloseOption.CloseSocketOnly, CloseOptionReason.Failure, httpInputStream, response, -1);
       }
     } catch (IOException io) {
       logger.debug(String.format("[%s] Closing socket with status [%d]. An IO exception was thrown during processing. These are pretty common.", Thread.currentThread().threadId(), Status.InternalServerError), io);
+      System.out.println("IOException: close the socket.");
       closeSocket(CloseOption.TryToWriteFinalResponse, CloseOptionReason.Failure, httpInputStream, response, Status.InternalServerError);
     } catch (Throwable t) {
       // Log the error and signal a failure
       var status = Status.InternalServerError;
       logger.error(String.format("[%s] Closing socket with status [%d]. An HTTP worker threw an exception while processing a request.", Thread.currentThread().threadId(), status), t);
+      System.out.println("Throwable: close the socket.\n" + t.getMessage());
       closeSocket(CloseOption.TryToWriteFinalResponse, CloseOptionReason.Failure, httpInputStream, response, status);
     } finally {
+      // TODO : Daniel : Review : Is this true? If we are using a keep-alive and we have not caught an exception, we have not yet exited the thread.
       if (instrumenter != null) {
         instrumenter.threadExited();
       }

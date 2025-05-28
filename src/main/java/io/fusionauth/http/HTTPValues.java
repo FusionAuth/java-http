@@ -306,6 +306,8 @@ public final class HTTPValues {
   }
 
   public static final class Protocols {
+    public static final String HTTTP1_0 = "HTTP/1.0";
+
     public static final String HTTTP1_1 = "HTTP/1.1";
 
     private Protocols() {

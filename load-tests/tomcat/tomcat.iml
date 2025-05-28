@@ -12,13 +12,14 @@
     <orderEntry type="module-library" scope="PROVIDED">
       <library>
         <CLASSES>
-          <root url="jar://$USER_HOME$/.savant/cache/javax/servlet/servlet-api/3.1.0/servlet-api-3.1.0.jar!/" />
+          <root url="jar://$MODULE_DIR$/.savant/cache/javax/servlet/servlet-api/3.1.0/servlet-api-3.1.0.jar!/" />
         </CLASSES>
         <JAVADOC />
         <SOURCES>
-          <root url="jar://$USER_HOME$/.savant/cache/javax/servlet/servlet-api/3.1.0/servlet-api-3.1.0-src.jar!/" />
+          <root url="jar://$MODULE_DIR$/.savant/cache/javax/servlet/servlet-api/3.1.0/servlet-api-3.1.0-src.jar!/" />
         </SOURCES>
       </library>
     </orderEntry>
   </component>
 </module>
+

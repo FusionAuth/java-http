@@ -37,6 +37,8 @@ public class CountingInstrumenter implements Instrumenter {
 
   private long connections;
 
+  private long requests;
+
   private long startedCount;
 
   private long threadCount;
@@ -44,6 +46,11 @@ public class CountingInstrumenter implements Instrumenter {
   @Override
   public void acceptedConnection() {
     connections++;
+  }
+
+  @Override
+  public void acceptedRequests() {
+    requests++;
   }
 
   @Override
@@ -92,6 +99,10 @@ public class CountingInstrumenter implements Instrumenter {
 
   public long getConnections() {
     return connections;
+  }
+
+  public long getRequests() {
+    return requests;
   }
 
   public long getStartedCount() {

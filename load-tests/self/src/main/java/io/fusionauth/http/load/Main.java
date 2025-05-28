@@ -1,5 +1,5 @@
 /*
- * Copyright (c) 2022, FusionAuth, All Rights Reserved
+ * Copyright (c) 2022-2025, FusionAuth, All Rights Reserved
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -34,12 +34,38 @@ public class Main {
                                              .withLoggerFactory(SystemOutLoggerFactory.FACTORY)
                                              .start()) {
 
+      long lastMeasuredAcceptedRequests = instrumenter.getRequests();
+
       for (int i = 0; i < 1_000; i++) {
-        Thread.sleep(10_000);
-        System.out.printf("Current stats. Bad requests [%s]. Bytes read [%s]. Bytes written [%s]. Chunked requests [%s]. Chunked responses [%s]. Closed connections [%s]. Connections [%s]. Started [%s]. Virtual threads [%s].\n",
-            instrumenter.getBadRequests(), instrumenter.getBytesRead(), instrumenter.getBytesWritten(), instrumenter.getChunkedRequests(),
-            instrumenter.getChunkedResponses(), instrumenter.getClosedConnections(), instrumenter.getConnections(), instrumenter.getStartedCount(),
-            instrumenter.getThreadCount());
+        Thread.sleep(30_000);
+        long acceptedRequests = instrumenter.getRequests();
+        // Cut down on noise if we are not running any requests.
+        if (instrumenter.getRequests() > lastMeasuredAcceptedRequests) {
+          System.out.printf("""
+                  %s Current stats
+                   - Servers started:    [%,d]
+                   - Active workers:     [%,d]
+                   - Bad requests:       [%,d]
+                   - Bytes read:         [%,d]
+                   - Bytes written:      [%,d]
+                   - Chunked requests:   [%,d]
+                   - Chunked responses:  [%,d]
+                   - Closed connections: [%,d]
+                   - Total connections:  [%,d]
+                  """,
+              System.currentTimeMillis(),
+              instrumenter.getStartedCount(),
+              instrumenter.getThreadCount(),
+              instrumenter.getBadRequests(),
+              instrumenter.getBytesRead(),
+              instrumenter.getBytesWritten(),
+              instrumenter.getChunkedRequests(),
+              instrumenter.getChunkedResponses(),
+              instrumenter.getClosedConnections(),
+              instrumenter.getConnections());
+        }
+
+        lastMeasuredAcceptedRequests = acceptedRequests;
       }
 
       System.out.println("Shutting down java-http server");

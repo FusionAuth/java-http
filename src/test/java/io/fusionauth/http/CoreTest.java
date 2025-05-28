@@ -230,17 +230,33 @@ public class CoreTest extends BaseTest {
     }
   }
 
+  @SuppressWarnings("ExtractMethodRecommender")
   @Test(dataProvider = "schemes")
-  public void hugeHeaders(String scheme) throws Exception {
-    // 260 characters for a total of 16,640 bytes per header value. 5 headers for a total of 83,200 bytes
+  public void large_headers(String scheme) throws Exception {
+    // Use case: Ensure we can read headers from the request, and send headers on the response that exceed the default request and repsonse buffer lengths.
+
+    // Ensure the headers in total exceed the response buffer sizes.
+    var requestBufferLength = new HTTPServerConfiguration().getRequestBufferSize();
+    var headersRequiredToExceedRequestBufferLength = (requestBufferLength / LongString.length()) + 1;
+
+    // Ensure the headers in total exceed the response buffer sizes.
+    var responseBufferLength = new HTTPServerConfiguration().getResponseBufferSize();
+    var headersRequiredToExceedResponseBufferLength = (responseBufferLength / LongString.length()) + 1;
+
+    // The server will return these larger headers on the HTTP response
     HTTPHandler handler = (req, res) -> {
+
+      // Expect the headers sent by the client
+      for (int i = 0; i < headersRequiredToExceedRequestBufferLength; i++) {
+        assertEquals(req.getHeader("X-Huge-Header-" + i), LongString);
+      }
+
+      // Now write large headers back on the response
       res.setHeader(Headers.ContentType, "text/plain");
-      res.setHeader(Headers.ContentLength, "16");
-      res.setHeader("X-Huge-Header-1", LongString);
-      res.setHeader("X-Huge-Header-2", LongString);
-      res.setHeader("X-Huge-Header-3", LongString);
-      res.setHeader("X-Huge-Header-4", LongString);
-      res.setHeader("X-Huge-Header-5", LongString);
+      res.setHeader(Headers.ContentLength, ExpectedResponse.getBytes().length + "");
+      for (int i = 0; i < headersRequiredToExceedResponseBufferLength; i++) {
+        res.setHeader("X-Huge-Header-" + i, LongString);
+      }
       res.setStatus(200);
 
       try {
@@ -254,20 +270,27 @@ public class CoreTest extends BaseTest {
 
     try (var client = makeClient(scheme, null); var ignore = makeServer(scheme, handler).start()) {
       URI uri = makeURI(scheme, "");
-      var response = client.send(
-          HttpRequest.newBuilder()
-                     .uri(uri)
-                     .header("X-Huge-Header-1", LongString)
-                     .header("X-Huge-Header-2", LongString)
-                     .header("X-Huge-Header-3", LongString)
-                     .header("X-Huge-Header-4", LongString)
-                     .header("X-Huge-Header-5", LongString)
-                     .POST(BodyPublishers.ofString(RequestBody))
-                     .build(),
+      var builder = HttpRequest.newBuilder()
+                               .uri(uri);
+
+
+      // The client is going to send these large headers on the request
+      for (int i = 0; i < headersRequiredToExceedRequestBufferLength; i++) {
+        builder.setHeader("X-Huge-Header-" + i, LongString);
+      }
+
+      var response = client.send(builder
+              .POST(BodyPublishers.ofString(RequestBody))
+              .build(),
           r -> BodySubscribers.ofString(StandardCharsets.UTF_8)
       );
 
       assertEquals(response.statusCode(), 200);
+
+      // Ensure each header came back on the response
+      for (int i = 0; i < headersRequiredToExceedResponseBufferLength; i++) {
+        assertEquals(response.headers().firstValue("X-Huge-Header-" + i).get(), LongString);
+      }
     }
   }
 
@@ -294,7 +317,7 @@ public class CoreTest extends BaseTest {
       out.flush();
       var in = socket.getInputStream();
       var body = in.readAllBytes();
-      fail("Should have failed but instead got\n\n" + new String(body));
+        fail("Should have failed but instead got\n\n" + new String(body));
     } catch (Exception ignore) {
       // Expected
     }

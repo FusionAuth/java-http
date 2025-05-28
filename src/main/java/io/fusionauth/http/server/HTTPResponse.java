@@ -31,7 +31,6 @@ import java.util.Map;
 import java.util.stream.Collectors;
 
 import io.fusionauth.http.Cookie;
-import io.fusionauth.http.HTTPValues.Connections;
 import io.fusionauth.http.HTTPValues.ContentTypes;
 import io.fusionauth.http.HTTPValues.Headers;
 import io.fusionauth.http.HTTPValues.Status;
@@ -248,17 +247,6 @@ public class HTTPResponse {
    */
   public void setCompress(boolean compress) {
     outputStream.setCompress(compress);
-  }
-
-  /**
-   * @return If the connection should be kept open (keep-alive) or not. The default is to return the Connection: keep-alive header, which
-   *     this method does.
-   */
-  public boolean isKeepAlive() {
-    // TODO : Daniel Review : Should this have the same logic as HTTPRequest.isKeepAlive?
-    //        - The request says if null or != "close" then it is keep alive.
-    String connection = getHeader(Headers.Connection);
-    return connection == null || connection.equalsIgnoreCase(Connections.KeepAlive);
   }
 
   public void removeCookie(String name) {

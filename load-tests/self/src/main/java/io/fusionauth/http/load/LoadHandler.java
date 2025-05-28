@@ -27,16 +27,16 @@ public class LoadHandler implements HTTPHandler {
   @Override
   public void handle(HTTPRequest req, HTTPResponse res) {
     if (req.getPath().equals("/text")) {
-      System.out.println("Text");
+//      System.out.println("Text");
       res.setStatus(200);
       res.setContentType("text/plain");
 
       try (OutputStream os = res.getOutputStream()) {
-        System.out.println("Wrote");
+//        System.out.println("Wrote");
         os.write("Hello world".getBytes());
         os.flush();
       } catch (Exception e) {
-        System.out.println("Failed");
+//        System.out.println("Failed");
         res.setStatus(500);
       }
     } else {
