@@ -412,7 +412,7 @@ public class CoreTest extends BaseTest {
       res.getOutputStream().write(req.getBodyBytes());
       res.getOutputStream().close();
 
-      // This will hose up the works - or it did until we fixed it.
+      // This will hose up the works - or it did until we fixed a bug in the HTTPRequest.getBodyBytes method.
       req.getFormData();
 
       // Ensure you can call this method and get the same value in return each time.

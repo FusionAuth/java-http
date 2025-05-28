@@ -20,6 +20,7 @@ import java.io.IOException;
 import java.io.InputStream;
 import java.io.OutputStream;
 import java.net.URLDecoder;
+import java.nio.ByteBuffer;
 import java.nio.charset.Charset;
 import java.nio.charset.IllegalCharsetNameException;
 import java.nio.charset.StandardCharsets;
@@ -242,7 +243,7 @@ public final class HTTPTools {
    * @return Any leftover body bytes from the last read from the InputStream.
    * @throws IOException If the read fails.
    */
-  public static BodyBytes parseRequestPreamble(InputStream inputStream, HTTPRequest request, byte[] requestBuffer,
+  public static ByteBuffer parseRequestPreamble(InputStream inputStream, HTTPRequest request, byte[] requestBuffer,
                                                Instrumenter instrumenter,
                                                Runnable readObserver)
       throws IOException {
@@ -302,7 +303,7 @@ public final class HTTPTools {
       logger.trace("Had [{}] body bytes from the preamble read.", (read - index));
       // TODO : Daniel : Performance - can we just return an offset into the requestBuffer instead of copying these bytes?
       //        Review with Brian, seems to be safe so far and removes extra IO.
-      return new BodyBytes(requestBuffer, index, read);
+      return ByteBuffer.wrap(requestBuffer, index, read - index);
     }
 
     return null;
@@ -414,9 +415,6 @@ public final class HTTPTools {
       out.write(response.getStatusMessage().getBytes());
     }
     out.write(ControlBytes.CRLF);
-  }
-
-  public record BodyBytes(byte[] byteBuffer, int fromIndex, int toIndex) {
   }
 
   /**

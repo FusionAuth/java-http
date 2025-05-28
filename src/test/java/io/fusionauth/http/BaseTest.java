@@ -55,6 +55,8 @@ import java.util.stream.Collectors;
 import io.fusionauth.http.log.FileLogger;
 import io.fusionauth.http.log.FileLoggerFactory;
 import io.fusionauth.http.log.Level;
+import io.fusionauth.http.log.LoggerFactory;
+import io.fusionauth.http.log.SystemOutLoggerFactory;
 import io.fusionauth.http.security.SecurityTools;
 import io.fusionauth.http.server.ExpectValidator;
 import io.fusionauth.http.server.HTTPHandler;
@@ -271,7 +273,7 @@ public abstract class BaseTest {
       listenerConfiguration = new HTTPListenerConfiguration(4242);
     }
 
-    FileLoggerFactory factory = FileLoggerFactory.FACTORY;
+    LoggerFactory factory = SystemOutLoggerFactory.FACTORY;
     return new HTTPServer().withHandler(handler)
                            .withKeepAliveTimeoutDuration(Duration.ofSeconds(3))
                            .withInitialReadTimeout(Duration.ofSeconds(21))

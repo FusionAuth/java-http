@@ -17,13 +17,14 @@ package io.fusionauth.http.server.io;
 
 import java.io.IOException;
 import java.io.InputStream;
+import java.nio.ByteBuffer;
+import java.util.Arrays;
 
 import io.fusionauth.http.io.ChunkedInputStream;
 import io.fusionauth.http.log.Logger;
 import io.fusionauth.http.server.HTTPRequest;
 import io.fusionauth.http.server.HTTPServerConfiguration;
 import io.fusionauth.http.server.Instrumenter;
-import io.fusionauth.http.util.HTTPTools.BodyBytes;
 
 /**
  * An InputStream that handles the HTTP body, including body bytes that were read while the preamble was processed. This class also handles
@@ -39,10 +40,9 @@ public class HTTPInputStream extends InputStream {
 
   private final HTTPRequest request;
 
-  private byte[] bodyBytes;
+  private ByteBuffer bodyBytes;
 
   private int bodyBytesIndex;
-  private int bodyBytesLength;
 
   private long bytesRemaining;
 
@@ -50,16 +50,12 @@ public class HTTPInputStream extends InputStream {
 
   private InputStream delegate;
 
-  public HTTPInputStream(HTTPServerConfiguration configuration, HTTPRequest request, InputStream delegate, BodyBytes bodyBytes) {
+  public HTTPInputStream(HTTPServerConfiguration configuration, HTTPRequest request, InputStream delegate, ByteBuffer bodyBytes) {
     this.logger = configuration.getLoggerFactory().getLogger(HTTPInputStream.class);
     this.instrumenter = configuration.getInstrumenter();
     this.request = request;
     this.delegate = delegate;
-    if (bodyBytes != null) {
-      this.bodyBytes = bodyBytes.byteBuffer();
-      this.bodyBytesIndex = bodyBytes.fromIndex();
-      this.bodyBytesLength = bodyBytes.toIndex()-bodyBytes.fromIndex();
-    }
+    this.bodyBytes = bodyBytes;
 
     // Start the countdown
     if (request.getContentLength() != null) {
@@ -71,6 +67,7 @@ public class HTTPInputStream extends InputStream {
   public void close() throws IOException {
     // Ignore because we don't know if we should close the socket's InputStream
 
+    System.out.println("HTTPInputStream.close()");
     // TODO : Daniel : Review : Should this be revisited? This could be a good location to call drain?
     //        See LeftOverInputStream.drain()
     //        See FixedLengthInputStream
@@ -100,7 +97,6 @@ public class HTTPInputStream extends InputStream {
     // TODO : Daniel : Review : What about chunked encoding, we will not have a Content-Length.
     //        Should this also check if chunked, or does chunked never call this method?
     if (bytesRemaining <= 0) {
-      System.out.println("-1 on read(), no bytesRemaining because no ContentLength header.");
       return -1;
     }
 
@@ -112,9 +108,9 @@ public class HTTPInputStream extends InputStream {
     // If bodyBytes exist, they are left over bytes from parsing the preamble.
     // - Process these bytes first before reading from the delegate InputStream.
     if (bodyBytes != null) {
-      b = bodyBytes[bodyBytesIndex++];
+      b = bodyBytes.get(bodyBytesIndex++);
 
-      if (bodyBytesIndex >= bodyBytesLength) {
+      if (bodyBytesIndex >= bodyBytes.limit()) {
         bodyBytes = null;
       }
     } else {
@@ -126,9 +122,6 @@ public class HTTPInputStream extends InputStream {
     }
 
     bytesRemaining--;
-    if (b == -1) {
-      System.out.println("-1 on read() due to delegate InputStream");
-    }
     return b;
   }
 
@@ -140,7 +133,6 @@ public class HTTPInputStream extends InputStream {
   @Override
   public int read(byte[] buffer, int offset, int length) throws IOException {
     // Signal end of the stream if there is no more to read and the request isn't chunked
-    // TODO : Daniel : Review : When we drain to be able to write a response --- how does Transfer-Encoding work into this?
     if (bytesRemaining <= 0 && !request.isChunked()) {
       return -1;
     }
@@ -153,11 +145,17 @@ public class HTTPInputStream extends InputStream {
     // If bodyBytes exist, they are left over bytes from parsing the preamble.
     // - Process these bytes first before reading from the delegate InputStream.
     if (bodyBytes != null) {
-      read = Math.min(bodyBytes.length - bodyBytesIndex, length);
+//      int maximumBytesAvailableToRead =bodyBytesLength - (bodyBytesIndex - initialBodyBytesIndex);
+      int maximumBytesAvailableToRead =bodyBytes.limit() - bodyBytesIndex;
+      System.out.println("max bytes to read: " + (bodyBytes.limit() - bodyBytesIndex));
+      System.out.println("max bytes to read: " + (bodyBytes.remaining()));
+      // 0 --> 24
+      // 50 --> 74
+      read = Math.min(maximumBytesAvailableToRead, length);
       System.arraycopy(bodyBytes, bodyBytesIndex, buffer, offset, read);
       bodyBytesIndex += read;
 
-      if (bodyBytesIndex >= bodyBytes.length) {
+      if (bodyBytesIndex >= bodyBytes.limit()) {
         bodyBytes = null;
       }
     } else {
@@ -183,7 +181,9 @@ public class HTTPInputStream extends InputStream {
       logger.trace("Client indicated it was sending an entity-body in the request. Handling body using Content-Length header {}.", contentLength);
     } else if (request.isChunked()) {
       logger.trace("Client indicated it was sending an entity-body in the request. Handling body using chunked encoding.");
-      delegate = new ChunkedInputStream(delegate, 1024, bodyBytes);
+      // TODO : Daniel : Review : Can I pass this reference to the ChunkedInputStream instead of copying the bytes?
+      byte[] leftOverBytes = Arrays.copyOfRange(bodyBytes.array(), bodyBytes.position(), bodyBytes.limit());
+      delegate = new ChunkedInputStream(delegate, 1024, leftOverBytes);
       bodyBytes = null;
 
       if (instrumenter != null) {

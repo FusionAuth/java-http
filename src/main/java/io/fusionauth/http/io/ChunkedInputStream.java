@@ -45,6 +45,7 @@ public class ChunkedInputStream extends InputStream {
 
   private ChunkedBodyState state = ChunkedBodyState.ChunkSize;
 
+  // TODO : Why is this so different from HTTP InputStream, can't I just pass through the ByteBuffer that wraps the Request Buffer?
   public ChunkedInputStream(InputStream delegate, int bufferSize, byte[] bodyBytes) {
     this.delegate = delegate;
 

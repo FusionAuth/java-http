@@ -20,6 +20,7 @@ import java.io.OutputStream;
 import java.net.Socket;
 import java.net.SocketException;
 import java.net.SocketTimeoutException;
+import java.nio.ByteBuffer;
 
 import io.fusionauth.http.ConnectionClosedException;
 import io.fusionauth.http.HTTPValues;
@@ -40,7 +41,6 @@ import io.fusionauth.http.server.io.Throughput;
 import io.fusionauth.http.server.io.ThroughputInputStream;
 import io.fusionauth.http.server.io.ThroughputOutputStream;
 import io.fusionauth.http.util.HTTPTools;
-import io.fusionauth.http.util.HTTPTools.BodyBytes;
 import io.fusionauth.http.util.ThreadPool;
 
 /**
@@ -109,9 +109,6 @@ public class HTTPWorker implements Runnable {
       }
 
       while (true) {
-        var now = System.currentTimeMillis();
-        // System.out.println("[" + now + "] Handle a new request.");
-        // TODO : Daniel : Review : Separate from some debugging efforts, this should be a trace
         logger.trace("[{}] Running HTTP worker. Block while we wait to read the preamble", Thread.currentThread().threadId());
         var request = new HTTPRequest(configuration.getContextPath(), configuration.getMultipartBufferSize(),
             listener.getCertificate() != null ? "https" : "http", listener.getPort(), socket.getInetAddress().getHostAddress());
@@ -125,7 +122,8 @@ public class HTTPWorker implements Runnable {
 
         var inputStream = new ThroughputInputStream(socket.getInputStream(), throughput);
 
-        BodyBytes bodyBytes = null;
+        ByteBuffer bodyBytes = null;
+//        byte[] bodyBytes = null;
 //        try {
         // TODO : Daniel : Review since this is single threaded - can the bodyBytes just be a pointer into buffers.requestBuffer?
         //        Or is it critical that we are done with the requestBuffer after this method returns to be used for another request?
@@ -135,6 +133,7 @@ public class HTTPWorker implements Runnable {
         // Not this line of code will block
         // - When a client is using Keep-Alive - we will loop and block here while we wait for the client to send us bytes.
         byte[] requestBuffer = buffers.requestBuffer();
+//        bodyBytes = HTTPTools.parseRequestPreamble(inputStream, request, requestBuffer, instrumenter, () -> state = State.Read);
         bodyBytes = HTTPTools.parseRequestPreamble(inputStream, request, requestBuffer, instrumenter, () -> state = State.Read);
 
         // Once we have performed an initial read, we can count this as a handled request.
@@ -260,7 +259,7 @@ public class HTTPWorker implements Runnable {
       if (Thread.currentThread().isInterrupted()) {
         // Close socket only. We do not want to potentially delay the shutdown at all.
         logger.debug("[{}] Closing socket. Server is shutting down.", Thread.currentThread().threadId());
-        System.out.println("SocketException: shutting down the server. Close the socket.");
+//        System.out.println("SocketException: shutting down the server. Close the socket.");
         closeSocket(CloseOption.CloseSocketOnly, CloseOptionReason.Failure, httpInputStream, response, -1);
       }
     } catch (IOException io) {

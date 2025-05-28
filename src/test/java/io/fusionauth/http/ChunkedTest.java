@@ -1,5 +1,5 @@
 /*
- * Copyright (c) 2022, FusionAuth, All Rights Reserved
+ * Copyright (c) 2022-2025, FusionAuth, All Rights Reserved
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -223,43 +223,62 @@ public class ChunkedTest extends BaseTest {
 
   @Test(dataProvider = "schemes", groups = "performance")
   public void performanceChunked(String scheme) throws Exception {
+    String responseBody = "These pretzels are making me thirsty. ".repeat(16_000);
+    byte[] responseBodyBytes = responseBody.getBytes(StandardCharsets.UTF_8);
+
     HTTPHandler handler = (req, res) -> {
       res.setHeader(Headers.ContentType, "text/plain");
       res.setStatus(200);
 
       try {
         OutputStream outputStream = res.getOutputStream();
-        outputStream.write(ExpectedResponse.getBytes());
+        outputStream.write(responseBodyBytes);
         outputStream.close();
       } catch (IOException e) {
         throw new RuntimeException(e);
       }
     };
 
+    int iterations = 15_000;
     CountingInstrumenter instrumenter = new CountingInstrumenter();
     try (var client = makeClient(scheme, null); var ignore = makeServer(scheme, handler, instrumenter).start()) {
       URI uri = makeURI(scheme, "");
       long start = System.currentTimeMillis();
-      for (int i = 0; i < 100_000; i++) {
+      long lastLog = start;
+
+      for (int i = 0; i < iterations; i++) {
         var response = client.send(
             HttpRequest.newBuilder().uri(uri).GET().build(),
             r -> BodySubscribers.ofString(StandardCharsets.UTF_8)
         );
 
         assertEquals(response.statusCode(), 200);
-        assertEquals(response.body(), ExpectedResponse);
+        assertEquals(response.body(), responseBody);
 
-        if (i % 1_000 == 0) {
-          System.out.println(i);
+        if (System.currentTimeMillis() - lastLog > 5_000) {
+          long now = System.currentTimeMillis();
+          double currentAverage = (now - start) / (double) i;
+          System.out.printf("Chunked Performance: Iterations [%,d] Response body [%,d] bytes. Running average is [%f] ms.\n", i, responseBodyBytes.length, currentAverage);
+          lastLog = System.currentTimeMillis();
         }
       }
 
       long end = System.currentTimeMillis();
-      double average = (end - start) / 10_000D;
-      System.out.println("Average linear request time is [" + average + "]ms");
+      double average = (end - start) / (double) iterations;
+      System.out.printf("Chunked Performance: Iterations [%,d] Response body [%,d] bytes. Final average is [%f] ms.\n", iterations,  responseBodyBytes.length, average);
+
+      // HTTP
+      // Chunked Performance: Iterations [15,000] Response body [608,000] bytes. Final average is [0.563467] ms.
+      // Chunked Performance: Iterations [15,000] Response body [608,000] bytes. Final average is [0.572667] ms
+
+      // HTTPS
+      // Chunked Performance: Iterations [15,000] Response body [608,000] bytes. Final average is [0.998800] ms.
+      // Chunked Performance: Iterations [15,000] Response body [608,000] bytes. Final average is [1.025333] ms.
     }
 
+    // We are using keep-alive, so expect 1 connection, and the total requests accepted, and chunked responses should equal the iteration count.
     assertEquals(instrumenter.getConnections(), 1);
-    assertEquals(instrumenter.getChunkedResponses(), 100_000);
+    assertEquals(instrumenter.getChunkedResponses(), iterations);
+    assertEquals(instrumenter.getAcceptedRequests(), iterations);
   }
 }

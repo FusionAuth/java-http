@@ -119,7 +119,6 @@ public class HTTPServerThread extends Thread {
         logger.debug("Nothing accepted. Cleaning up existing connections.");
         System.out.println("Server caught SocketTimeoutException");
       } catch (SocketException e) {
-        System.out.println("Server caught SocketException");
         // This should only happen when the server is shutdown
         if (socket.isClosed()) {
           running = false;
@@ -147,7 +146,6 @@ public class HTTPServerThread extends Thread {
   public void shutdown() {
     running = false;
     try {
-      System.out.println("shutdown()");
       cleaner.interrupt();
       socket.close();
     } catch (IOException ignore) {

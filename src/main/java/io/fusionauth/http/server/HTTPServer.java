@@ -1,5 +1,5 @@
 /*
- * Copyright (c) 2022, FusionAuth, All Rights Reserved
+ * Copyright (c) 2022-2025, FusionAuth, All Rights Reserved
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -40,10 +40,9 @@ public class HTTPServer implements Closeable, Configurable<HTTPServer> {
 
   @Override
   public void close() {
-    logger.info("HTTP server shutdown requested. Attempting to close each listener. This could take a while.");
-
     long start = System.currentTimeMillis();
     long shutdownDuration = configuration.getShutdownDuration().toMillis();
+    logger.info("HTTP server shutdown requested. Attempting to close each listener. Wait up to [{}] ms.", shutdownDuration);
 
     // First, shutdown all the threads
     for (HTTPServerThread thread : servers) {
