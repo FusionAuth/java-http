@@ -80,3 +80,9 @@ target(name: "app", description: "Builds the app", dependsOn: ["jar"]) {
 target(name: "idea", description: "Updates the IntelliJ IDEA module file") {
   idea.iml()
 }
+
+target(name: "start", description: "Starts the java-http server for load testing!", dependsOn: ["app"]) {
+  if (new ProcessBuilder('./start.sh').directory(new File("build/dist")).inheritIO().start().waitFor() != 0) {
+    fail("Unable to start the server!")
+  }
+}
