@@ -56,6 +56,9 @@ public class HTTPInputStream extends InputStream {
     this.request = request;
     this.delegate = delegate;
     this.bodyBytes = bodyBytes;
+    if (bodyBytes != null) {
+      bodyBytesIndex = bodyBytes.position();
+    }
 
     // Start the countdown
     if (request.getContentLength() != null) {
@@ -145,14 +148,8 @@ public class HTTPInputStream extends InputStream {
     // If bodyBytes exist, they are left over bytes from parsing the preamble.
     // - Process these bytes first before reading from the delegate InputStream.
     if (bodyBytes != null) {
-//      int maximumBytesAvailableToRead =bodyBytesLength - (bodyBytesIndex - initialBodyBytesIndex);
-      int maximumBytesAvailableToRead =bodyBytes.limit() - bodyBytesIndex;
-      System.out.println("max bytes to read: " + (bodyBytes.limit() - bodyBytesIndex));
-      System.out.println("max bytes to read: " + (bodyBytes.remaining()));
-      // 0 --> 24
-      // 50 --> 74
-      read = Math.min(maximumBytesAvailableToRead, length);
-      System.arraycopy(bodyBytes, bodyBytesIndex, buffer, offset, read);
+      read = Math.min(bodyBytes.limit() - bodyBytesIndex, length);
+      System.arraycopy(bodyBytes.array(), bodyBytesIndex, buffer, offset, read);
       bodyBytesIndex += read;
 
       if (bodyBytesIndex >= bodyBytes.limit()) {
