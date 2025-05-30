@@ -1,5 +1,5 @@
 /*
- * Copyright (c) 2022, FusionAuth, All Rights Reserved
+ * Copyright (c) 2022-2025, FusionAuth, All Rights Reserved
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -25,6 +25,7 @@ import java.nio.charset.StandardCharsets;
 import java.util.concurrent.atomic.AtomicBoolean;
 
 import io.fusionauth.http.HTTPValues.Headers;
+import io.fusionauth.http.server.AlwaysContinueExpectValidator;
 import io.fusionauth.http.server.CountingInstrumenter;
 import io.fusionauth.http.server.ExpectValidator;
 import io.fusionauth.http.server.HTTPHandler;
@@ -35,7 +36,7 @@ import static org.testng.Assert.assertTrue;
 import static org.testng.Assert.fail;
 
 /**
- * Tests the HTTP server.
+ * Tests the HTTP server response to 'Expect: 100 Continue'.
  *
  * @author Brian Pontarelli
  */
@@ -47,24 +48,24 @@ public class ExpectTest extends BaseTest {
   @Test(dataProvider = "schemes")
   public void expect(String scheme) throws Exception {
     HTTPHandler handler = (req, res) -> {
-      System.out.println("Handling");
+      println("Handling");
       assertEquals(req.getHeader(Headers.ContentType), "application/json"); // Mixed case
 
       try {
-        System.out.println("Reading");
+        println("Reading");
         byte[] body = req.getInputStream().readAllBytes();
         assertEquals(new String(body), RequestBody);
       } catch (IOException e) {
         fail("Unable to parse body", e);
       }
 
-      System.out.println("Done");
+      println("Done");
       res.setHeader(Headers.ContentType, "text/plain");
       res.setHeader("Content-Length", "16");
       res.setStatus(200);
 
       try {
-        System.out.println("Writing");
+        println("Writing");
         OutputStream outputStream = res.getOutputStream();
         outputStream.write(ExpectedResponse.getBytes());
         outputStream.close();
@@ -75,7 +76,7 @@ public class ExpectTest extends BaseTest {
 
     AtomicBoolean validated = new AtomicBoolean(false);
     ExpectValidator validator = (req, res) -> {
-      System.out.println("Validating");
+      println("Validating");
       validated.set(true);
       assertEquals(req.getContentType(), "application/json");
       assertEquals((long) req.getContentLength(), RequestBody.length());
@@ -83,17 +84,25 @@ public class ExpectTest extends BaseTest {
       res.setStatusMessage("Continue");
     };
 
+    // Test w/ and w/out a custom expect validator. The default behavior should be to approve the payload.
     CountingInstrumenter instrumenter = new CountingInstrumenter();
-    try (HTTPServer ignore = makeServer(scheme, handler, instrumenter, validator).start(); var client = makeClient(scheme, null)) {
-      URI uri = makeURI(scheme, "");
-      var response = client.send(
-          HttpRequest.newBuilder().uri(uri).header(Headers.ContentType, "application/json").expectContinue(true).POST(BodyPublishers.ofString(RequestBody)).build(),
-          r -> BodySubscribers.ofString(StandardCharsets.UTF_8)
-      );
+    boolean[] validationOptions = {true, false};
+    for (boolean validation : validationOptions) {
+      ExpectValidator expectValidator = validation
+          ? validator                             // Custom
+          : new AlwaysContinueExpectValidator();  // Default
 
-      assertEquals(response.statusCode(), 200);
-      assertEquals(response.body(), ExpectedResponse);
-      assertTrue(validated.get());
+      try (HTTPServer ignore = makeServer(scheme, handler, instrumenter, expectValidator).start(); var client = makeClient(scheme, null)) {
+        URI uri = makeURI(scheme, "");
+        var response = client.send(
+            HttpRequest.newBuilder().uri(uri).header(Headers.ContentType, "application/json").expectContinue(true).POST(BodyPublishers.ofString(RequestBody)).build(),
+            r -> BodySubscribers.ofString(StandardCharsets.UTF_8)
+        );
+
+        assertEquals(response.statusCode(), 200);
+        assertEquals(response.body(), ExpectedResponse);
+        assertTrue(validated.get());
+      }
     }
   }
 
@@ -102,7 +111,7 @@ public class ExpectTest extends BaseTest {
     HTTPHandler handler = (req, res) -> fail("Should not have been called");
 
     ExpectValidator validator = (req, res) -> {
-      System.out.println("Validating");
+      println("Validating");
       assertEquals(req.getContentType(), "application/json");
       assertEquals((long) req.getContentLength(), RequestBody.length());
       res.setStatus(417);

@@ -1,5 +1,5 @@
 /*
- * Copyright (c) 2021-2023, FusionAuth, All Rights Reserved
+ * Copyright (c) 2021-2025, FusionAuth, All Rights Reserved
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -144,6 +144,13 @@ public final class HTTPValues {
     public static final String name = "name";
   }
 
+  public static final class HeaderBytes {
+    public static final byte[] SetCookie = Headers.SetCookie.getBytes();
+
+    private HeaderBytes() {
+    }
+  }
+
   /**
    * Header names.
    */
@@ -268,13 +275,6 @@ public final class HTTPValues {
     }
   }
 
-  public static final class HeaderBytes {
-    public static final byte[] SetCookie = Headers.SetCookie.getBytes();
-
-    private HeaderBytes() {
-    }
-  }
-
   public static final class Methods {
     public static final String CONNECT = "CONNECT";
 
@@ -306,6 +306,8 @@ public final class HTTPValues {
   }
 
   public static final class Protocols {
+    public static final String HTTTP1_0 = "HTTP/1.0";
+
     public static final String HTTTP1_1 = "HTTP/1.1";
 
     private Protocols() {

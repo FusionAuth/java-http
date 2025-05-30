@@ -1,5 +1,5 @@
 /*
- * Copyright (c) 2022-2024, FusionAuth, All Rights Reserved
+ * Copyright (c) 2022-2025, FusionAuth, All Rights Reserved
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -15,7 +15,7 @@
  */
 package io.fusionauth.http.util;
 
-import io.fusionauth.http.ParseException;
+import static io.fusionauth.http.util.HTTPTools.makeParseException;
 
 /**
  * Finite state machine parser for an HTTP 1.1 request preamble. This is the start-line and headers.
@@ -32,7 +32,7 @@ public enum RequestPreambleState {
         return RequestMethod;
       }
 
-      throw makeParseException((char) ch);
+      throw makeParseException(ch, this);
     }
 
     @Override
@@ -50,7 +50,7 @@ public enum RequestPreambleState {
         return RequestPath;
       }
 
-      throw makeParseException((char) ch);
+      throw makeParseException(ch, this);
     }
 
     @Override
@@ -68,7 +68,7 @@ public enum RequestPreambleState {
         return RequestPath;
       }
 
-      throw makeParseException((char) ch);
+      throw makeParseException(ch, this);
     }
 
     @Override
@@ -86,7 +86,7 @@ public enum RequestPreambleState {
         return RequestProtocol;
       }
 
-      throw makeParseException((char) ch);
+      throw makeParseException(ch, this);
     }
 
     @Override
@@ -98,13 +98,15 @@ public enum RequestPreambleState {
   RequestProtocol {
     @Override
     public RequestPreambleState next(byte ch) {
-      if (ch == 'H' || ch == 'T' || ch == 'P' || ch == '/' || ch == '1' || ch == '.') {
+      // While this server only supports HTTP/1.1, allow the request protocol to be parsed for any valid version.
+      // - The supported version will be validated elsewhere.
+      if (ch == 'H' || ch == 'T' || ch == 'P' || ch == '/' || ch == '.' || (ch >= '0' && ch <= '9')) {
         return RequestProtocol;
       } else if (ch == '\r') {
         return RequestCR;
       }
 
-      throw makeParseException((char) ch);
+      throw makeParseException(ch, this);
     }
 
     @Override
@@ -120,7 +122,7 @@ public enum RequestPreambleState {
         return RequestLF;
       }
 
-      throw makeParseException((char) ch);
+      throw makeParseException(ch, this);
     }
 
     @Override
@@ -138,7 +140,7 @@ public enum RequestPreambleState {
         return HeaderName;
       }
 
-      throw makeParseException((char) ch);
+      throw makeParseException(ch, this);
     }
 
     @Override
@@ -156,7 +158,7 @@ public enum RequestPreambleState {
         return HeaderColon;
       }
 
-      throw makeParseException((char) ch);
+      throw makeParseException(ch, this);
     }
 
     @Override
@@ -192,7 +194,7 @@ public enum RequestPreambleState {
         return HeaderValue;
       }
 
-      throw makeParseException((char) ch);
+      throw makeParseException(ch, this);
     }
 
     @Override
@@ -208,7 +210,7 @@ public enum RequestPreambleState {
         return HeaderLF;
       }
 
-      throw makeParseException((char) ch);
+      throw makeParseException(ch, this);
     }
 
     @Override
@@ -226,7 +228,7 @@ public enum RequestPreambleState {
         return HeaderName;
       }
 
-      throw makeParseException((char) ch);
+      throw makeParseException(ch, this);
     }
 
     @Override
@@ -242,7 +244,7 @@ public enum RequestPreambleState {
         return Complete;
       }
 
-      throw makeParseException((char) ch);
+      throw makeParseException(ch, this);
     }
 
     @Override
@@ -266,8 +268,4 @@ public enum RequestPreambleState {
   public abstract RequestPreambleState next(byte ch);
 
   public abstract boolean store();
-
-  ParseException makeParseException(char ch) {
-    return new ParseException("Invalid character [" + ch + "] in state [" + this + "]");
-  }
 }

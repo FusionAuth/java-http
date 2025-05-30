@@ -358,12 +358,14 @@
       </HTMLCodeStyleSettings>
       <JavaCodeStyleSettings>
         <option name="DO_NOT_WRAP_AFTER_SINGLE_ANNOTATION" value="true" />
+        <option name="BLANK_LINES_AROUND_FIELD_WITH_ANNOTATIONS" value="1" />
         <option name="CLASS_NAMES_IN_JAVADOC" value="3" />
         <option name="INSERT_INNER_CLASS_IMPORTS" value="true" />
         <option name="CLASS_COUNT_TO_USE_IMPORT_ON_DEMAND" value="9999" />
         <option name="NAMES_COUNT_TO_USE_IMPORT_ON_DEMAND" value="9999" />
         <option name="IMPORT_LAYOUT_TABLE">
           <value>
+            <package name="" withSubpackages="true" static="false" module="true" />
             <package name="javax" withSubpackages="true" static="false" />
             <package name="java" withSubpackages="true" static="false" />
             <emptyLine />
@@ -687,6 +689,7 @@
       <codeStyleSettings language="JAVA">
         <option name="BLANK_LINES_AROUND_FIELD" value="1" />
         <option name="ALIGN_MULTILINE_CHAINED_METHODS" value="true" />
+        <option name="ALIGN_MULTILINE_BINARY_OPERATION" value="true" />
         <option name="METHOD_PARAMETERS_WRAP" value="1" />
         <option name="THROWS_KEYWORD_WRAP" value="1" />
         <option name="WRAP_COMMENTS" value="true" />
@@ -1433,5 +1436,18 @@
   </component>
   <component name="VcsDirectoryMappings">
     <mapping directory="$PROJECT_DIR$" vcs="Git" />
+  </component>
+  <component name="libraryTable">
+    <library name=".kts definition dependencies">
+      <CLASSES>
+        <root url="jar://$KOTLIN_BUNDLED$/lib/kotlin-reflect.jar!/" />
+        <root url="jar://$KOTLIN_BUNDLED$/lib/kotlin-script-runtime.jar!/" />
+        <root url="jar://$KOTLIN_BUNDLED$/lib/kotlin-stdlib.jar!/" />
+      </CLASSES>
+      <JAVADOC />
+      <SOURCES>
+        <root url="jar://$KOTLIN_BUNDLED$/lib/kotlin-stdlib-sources.jar!/" />
+      </SOURCES>
+    </library>
   </component>
 </project>

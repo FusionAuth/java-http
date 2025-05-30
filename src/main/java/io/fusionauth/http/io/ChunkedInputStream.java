@@ -1,5 +1,5 @@
 /*
- * Copyright (c) 2022, FusionAuth, All Rights Reserved
+ * Copyright (c) 2022-2025, FusionAuth, All Rights Reserved
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -18,8 +18,8 @@ package io.fusionauth.http.io;
 import java.io.IOException;
 import java.io.InputStream;
 
-import io.fusionauth.http.ParseException;
 import io.fusionauth.http.util.HTTPTools;
+import static io.fusionauth.http.util.HTTPTools.makeParseException;
 
 /**
  * A filter InputStream that handles the chunked body while passing the body bytes down to the delegate stream.
@@ -45,6 +45,7 @@ public class ChunkedInputStream extends InputStream {
 
   private ChunkedBodyState state = ChunkedBodyState.ChunkSize;
 
+  // TODO : Why is this so different from HTTP InputStream, can't I just pass through the ByteBuffer that wraps the Request Buffer?
   public ChunkedInputStream(InputStream delegate, int bufferSize, byte[] bodyBytes) {
     this.delegate = delegate;
 
@@ -143,7 +144,7 @@ public class ChunkedInputStream extends InputStream {
           return ChunkSize;
         }
 
-        throw new ParseException();
+        throw makeParseException(ch, this);
       }
     },
 
@@ -153,7 +154,7 @@ public class ChunkedInputStream extends InputStream {
           return ChunkSizeLF;
         }
 
-        throw new ParseException();
+        throw makeParseException(ch, this);
       }
     },
 
@@ -172,7 +173,7 @@ public class ChunkedInputStream extends InputStream {
           return ChunkCR;
         }
 
-        throw new ParseException();
+        throw makeParseException(ch, this);
       }
     },
 
@@ -183,7 +184,7 @@ public class ChunkedInputStream extends InputStream {
           return length == 0 ? Complete : ChunkLF;
         }
 
-        throw new ParseException();
+        throw makeParseException(ch, this);
       }
     },
 
@@ -196,7 +197,7 @@ public class ChunkedInputStream extends InputStream {
           return ChunkSize;
         }
 
-        throw new ParseException();
+        throw makeParseException(ch, this);
       }
     },
 

@@ -1,5 +1,5 @@
 /*
- * Copyright (c) 2022, FusionAuth, All Rights Reserved
+ * Copyright (c) 2022-2025, FusionAuth, All Rights Reserved
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -21,18 +21,23 @@ package io.fusionauth.http;
  * @author Brian Pontarelli
  */
 public class ParseException extends RuntimeException {
+  private final String state;
+
   public ParseException() {
+    this.state = null;
   }
 
   public ParseException(String message) {
     super(message);
+    this.state = null;
   }
 
-  public ParseException(String message, Throwable cause) {
-    super(message, cause);
+  public ParseException(String message, String state) {
+    super(message);
+    this.state = state;
   }
 
-  public ParseException(Throwable cause) {
-    super(cause);
+  public String getState() {
+    return state;
   }
 }

@@ -1,5 +1,5 @@
 /*
- * Copyright (c) 2022-2023, FusionAuth, All Rights Reserved
+ * Copyright (c) 2022-2025, FusionAuth, All Rights Reserved
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -77,6 +77,8 @@ public interface Configurable<T extends Configurable<T>> {
    * @param validator The validator.
    * @return This.
    */
+  // TODO : Daniel : Review : It would be cool to offer some additional methods such as withOptionalExpectValidator?
+  //                 Or would there be another way that we could allow the caller to designate null as don't set?
   default T withExpectValidator(ExpectValidator validator) {
     configuration().withExpectValidator(validator);
     return (T) this;
@@ -153,6 +155,22 @@ public interface Configurable<T extends Configurable<T>> {
   }
 
   /**
+   * Sets the maximum number of pending socket connections per HTTP listener.
+   * <p>
+   * This number represents how many pending socket connections are allowed to queue before they are rejected. Once the connection is
+   * accepted by the server socket, a client socket is created and handed to an HTTP Worker. This queue length only needs to be large enough
+   * to buffer the incoming requests as fast as we can accept them and hand them to a worker.
+   * <p>
+   * Defaults to 200.
+   *
+   * @return This.
+   */
+  default T withMaxPendingSocketConnections(int maxPendingSocketConnections) {
+    configuration().withMaxPendingSocketConnections(maxPendingSocketConnections);
+    return (T) this;
+  }
+
+  /**
    * This configures the maximum size of a chunk in the response when the server is using chunked response encoding. Defaults to 16k.
    *
    * @param size The size in bytes.
@@ -160,6 +178,19 @@ public interface Configurable<T extends Configurable<T>> {
    */
   default T withMaxResponseChunkSize(int size) {
     configuration().withMaxResponseChunkSize(size);
+    return (T) this;
+  }
+
+  /**
+   * Sets the maximum number of bytes the server will allow worker threads to drain after calling the request handler. If the request
+   * handler does not read all the bytes, and this limit is exceeded the connection will be closed. Defaults to 128k bytes.
+   *
+   * @param maxBytesToDrain The maximum number of bytes to drain from the InputStream if the request handler did not read all the available
+   *                        bytes.
+   * @return This.
+   */
+  default T withMaximumBytesToDrain(int maxBytesToDrain) {
+    configuration().withMaximumBytesToDrain(maxBytesToDrain);
     return (T) this;
   }
 
