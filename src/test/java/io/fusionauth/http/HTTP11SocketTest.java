@@ -15,11 +15,6 @@
  */
 package io.fusionauth.http;
 
-import java.net.Socket;
-import java.nio.charset.StandardCharsets;
-import java.time.Duration;
-
-import io.fusionauth.http.server.HTTPServer;
 import org.testng.annotations.Test;
 
 /**
@@ -27,7 +22,23 @@ import org.testng.annotations.Test;
  *
  * @author Daniel DeGroff
  */
-public class HTTP11SocketTest extends BaseTest {
+public class HTTP11SocketTest extends BaseSocketTest {
+  @Test
+  public void bad_request() throws Exception {
+    // Invalid HTTP header
+    withRequest("""
+        cat /etc/password\r
+        \r
+        {body}
+        """
+    ).expectResponse("""
+        HTTP/1.1 400 \r
+        connection: close\r
+        content-length: 0\r
+        \r
+        """);
+  }
+
   @Test
   public void duplicate_host_header() throws Exception {
     // Duplicate Host header
@@ -47,23 +58,6 @@ public class HTTP11SocketTest extends BaseTest {
         \r
         """);
   }
-
-  @Test
-  public void bad_request() throws Exception {
-    // Invalid HTTP header
-    withRequest("""
-        cat /etc/password\r
-        \r
-        {body}
-        """
-    ).expectResponse("""
-        HTTP/1.1 400 \r
-        connection: close\r
-        content-length: 0\r
-        \r
-        """);
-  }
-
 
   @Test
   public void duplicate_host_header_withTransferEncoding() throws Exception {
@@ -156,13 +150,13 @@ public class HTTP11SocketTest extends BaseTest {
     // Too large, we will take a NumberFormatException and set this value to null in the request.
     // - So as it is written, we won't return the user an error, but we will assume that a body is not present.
     withRequest(("""
-            GET / HTTP/1.1\r
-            Host: cyberdyne-systems.com\r
-            Content-Type: plain/text\r
-            Content-Length: 9223372036854775808\r
-            \r
-            {body}
-            """)
+        GET / HTTP/1.1\r
+        Host: cyberdyne-systems.com\r
+        Content-Type: plain/text\r
+        Content-Length: 9223372036854775808\r
+        \r
+        {body}
+        """)
     ).expectResponse("""
         HTTP/1.1 400 \r
         connection: close\r
@@ -241,37 +235,6 @@ public class HTTP11SocketTest extends BaseTest {
         """
     ).expectResponse("""
         HTTP/1.1 505 \r
-        connection: close\r
-        content-length: 0\r
-        \r
-        """);
-
-    // Minor version less than the highest supported: HTTP/1.0
-    // - While this is an HTTP 1.1 server, RFC 7230 indicates that a message with a higher minor version that is supported
-    //   should be accepted and treated as the highest minor version. See section 2.6.
-    //
-    // Section 2.6
-    //
-    //          When an HTTP message is received with a major version number that the
-    //          recipient implements, but a higher minor version number than what the
-    //          recipient implements, the recipient SHOULD process the message as if
-    //          it were in the highest minor version within that major version to
-    //          which the recipient is conformant.  A recipient can assume that a
-    //          message with a higher minor version, when sent to a recipient that
-    //          has not yet indicated support for that higher version, is
-    //          sufficiently backwards-compatible to be safely processed by any
-    //          implementation of the same major version
-    withRequest("""
-        GET / HTTP/1.0\r
-        Host: cyberdyne-systems.com\r
-        Connection: close\r
-        Content-Type: plain/text\r
-        Content-Length: {contentLength}\r
-        \r
-        {body}
-        """
-    ).expectResponse("""
-        HTTP/1.1 200 \r
         connection: close\r
         content-length: 0\r
         \r
@@ -388,40 +351,6 @@ public class HTTP11SocketTest extends BaseTest {
         """);
   }
 
-  @Test
-  public void test_HTTP_10_OK() throws Exception {
-    // Minor version less than the highest supported: HTTP/1.0
-    // - While this is an HTTP 1.1 server, RFC 7230 indicates that a message with a higher minor version that is supported
-    //   should be accepted and treated as the highest minor version. See section 2.6.
-    //
-    // Section 2.6
-    //
-    //          When an HTTP message is received with a major version number that the
-    //          recipient implements, but a higher minor version number than what the
-    //          recipient implements, the recipient SHOULD process the message as if
-    //          it were in the highest minor version within that major version to
-    //          which the recipient is conformant.  A recipient can assume that a
-    //          message with a higher minor version, when sent to a recipient that
-    //          has not yet indicated support for that higher version, is
-    //          sufficiently backwards-compatible to be safely processed by any
-    //          implementation of the same major version
-    withRequest("""
-        GET / HTTP/1.0\r
-        Host: cyberdyne-systems.com\r
-        Connection: close\r
-        Content-Type: plain/text\r
-        Content-Length: {contentLength}\r
-        \r
-        {body}
-        """
-    ).expectResponse("""
-        HTTP/1.1 200 \r
-        connection: close\r
-        content-length: 0\r
-        \r
-        """);
-  }
-
   /**
    * Content-Length header requirements.
    * </p>
@@ -451,71 +380,5 @@ public class HTTP11SocketTest extends BaseTest {
         content-length: 0\r
         \r
         """);
-  }
-
-  private void assertResponse(String request, String response) throws Exception {
-    try (HTTPServer ignore = makeServer("http", (req, res) -> res.setStatus(200))
-        .withInitialReadTimeout(Duration.ofMinutes(2))
-        .withReadThroughputCalculationDelayDuration(Duration.ofMinutes(2))
-        .withWriteThroughputCalculationDelayDuration(Duration.ofMinutes(2))
-
-        // Using various timeouts to make it easier to debug which one we are hitting.
-        .withKeepAliveTimeoutDuration(Duration.ofSeconds(23))
-        .withInitialReadTimeout(Duration.ofSeconds(19))
-        .withProcessingTimeoutDuration(Duration.ofSeconds(27))
-
-        // Default is 8k, reduce this 512 to ensure we overflow this and have to read from the input stream again
-        .withRequestBufferSize(512)
-        .start();
-         Socket socket = makeClientSocket("http")) {
-
-      var bodyString = "These pretzels are making me thirsty. ";
-      // Ensure this is larger than the default configured size for the request buffer.
-      // - This body is added to each request to ensure we correctly drain the InputStream before we can write the HTTP response.
-      // - This should ensure that the body is the length of the (BodyString x 2) larger than the configured request buffer. This ensures
-      //   that there are bytes remaining in the InputStream after we have parsed the preamble.
-      var requestBufferSize = ignore.configuration().getRequestBufferSize();
-      var body = bodyString.repeat(((requestBufferSize / bodyString.length())) * 2);
-
-      if (request.contains("Transfer-Encoding: chunked")) {
-        //noinspection ExtractMethodRecommender
-        var result = "";
-        // Chunk in 100 byte increments. Using a smaller chunk size to ensure we don't end up with a single chunk.
-        for (var i = 0; i < body.length(); i += 100) {
-          var endIndex = Math.min(i + 100, body.length());
-          var chunk = body.substring(i, endIndex);
-          var chunkLength = chunk.getBytes(StandardCharsets.UTF_8).length;
-          String hex = Integer.toHexString(chunkLength);
-          //noinspection StringConcatenationInLoop
-          result += (hex + "\r\n" + body.substring(i, endIndex) + "\r\n");
-        }
-        body = result + "0\r\n\r\n";
-      }
-
-      request = request.replace("{body}", body);
-      request = request.replace("{contentLength}", body.getBytes(StandardCharsets.UTF_8).length + "");
-
-      var os = socket.getOutputStream();
-      os.write(request.getBytes(StandardCharsets.UTF_8));
-      os.flush();
-
-      assertHTTPResponseEquals(socket, response);
-    }
-  }
-
-  private Builder withRequest(String request) {
-    return new Builder(request);
-  }
-
-  private class Builder {
-    public String request;
-
-    public Builder(String request) {
-      this.request = request;
-    }
-
-    public void expectResponse(String response) throws Exception {
-      assertResponse(request, response);
-    }
   }
 }

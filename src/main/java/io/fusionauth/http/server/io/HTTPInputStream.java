@@ -90,20 +90,18 @@ public class HTTPInputStream extends InputStream {
 
     drained = true;
 
-    long remaining = maximumBytesToDrain;
     int total = 0;
     byte[] skipBuffer = new byte[2048];
     while (true) {
-      int skipped = read(skipBuffer, 0, (int) Math.min(remaining, 2048));
-      if (skipped <= 0) {
+      // Worst case the length of the skipBuffer greater than maximumBytesToDrain.
+      int skipped = read(skipBuffer);
+      if (skipped < 0) {
         break;
       }
 
       total += skipped;
-      remaining -= skipped;
 
       if (total > maximumBytesToDrain) {
-        // TODO : Daniel : Review : Needs a test for this.
         throw new TooManyBytesToDrainException(total, maximumBytesToDrain);
       }
     }

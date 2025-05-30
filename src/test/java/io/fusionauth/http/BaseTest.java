@@ -52,6 +52,7 @@ import java.util.Map;
 import java.util.UUID;
 import java.util.stream.Collectors;
 
+import io.fusionauth.http.HTTPValues.Connections;
 import io.fusionauth.http.log.FileLogger;
 import io.fusionauth.http.log.FileLoggerFactory;
 import io.fusionauth.http.log.Level;
@@ -286,9 +287,9 @@ public abstract class BaseTest {
     LoggerFactory factory = FileLoggerFactory.FACTORY;
 //    LoggerFactory factory = SystemOutLoggerFactory.FACTORY;
     return new HTTPServer().withHandler(handler)
-                           .withKeepAliveTimeoutDuration(Duration.ofSeconds(3))
-                           .withInitialReadTimeout(Duration.ofSeconds(21))
-                           .withProcessingTimeoutDuration(Duration.ofSeconds(27))
+                           .withKeepAliveTimeoutDuration(Duration.ofSeconds(10))
+                           .withInitialReadTimeout(Duration.ofSeconds(30))
+                           .withProcessingTimeoutDuration(Duration.ofSeconds(30))
                            .withExpectValidator(expectValidator)
                            .withInstrumenter(instrumenter)
                            .withLoggerFactory(factory)
@@ -315,6 +316,14 @@ public abstract class BaseTest {
     return new Object[][]{
         {"http"},
         {"https"}
+    };
+  }
+
+  @DataProvider
+  public Object[][] connections() {
+    return new Object[][]{
+        {Connections.Close},
+        {Connections.KeepAlive}
     };
   }
 

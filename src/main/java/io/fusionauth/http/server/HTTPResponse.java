@@ -182,7 +182,6 @@ public class HTTPResponse {
     return headers.get(key.toLowerCase());
   }
 
-  // TODO : Daniel : Review : Should this return a copy for safety reasons? It is sort of nice to have access to the reference, but also sort of dangerous.
   public Map<String, List<String>> getHeadersMap() {
     return headers;
   }

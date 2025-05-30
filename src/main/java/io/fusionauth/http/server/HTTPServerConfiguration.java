@@ -385,6 +385,8 @@ public class HTTPServerConfiguration implements Configurable<HTTPServerConfigura
    */
   @Override
   public HTTPServerConfiguration withMaximumBytesToDrain(int maxBytesToDrain) {
+    // TODO : Daniel : Review : This is a large number... any opinion on this limit?
+    //        The JDK HTTP server defaults to 64k. See ServerConfig.DEFAULT_DRAIN_AMOUNT
     if (maxBytesToDrain <= 1024 || maxBytesToDrain >= 256 * 1024 * 1024) {
       throw new IllegalArgumentException("The maximum bytes to drain must be greater than or equal to 1024 and less than or equal to 268,435,456 (256 megabytes)");
     }

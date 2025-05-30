@@ -333,9 +333,6 @@ public final class HTTPTools {
     }
 
     if (index < read) {
-      logger.trace("Had [{}] body bytes from the preamble read.", (read - index));
-      // TODO : Daniel : Performance - can we just return an offset into the requestBuffer instead of copying these bytes?
-      //        Review with Brian, seems to be safe so far and removes extra IO.
       return Arrays.copyOfRange(requestBuffer, index, read);
     }
 

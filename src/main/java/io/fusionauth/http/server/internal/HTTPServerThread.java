@@ -194,7 +194,6 @@ public class HTTPServerThread extends Thread {
           Thread thread = client.thread();
           long threadId = thread.threadId();
           if (!thread.isAlive()) {
-            // TODO : Daniel : Review : Outside of debugging some issues, this should probably be trace.
             logger.trace("[{}] Remove dead client worker. Born [{}]. Died at age [{}] ms. Requests handled [{}].", threadId, client.getStartInstant(), client.getAge(), client.getHandledRequests());
             iterator.remove();
             removedClientCount++;

@@ -126,6 +126,9 @@ public class HTTPWorker implements Runnable {
         // - When a client is using Keep-Alive - we will loop and block here while we wait for the client to send us bytes.
         byte[] requestBuffer = buffers.requestBuffer();
         byte[] bodyBytes = HTTPTools.parseRequestPreamble(inputStream, request, requestBuffer, instrumenter, () -> state = State.Read);
+        if (bodyBytes != null) {
+          logger.trace("[{}] Preamble parser had [{}] left over bytes. These will be used in the HTTPInputStream.", bodyBytes.length);
+        }
 
         // Once we have performed an initial read, we can count this as a handled request.
         handledRequests++;
@@ -155,7 +158,7 @@ public class HTTPWorker implements Runnable {
           boolean doContinue = handleExpectContinue(request);
           if (!doContinue) {
             // Note that the expectContinue code already wrote to the OutputStream, all we need to do is close the socket.
-            closeSocketOnly(CloseSockerReason.Expected);
+            closeSocketOnly(CloseSocketReason.Expected);
             return;
           }
 
@@ -192,24 +195,26 @@ public class HTTPWorker implements Runnable {
 
         // Close the socket.
         logger.trace("[{}] Closing socket. No Keep-Alive.", Thread.currentThread().threadId());
-        closeSocketOnly(CloseSockerReason.Expected);
+        closeSocketOnly(CloseSocketReason.Expected);
       }
     } catch (ConnectionClosedException e) {
       // The client closed the socket. Trace log this since it is an expected case.
       logger.trace("[{}] Closing socket. Client closed the connection. Reason [{}].", Thread.currentThread().threadId(), e.getMessage());
-      closeSocketOnly(CloseSockerReason.Expected);
+      closeSocketOnly(CloseSocketReason.Expected);
     } catch (TooManyBytesToDrainException e) {
       // The request handler did not read the entire InputStream, we tried to drain it but there were more bytes remaining than the configured maximum.
       // - Close the connection, unless we drain it, the connection cannot be re-used.
       // - Treating this as an expected case because if we are in a keep-alive state, no big deal, the client can just re-open the request. If we
       //   are not ina keep alive state, the request does not need to be re-used anyway.
+      // TODO : Daniel : Review : We could add something to the instrumenter? In theory we could try and write back a failure, but that will most likely
+      //        not be read because the client will get a socket reset when they try to read the response because we never drained the InputStream
       logger.debug("[{}] Closing socket [{}]. Too many bytes remaining in the InputStream. Drained [{}] bytes. Configured maximum bytes [{}].", Thread.currentThread().threadId(), state, e.getDrainedBytes(), e.getMaximumDrainedBytes());
-      closeSocketOnly(CloseSockerReason.Expected);
+      closeSocketOnly(CloseSocketReason.Expected);
     } catch (SocketTimeoutException e) {
       // This might be a read timeout or a Keep-Alive timeout. The reason is based on the worker state.
-      CloseSockerReason reason = state == State.KeepAlive ? CloseSockerReason.Expected : CloseSockerReason.Unexpected;
+      CloseSocketReason reason = state == State.KeepAlive ? CloseSocketReason.Expected : CloseSocketReason.Unexpected;
       String message = state == State.Read ? "Initial read timeout" : "Keep-Alive expired";
-      if (reason == CloseSockerReason.Expected) {
+      if (reason == CloseSocketReason.Expected) {
         logger.trace("[{}] Closing socket [{}]. {}.", Thread.currentThread().threadId(), state, message);
       } else {
         logger.debug("[{}] Closing socket [{}]. {}.", Thread.currentThread().threadId(), state, message);
@@ -224,7 +229,7 @@ public class HTTPWorker implements Runnable {
       if (Thread.currentThread().isInterrupted()) {
         // Close socket only. We do not want to potentially delay the shutdown at all.
         logger.debug("[{}] Closing socket. Server is shutting down.", Thread.currentThread().threadId());
-        closeSocketOnly(CloseSockerReason.Expected);
+        closeSocketOnly(CloseSocketReason.Expected);
       }
     } catch (IOException io) {
       logger.debug(String.format("[%s] Closing socket with status [%d]. An IO exception was thrown during processing. These are pretty common.", Thread.currentThread().threadId(), Status.InternalServerError), io);
@@ -272,12 +277,12 @@ public class HTTPWorker implements Runnable {
     } finally {
       // It is plausible that calling response.close() could throw an exception. We must ensure we close the socket.
       // TODO : Daniel : Review : Can I write a test to force this condition?
-      closeSocketOnly(CloseSockerReason.Unexpected);
+      closeSocketOnly(CloseSocketReason.Unexpected);
     }
   }
 
-  private void closeSocketOnly(CloseSockerReason reason) {
-    if (reason == CloseSockerReason.Unexpected && instrumenter != null) {
+  private void closeSocketOnly(CloseSocketReason reason) {
+    if (reason == CloseSocketReason.Unexpected && instrumenter != null) {
       instrumenter.connectionClosed();
     }
 
@@ -322,7 +327,6 @@ public class HTTPWorker implements Runnable {
    * @return true if the socket should be kept alive.
    */
   private boolean keepSocketAlive(HTTPRequest request, HTTPResponse response) {
-    // TODO : Daniel : Review : Write a test where the request handler sets Connection: close to ensure this is honored.
     var connectionHeader = response.getHeader(Headers.Connection);
     return request.getProtocol().equals(Protocols.HTTTP1_1)
         ? !Connections.Close.equalsIgnoreCase(connectionHeader)
@@ -399,6 +403,10 @@ public class HTTPWorker implements Runnable {
           return Status.BadRequest;
         }
       }
+    } else {
+      // To simplify downstream code and remove ambiguity. If we have a Transfer-Encoding request header, remove Content-Length.
+      request.setContentLength(null);
+      request.removeHeader(Headers.ContentLength);
     }
 
     return null;
@@ -411,7 +419,7 @@ public class HTTPWorker implements Runnable {
     KeepAlive
   }
 
-  private enum CloseSockerReason {
+  private enum CloseSocketReason {
     Expected,
     Unexpected
   }
