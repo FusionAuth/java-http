@@ -56,7 +56,6 @@ import io.fusionauth.http.log.FileLogger;
 import io.fusionauth.http.log.FileLoggerFactory;
 import io.fusionauth.http.log.Level;
 import io.fusionauth.http.log.LoggerFactory;
-import io.fusionauth.http.log.SystemOutLoggerFactory;
 import io.fusionauth.http.security.SecurityTools;
 import io.fusionauth.http.server.ExpectValidator;
 import io.fusionauth.http.server.HTTPHandler;
@@ -67,6 +66,7 @@ import org.testng.ITestListener;
 import org.testng.ITestResult;
 import org.testng.annotations.AfterMethod;
 import org.testng.annotations.AfterSuite;
+import org.testng.annotations.BeforeMethod;
 import org.testng.annotations.BeforeSuite;
 import org.testng.annotations.DataProvider;
 import sun.security.util.KnownOIDs;
@@ -96,9 +96,6 @@ import static org.testng.Assert.fail;
  */
 public abstract class BaseTest {
 
-  protected void printf(String format, Object... args) {
-    System.out.printf(SystemOutPrefix + format, args);
-  }
   /**
    * This timeout is used for the HttpClient during each test. If you are in a debugger, you will need to change this timeout to be much
    * larger, otherwise, the client might truncate the request to the server.
@@ -131,6 +128,8 @@ public abstract class BaseTest {
   public static Certificate rootCertificate;
 
   public static KeyPair rootKeyPair;
+
+  protected boolean verbose;
 
   static {
     System.setProperty("sun.net.http.retryPost", "false");
@@ -225,6 +224,11 @@ public abstract class BaseTest {
     } catch (Exception e) {
       throw new IllegalArgumentException(e);
     }
+  }
+
+  @BeforeMethod
+  public void beforeMethod() {
+    verbose = false;
   }
 
   @AfterMethod
@@ -399,6 +403,26 @@ public abstract class BaseTest {
     }
   }
 
+  protected void printf(String format, Object... args) {
+    if (verbose) {
+      System.out.printf(SystemOutPrefix + format, args);
+    }
+  }
+
+  protected void println(Object o) {
+    if (verbose) {
+      System.out.println(o);
+    }
+  }
+
+  protected void sleep(long millis) {
+    try {
+      Thread.sleep(millis);
+    } catch (InterruptedException e) {
+      // Ignore
+    }
+  }
+
   /**
    * Verifies that the chain certificates can be validated up to the supplied root certificate. See
    * {@link CertPathValidator#validate(CertPath, CertPathParameters)} for details.
@@ -502,7 +526,8 @@ public abstract class BaseTest {
 
     private String serializeDataProviderArgs(Object[] dataProvider) {
       String result = Arrays.stream(dataProvider)
-                            .map(o -> (o == null ? "null" : o.toString()).replace("\n", " "))
+                            // Escape line return and carriage return to keep everything on the same line
+                            .map(o -> (o == null ? "null" : o.toString()).replace("\n", "\\n").replace("\r", "\\r"))
                             .collect(Collectors.joining(", "));
 
       int maxLength = 128;

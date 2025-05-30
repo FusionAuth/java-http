@@ -1,5 +1,5 @@
 /*
- * Copyright (c) 2022, FusionAuth, All Rights Reserved
+ * Copyright (c) 2022-2025, FusionAuth, All Rights Reserved
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -192,7 +192,7 @@ public class CompressionTest extends BaseTest {
         DecimalFormat formatter = new DecimalFormat("#,###");
         @SuppressWarnings("ConstantConditions")
         String mode = compress ? compress + " " : compress + "";
-        System.out.println("[compression: " + mode + "][" + formatter.format(counter) + "] requests. Total time [" + (formatter.format(total)) + "] ms, Avg [" + avg + "] ms");
+        println("[compression: " + mode + "][" + formatter.format(counter) + "] requests. Total time [" + (formatter.format(total)) + "] ms, Avg [" + avg + "] ms");
       }
     }
   }

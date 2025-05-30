@@ -1,5 +1,5 @@
 /*
- * Copyright (c) 2022, FusionAuth, All Rights Reserved
+ * Copyright (c) 2022-2025, FusionAuth, All Rights Reserved
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -56,27 +56,27 @@ public class MultipartTest extends BaseTest {
   @Test(dataProvider = "schemes")
   public void post(String scheme) throws Exception {
     HTTPHandler handler = (req, res) -> {
-      System.out.println("Handling");
+      println("Handling");
       assertEquals(req.getContentType(), "multipart/form-data");
 
       Map<String, List<String>> form = req.getFormData();
       assertEquals(form.get("foo"), List.of("bar"));
 
       List<FileInfo> files = req.getFiles();
-      assertEquals(files.get(0).getContentType(), "text/plain");
-      assertEquals(files.get(0).getEncoding(), StandardCharsets.ISO_8859_1);
-      assertEquals(files.get(0).getName(), "file");
-      assertEquals(Files.readString(files.get(0).getFile()), "filecontents");
+      assertEquals(files.getFirst().getContentType(), "text/plain");
+      assertEquals(files.getFirst().getEncoding(), StandardCharsets.ISO_8859_1);
+      assertEquals(files.getFirst().getName(), "file");
+      assertEquals(Files.readString(files.getFirst().getFile()), "filecontents");
 
-      Files.delete(files.get(0).getFile());
+      Files.delete(files.getFirst().getFile());
 
-      System.out.println("Done");
+      println("Done");
       res.setHeader(Headers.ContentType, "text/plain");
       res.setHeader("Content-Length", "16");
       res.setStatus(200);
 
       try {
-        System.out.println("Writing");
+        println("Writing");
         OutputStream outputStream = res.getOutputStream();
         outputStream.write(ExpectedResponse.getBytes());
         outputStream.close();
@@ -86,9 +86,8 @@ public class MultipartTest extends BaseTest {
     };
 
     CountingInstrumenter instrumenter = new CountingInstrumenter();
-    try (HTTPServer ignore = makeServer(scheme, handler, instrumenter).start()) {
+    try (HTTPServer ignore = makeServer(scheme, handler, instrumenter).start(); var client = makeClient(scheme, null)) {
       URI uri = makeURI(scheme, "");
-      var client = makeClient(scheme, null);
       var response = client.send(
           HttpRequest.newBuilder().uri(uri).header(Headers.ContentType, "multipart/form-data; boundary=----WebKitFormBoundaryTWfMVJErBoLURJIe").POST(BodyPublishers.ofString(Body)).build(),
           r -> BodySubscribers.ofString(StandardCharsets.UTF_8)

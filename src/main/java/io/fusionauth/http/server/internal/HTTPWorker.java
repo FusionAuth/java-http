@@ -216,7 +216,6 @@ public class HTTPWorker implements Runnable {
       }
       closeSocketOnly(reason);
     } catch (ParseException pe) {
-      System.out.println("\n\n" + pe.getMessage());
       logger.info("[{}] Closing socket with status [{}]. Bad request, failed to parse request. Reason [{}] Parser state [{}]", Thread.currentThread().threadId(), Status.BadRequest, pe.getMessage(), pe.getState());
       closeSocketOnError(response, Status.BadRequest);
     } catch (SocketException e) {

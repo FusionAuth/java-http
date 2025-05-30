@@ -15,7 +15,8 @@
  */
 jackson5Version = "3.0.1"
 restifyVersion = "4.2.1"
-testngVersion = "7.10.2"
+slf4jVersion = "2.0.17"
+testngVersion = "7.11.0"
 
 project(group: "io.fusionauth", name: "java-http", version: "0.4.0-RC.7", licenses: ["ApacheV2_0"]) {
   workflow {
@@ -41,10 +42,18 @@ project(group: "io.fusionauth", name: "java-http", version: "0.4.0-RC.7", licens
   }
 
   dependencies {
+    group(name: "compile") {
+      // Ha! Just kidding. This is pure Java - no deps!
+    }
     group(name: "test-compile", export: false) {
       dependency(id: "com.inversoft:jackson5:${jackson5Version}")
       dependency(id: "com.inversoft:restify:${restifyVersion}")
       dependency(id: "org.testng:testng:${testngVersion}")
+      // Gets rid of SLF warnings on test run
+      //   SLF4J: Failed to load class "org.slf4j.impl.StaticLoggerBinder".
+      //   SLF4J: Defaulting to no-operation (NOP) logger implementation
+      //   SLF4J: See http://www.slf4j.org/codes.html#StaticLoggerBinder for further details.
+      dependency(id: "org.slf4j:slf4j-nop:${slf4jVersion}")
     }
   }
 

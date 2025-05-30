@@ -48,24 +48,24 @@ public class ExpectTest extends BaseTest {
   @Test(dataProvider = "schemes")
   public void expect(String scheme) throws Exception {
     HTTPHandler handler = (req, res) -> {
-      System.out.println("Handling");
+      println("Handling");
       assertEquals(req.getHeader(Headers.ContentType), "application/json"); // Mixed case
 
       try {
-        System.out.println("Reading");
+        println("Reading");
         byte[] body = req.getInputStream().readAllBytes();
         assertEquals(new String(body), RequestBody);
       } catch (IOException e) {
         fail("Unable to parse body", e);
       }
 
-      System.out.println("Done");
+      println("Done");
       res.setHeader(Headers.ContentType, "text/plain");
       res.setHeader("Content-Length", "16");
       res.setStatus(200);
 
       try {
-        System.out.println("Writing");
+        println("Writing");
         OutputStream outputStream = res.getOutputStream();
         outputStream.write(ExpectedResponse.getBytes());
         outputStream.close();
@@ -76,7 +76,7 @@ public class ExpectTest extends BaseTest {
 
     AtomicBoolean validated = new AtomicBoolean(false);
     ExpectValidator validator = (req, res) -> {
-      System.out.println("Validating");
+      println("Validating");
       validated.set(true);
       assertEquals(req.getContentType(), "application/json");
       assertEquals((long) req.getContentLength(), RequestBody.length());
@@ -111,7 +111,7 @@ public class ExpectTest extends BaseTest {
     HTTPHandler handler = (req, res) -> fail("Should not have been called");
 
     ExpectValidator validator = (req, res) -> {
-      System.out.println("Validating");
+      println("Validating");
       assertEquals(req.getContentType(), "application/json");
       assertEquals((long) req.getContentLength(), RequestBody.length());
       res.setStatus(417);
