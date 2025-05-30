@@ -1002,7 +1002,9 @@ public class CoreTest extends BaseTest {
 
   @Test(dataProvider = "schemes")
   public void statusOnly(String scheme) throws Exception {
-    HTTPHandler handler = (req, res) -> res.setStatus(200);
+    // No-op handler. Do not read the HTTPInputStream.
+    // - We are using HTTP Keep-Alive, so we should be re-using the Socket InputStream.
+    HTTPHandler handler = (req, res) -> {};
 
     try (var client = makeClient(scheme, null); var ignore = makeServer(scheme, handler).start()) {
       URI uri = makeURI(scheme, "");

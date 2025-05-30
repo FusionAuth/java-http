@@ -69,7 +69,6 @@ public class HTTPOutputStream extends OutputStream {
 
   @Override
   public void close() throws IOException {
-    // System.out.println("   > HTTPOutputStream close()");
     commit(true);
     delegate.close();
   }

@@ -1,5 +1,5 @@
 /*
- * Copyright (c) 2022-2023, FusionAuth, All Rights Reserved
+ * Copyright (c) 2022-2025, FusionAuth, All Rights Reserved
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -160,6 +160,19 @@ public interface Configurable<T extends Configurable<T>> {
    */
   default T withMaxResponseChunkSize(int size) {
     configuration().withMaxResponseChunkSize(size);
+    return (T) this;
+  }
+
+  /**
+   * Sets the maximum number of bytes the server will allow worker threads to drain after calling the request handler. If the request
+   * handler does not read all the bytes, and this limit is exceeded the connection will be closed. Defaults to 128k bytes.
+   *
+   * @param maxBytesToDrain The maximum number of bytes to drain from the InputStream if the request handler did not read all the available
+   *                        bytes.
+   * @return This.
+   */
+  default T withMaximumBytesToDrain(int maxBytesToDrain) {
+    configuration().withMaximumBytesToDrain(maxBytesToDrain);
     return (T) this;
   }
 

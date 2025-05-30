@@ -1,5 +1,5 @@
 /*
- * Copyright (c) 2023, FusionAuth, All Rights Reserved
+ * Copyright (c) 2025, FusionAuth, All Rights Reserved
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -13,19 +13,17 @@
  * either express or implied. See the License for the specific
  * language governing permissions and limitations under the License.
  */
-package io.fusionauth.http;
-
-import java.io.IOException;
+package io.fusionauth.http.server;
 
 /**
- * An IOException that is most likely caused by the client closing a socket.
- * <p>
- * For example:
- * <p>
- * <code>java.io.IOException: Connection reset by peer</code>
+ * The default implementation of the Expect Validator. This validator always indicates the caller may continue.
+ *
+ * @author Daniel DeGroff
  */
-public class ClientAbortException extends IOException {
-  public ClientAbortException(IOException e) {
-    super(e);
+public class AlwaysContinueExpectValidator implements ExpectValidator {
+  @Override
+  public void validate(HTTPRequest request, HTTPResponse response) {
+    response.setStatus(100);
+    response.setStatusMessage("Continue");
   }
 }

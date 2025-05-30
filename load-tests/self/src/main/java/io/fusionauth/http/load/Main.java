@@ -32,6 +32,8 @@ public class Main {
     try (HTTPServer ignore = new HTTPServer().withHandler(new LoadHandler())
                                              .withCompressByDefault(false)
                                              .withInitialReadTimeout(Duration.ofSeconds(10))
+                                             .withMinimumReadThroughput(4 * 1024)
+                                             .withMinimumWriteThroughput(4 * 1024)
                                              .withInstrumenter(instrumenter)
                                              .withListener(new HTTPListenerConfiguration(8080))
                                              .withLoggerFactory(SystemOutLoggerFactory.FACTORY)
@@ -41,7 +43,7 @@ public class Main {
       long lastMeasuredConnectionsClosed = instrumenter.getClosedConnections();
 
       for (int i = 0; i < 1_000; i++) {
-        Thread.sleep(30_000);
+        Thread.sleep(10_000);
         long acceptedRequests = instrumenter.getAcceptedRequests();
         long connectionsClosed = instrumenter.getClosedConnections();
         // Cut down on noise if we are not running any requests.
@@ -52,24 +54,24 @@ public class Main {
                    - Active workers:     [%,d]
                    - Accepted requests:  [%,d]
                    - Bad requests:       [%,d]
-                   - Bytes read:         [%,d]
-                   - Bytes written:      [%,d]
                    - Chunked requests:   [%,d]
                    - Chunked responses:  [%,d]
                    - Closed connections: [%,d]
                    - Total connections:  [%,d]
+                   - Bytes read:         [%,d]
+                   - Bytes written:      [%,d]
                   """,
               System.currentTimeMillis(),
               instrumenter.getStartedCount(),
               instrumenter.getThreadCount(),
               acceptedRequests,
               instrumenter.getBadRequests(),
-              instrumenter.getBytesRead(),
-              instrumenter.getBytesWritten(),
               instrumenter.getChunkedRequests(),
               instrumenter.getChunkedResponses(),
               instrumenter.getClosedConnections(),
-              instrumenter.getConnections());
+              instrumenter.getConnections(),
+              instrumenter.getBytesRead(),
+              instrumenter.getBytesWritten());
         }
 
         lastMeasuredAcceptedRequests = acceptedRequests;

@@ -15,7 +15,7 @@
  */
 package io.fusionauth.http.util;
 
-import io.fusionauth.http.ParseException;
+import static io.fusionauth.http.util.HTTPTools.makeParseException;
 
 /**
  * Finite state machine parser for an HTTP 1.1 request preamble. This is the start-line and headers.
@@ -32,7 +32,7 @@ public enum RequestPreambleState {
         return RequestMethod;
       }
 
-      throw makeParseException(ch);
+      throw makeParseException(ch, this);
     }
 
     @Override
@@ -50,7 +50,7 @@ public enum RequestPreambleState {
         return RequestPath;
       }
 
-      throw makeParseException(ch);
+      throw makeParseException(ch, this);
     }
 
     @Override
@@ -68,7 +68,7 @@ public enum RequestPreambleState {
         return RequestPath;
       }
 
-      throw makeParseException(ch);
+      throw makeParseException(ch, this);
     }
 
     @Override
@@ -86,7 +86,7 @@ public enum RequestPreambleState {
         return RequestProtocol;
       }
 
-      throw makeParseException(ch);
+      throw makeParseException(ch, this);
     }
 
     @Override
@@ -106,7 +106,7 @@ public enum RequestPreambleState {
         return RequestCR;
       }
 
-      throw makeParseException(ch);
+      throw makeParseException(ch, this);
     }
 
     @Override
@@ -122,7 +122,7 @@ public enum RequestPreambleState {
         return RequestLF;
       }
 
-      throw makeParseException(ch);
+      throw makeParseException(ch, this);
     }
 
     @Override
@@ -140,7 +140,7 @@ public enum RequestPreambleState {
         return HeaderName;
       }
 
-      throw makeParseException(ch);
+      throw makeParseException(ch, this);
     }
 
     @Override
@@ -158,7 +158,7 @@ public enum RequestPreambleState {
         return HeaderColon;
       }
 
-      throw makeParseException(ch);
+      throw makeParseException(ch, this);
     }
 
     @Override
@@ -194,7 +194,7 @@ public enum RequestPreambleState {
         return HeaderValue;
       }
 
-      throw makeParseException(ch);
+      throw makeParseException(ch, this);
     }
 
     @Override
@@ -210,7 +210,7 @@ public enum RequestPreambleState {
         return HeaderLF;
       }
 
-      throw makeParseException(ch);
+      throw makeParseException(ch, this);
     }
 
     @Override
@@ -228,7 +228,7 @@ public enum RequestPreambleState {
         return HeaderName;
       }
 
-      throw makeParseException(ch);
+      throw makeParseException(ch, this);
     }
 
     @Override
@@ -244,7 +244,7 @@ public enum RequestPreambleState {
         return Complete;
       }
 
-      throw makeParseException(ch);
+      throw makeParseException(ch, this);
     }
 
     @Override
@@ -268,9 +268,4 @@ public enum RequestPreambleState {
   public abstract RequestPreambleState next(byte ch);
 
   public abstract boolean store();
-
-  ParseException makeParseException(byte b) {
-    char ch = (char) b;
-    return new ParseException("Invalid character [" + ch + "] in state [" + this + "]", this.name());
-  }
 }

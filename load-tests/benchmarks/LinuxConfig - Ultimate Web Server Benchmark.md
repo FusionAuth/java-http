@@ -16,7 +16,7 @@ The test was conducted using Apache Benchmark (`ab`) with the following command:
 
 
 ```sh
-ab -n 100000 -c 50 http://localhost:8080/
+ab -n 100000 -c 100 http://localhost:8080/
 ```
 
 - -n 100000 → Total number of requests (100,000)
@@ -31,8 +31,9 @@ Test run on:
 
 | Server    | Requests per second (RPS) | Latency (ms) | Normalized Performance (%) |
 | --------- |---------------------------|--------------| -------------------------- |
-| java-http | 18,648                    | 2.681        | 0                          | 
+| java-http | 20,265                    | 2.681        | 0                          | 
 
+Note that increasing the worker count to 100 produces very similar RPS with a higher latency.
 
 Note that I believe the results found at the above link were generated w/out using the `-k` parameter of `ab` which would enable HTTP 1.0 Keep-Alive. So this test is actually testing true discrete users where each socket handles a single HTTP request from a client.
 

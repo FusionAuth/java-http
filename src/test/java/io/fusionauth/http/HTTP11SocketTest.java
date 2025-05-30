@@ -49,6 +49,23 @@ public class HTTP11SocketTest extends BaseTest {
   }
 
   @Test
+  public void bad_request() throws Exception {
+    // Invalid HTTP header
+    withRequest("""
+        cat /etc/password\r
+        \r
+        {body}
+        """
+    ).expectResponse("""
+        HTTP/1.1 400 \r
+        connection: close\r
+        content-length: 0\r
+        \r
+        """);
+  }
+
+
+  @Test
   public void duplicate_host_header_withTransferEncoding() throws Exception {
     // Duplicate Host header w/ Transfer-Encoding instead of Content-Length
     // - In this case the Transfer-Encoding is only to ensure we can correctly drain the InputStream so the client can read the response.
@@ -442,7 +459,7 @@ public class HTTP11SocketTest extends BaseTest {
         .withReadThroughputCalculationDelayDuration(Duration.ofMinutes(2))
         .withWriteThroughputCalculationDelayDuration(Duration.ofMinutes(2))
 
-        // Testing
+        // Using various timeouts to make it easier to debug which one we are hitting.
         .withKeepAliveTimeoutDuration(Duration.ofSeconds(23))
         .withInitialReadTimeout(Duration.ofSeconds(19))
         .withProcessingTimeoutDuration(Duration.ofSeconds(27))
@@ -461,6 +478,7 @@ public class HTTP11SocketTest extends BaseTest {
       var body = bodyString.repeat(((requestBufferSize / bodyString.length())) * 2);
 
       if (request.contains("Transfer-Encoding: chunked")) {
+        //noinspection ExtractMethodRecommender
         var result = "";
         // Chunk in 100 byte increments. Using a smaller chunk size to ensure we don't end up with a single chunk.
         for (var i = 0; i < body.length(); i += 100) {
@@ -468,6 +486,7 @@ public class HTTP11SocketTest extends BaseTest {
           var chunk = body.substring(i, endIndex);
           var chunkLength = chunk.getBytes(StandardCharsets.UTF_8).length;
           String hex = Integer.toHexString(chunkLength);
+          //noinspection StringConcatenationInLoop
           result += (hex + "\r\n" + body.substring(i, endIndex) + "\r\n");
         }
         body = result + "0\r\n\r\n";
@@ -475,9 +494,6 @@ public class HTTP11SocketTest extends BaseTest {
 
       request = request.replace("{body}", body);
       request = request.replace("{contentLength}", body.getBytes(StandardCharsets.UTF_8).length + "");
-
-      System.out.println("Content-Length: " + body.getBytes(StandardCharsets.UTF_8).length);
-      System.out.println(request);
 
       var os = socket.getOutputStream();
       os.write(request.getBytes(StandardCharsets.UTF_8));

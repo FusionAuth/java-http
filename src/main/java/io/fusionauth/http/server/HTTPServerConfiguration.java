@@ -38,8 +38,7 @@ public class HTTPServerConfiguration implements Configurable<HTTPServerConfigura
 
   private String contextPath = "";
 
-  // TODO : Daniel : Add new validator that does the default.
-  private ExpectValidator expectValidator;
+  private ExpectValidator expectValidator = new AlwaysContinueExpectValidator();
 
   private HTTPHandler handler;
 
@@ -50,6 +49,8 @@ public class HTTPServerConfiguration implements Configurable<HTTPServerConfigura
   private Duration keepAliveTimeoutDuration = Duration.ofSeconds(20);
 
   private LoggerFactory loggerFactory = SystemOutLoggerFactory.FACTORY;
+
+  private int maxBytesToDrain = 128 * 1024; // 128k bytes
 
   private int maxResponseChunkSize = 16 * 1024; // 16k bytes
 
@@ -94,7 +95,7 @@ public class HTTPServerConfiguration implements Configurable<HTTPServerConfigura
   }
 
   /**
-   * @return The expect validator or null.
+   * @return The expect validator, never null.
    */
   public ExpectValidator getExpectValidator() {
     return expectValidator;
@@ -142,6 +143,15 @@ public class HTTPServerConfiguration implements Configurable<HTTPServerConfigura
    */
   public LoggerFactory getLoggerFactory() {
     return loggerFactory;
+  }
+
+  /**
+   * @return The maximum number of bytes to drain from the InputStream when the request handler did not read all available bytes and the
+   *     connection is using a keep-alive which means the server must drain the InputStream in preparation for the next request. Defaults to
+   *     128k.
+   */
+  public int getMaxBytesToDrain() {
+    return maxBytesToDrain;
   }
 
   /**
@@ -264,6 +274,7 @@ public class HTTPServerConfiguration implements Configurable<HTTPServerConfigura
    */
   @Override
   public HTTPServerConfiguration withExpectValidator(ExpectValidator validator) {
+    Objects.requireNonNull(handler, "You cannot set ExpectValidator to null");
     this.expectValidator = validator;
     return this;
   }
@@ -343,6 +354,19 @@ public class HTTPServerConfiguration implements Configurable<HTTPServerConfigura
   @Override
   public HTTPServerConfiguration withMaxResponseChunkSize(int size) {
     this.maxResponseChunkSize = size;
+    return this;
+  }
+
+  /**
+   * {@inheritDoc}
+   */
+  @Override
+  public HTTPServerConfiguration withMaximumBytesToDrain(int maxBytesToDrain) {
+    if (maxBytesToDrain <= 1024 || maxBytesToDrain >= 256 * 1024 * 1024) {
+      throw new IllegalArgumentException("The maximum bytes to drain must be greater than or equal to 1024 and less than or equal to 268,435,456 (256 megabytes)");
+    }
+
+    this.maxBytesToDrain = maxBytesToDrain;
     return this;
   }
 

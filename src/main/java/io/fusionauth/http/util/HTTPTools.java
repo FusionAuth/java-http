@@ -20,11 +20,12 @@ import java.io.IOException;
 import java.io.InputStream;
 import java.io.OutputStream;
 import java.net.URLDecoder;
-import java.nio.ByteBuffer;
 import java.nio.charset.Charset;
 import java.nio.charset.IllegalCharsetNameException;
 import java.nio.charset.StandardCharsets;
+import java.util.Arrays;
 import java.util.HashMap;
+import java.util.HexFormat;
 import java.util.LinkedList;
 import java.util.List;
 import java.util.Map;
@@ -35,6 +36,7 @@ import io.fusionauth.http.HTTPMethod;
 import io.fusionauth.http.HTTPValues.ControlBytes;
 import io.fusionauth.http.HTTPValues.HeaderBytes;
 import io.fusionauth.http.HTTPValues.ProtocolBytes;
+import io.fusionauth.http.ParseException;
 import io.fusionauth.http.log.Logger;
 import io.fusionauth.http.log.LoggerFactory;
 import io.fusionauth.http.server.HTTPRequest;
@@ -51,6 +53,14 @@ public final class HTTPTools {
    */
   public static void initialize(LoggerFactory loggerFactory) {
     HTTPTools.logger = loggerFactory.getLogger(HTTPTools.class);
+  }
+
+  /**
+   * @param ch The character as a since HTTP is ASCII
+   * @return True if the character is an ASCII control character.
+   */
+  public static boolean isControlCharacter(byte ch) {
+    return ch >= 0 && ch <= 31;
   }
 
   /**
@@ -96,6 +106,14 @@ public final class HTTPTools {
    */
   public static boolean isURICharacter(byte ch) {
     // TODO : Fully implement RFC 3986 to accurate parsing
+    //        https://www.rfc-editor.org/rfc/rfc3986#section-1.3
+    //        .
+    //        Decimal  Hex   Symbol
+    //        32       20    SP
+    //        33       21    !
+    //        ...
+    //        126      7E    ~
+    //        127      7F    DEL
     return ch >= '!' && ch <= '~';
   }
 
@@ -103,6 +121,22 @@ public final class HTTPTools {
   public static boolean isValueCharacter(byte ch) {
     int intVal = ch & 0xFF;  // Convert the value into an integer without extending the sign bit.
     return isURICharacter(ch) || intVal == ' ' || intVal == '\t' || intVal == '\n' || intVal >= 0x80;
+  }
+
+  /**
+   * Build a {@link ParseException} that can be thrown.
+   *
+   * @param b     the byte that caused the exception
+   * @param state the current parser state
+   * @return a throwable exception
+   */
+  public static ParseException makeParseException(byte b, Enum<? extends Enum<?>> state) {
+    // Trying to print a control characters can mess up the logging format.
+    var hex = HexFormat.of().withUpperCase().formatHex(new byte[]{b});
+    String message = HTTPTools.isControlCharacter(b)
+        ? "Unexpected character. Dec [" + b + "] Hex [" + hex + "]"
+        : "Unexpected character. Dec [" + b + "] Hex [" + hex + "] Symbol [" + ((char) b) + "]";
+    return new ParseException(message + " Parse state [" + state + "]", state.name());
   }
 
   /**
@@ -243,9 +277,8 @@ public final class HTTPTools {
    * @return Any leftover body bytes from the last read from the InputStream.
    * @throws IOException If the read fails.
    */
-  public static ByteBuffer parseRequestPreamble(InputStream inputStream, HTTPRequest request, byte[] requestBuffer,
-                                               Instrumenter instrumenter,
-                                               Runnable readObserver)
+  public static byte[] parseRequestPreamble(InputStream inputStream, HTTPRequest request, byte[] requestBuffer, Instrumenter instrumenter,
+                                            Runnable readObserver)
       throws IOException {
     RequestPreambleState state = RequestPreambleState.RequestMethod;
     var valueBuffer = new ByteArrayOutputStream(512);
@@ -303,7 +336,7 @@ public final class HTTPTools {
       logger.trace("Had [{}] body bytes from the preamble read.", (read - index));
       // TODO : Daniel : Performance - can we just return an offset into the requestBuffer instead of copying these bytes?
       //        Review with Brian, seems to be safe so far and removes extra IO.
-      return ByteBuffer.wrap(requestBuffer, index, read - index);
+      return Arrays.copyOfRange(requestBuffer, index, read);
     }
 
     return null;

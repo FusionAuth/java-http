@@ -17,9 +17,8 @@ package io.fusionauth.http.server.io;
 
 import java.io.IOException;
 import java.io.InputStream;
-import java.nio.ByteBuffer;
-import java.util.Arrays;
 
+import io.fusionauth.http.TooManyBytesToDrainException;
 import io.fusionauth.http.io.ChunkedInputStream;
 import io.fusionauth.http.log.Logger;
 import io.fusionauth.http.server.HTTPRequest;
@@ -38,27 +37,31 @@ public class HTTPInputStream extends InputStream {
 
   private final Logger logger;
 
+  private final int maximumBytesToDrain;
+
   private final HTTPRequest request;
 
-  private ByteBuffer bodyBytes;
+  private byte[] bodyBytes;
 
   private int bodyBytesIndex;
 
   private long bytesRemaining;
 
+  private boolean closed;
+
   private boolean committed;
 
   private InputStream delegate;
 
-  public HTTPInputStream(HTTPServerConfiguration configuration, HTTPRequest request, InputStream delegate, ByteBuffer bodyBytes) {
+  private boolean drained;
+
+  public HTTPInputStream(HTTPServerConfiguration configuration, HTTPRequest request, InputStream delegate, byte[] bodyBytes) {
     this.logger = configuration.getLoggerFactory().getLogger(HTTPInputStream.class);
     this.instrumenter = configuration.getInstrumenter();
     this.request = request;
     this.delegate = delegate;
     this.bodyBytes = bodyBytes;
-    if (bodyBytes != null) {
-      bodyBytesIndex = bodyBytes.position();
-    }
+    this.maximumBytesToDrain = configuration.getMaxBytesToDrain();
 
     // Start the countdown
     if (request.getContentLength() != null) {
@@ -68,37 +71,49 @@ public class HTTPInputStream extends InputStream {
 
   @Override
   public void close() throws IOException {
-    // Ignore because we don't know if we should close the socket's InputStream
+    if (closed) {
+      return;
+    }
 
-    System.out.println("HTTPInputStream.close()");
-    // TODO : Daniel : Review : Should this be revisited? This could be a good location to call drain?
-    //        See LeftOverInputStream.drain()
-    //        See FixedLengthInputStream
-    //        In some similar code, it seems that close calls drain - so in theory by closing the InputStream you can then
-    //        safely write to the output stream. Maybe this is the same difference that we are doing by directly calling drain().
-    //        Seems like there should be a better way, but maybe not - maybe it is only solved in HTTP2.
+    closed = true;
+    if (drained) {
+      return;
+    }
+
+    drain();
   }
 
-  public long purge() throws IOException {
-    // Would this work?
-    // - Note: Please don't call delegate.skipNBytes(Long.MAX_VALUE)
-    // TODO : Daniel : Review : Try the above and see what happens - we may swap out the pointer on delegate during commit()
-    try {
-      // System.out.println("   > skip [" + Long.MAX_VALUE + "] bytes...");
-      var result = skip(Long.MAX_VALUE);
-      // System.out.println("   > purged [" + result + "] bytes");
-      return result;
-    } finally {
-      // Note that skip calls read, read honors bytesRemaining. Set this to 0 last.
-      bytesRemaining = 0;
+  public int drain() throws IOException {
+    if (drained) {
+      return 0;
     }
+
+    drained = true;
+
+    long remaining = maximumBytesToDrain;
+    int total = 0;
+    byte[] skipBuffer = new byte[2048];
+    while (true) {
+      int skipped = read(skipBuffer, 0, (int) Math.min(remaining, 2048));
+      if (skipped <= 0) {
+        break;
+      }
+
+      total += skipped;
+      remaining -= skipped;
+
+      if (total > maximumBytesToDrain) {
+        // TODO : Daniel : Review : Needs a test for this.
+        throw new TooManyBytesToDrainException(total, maximumBytesToDrain);
+      }
+    }
+
+    return total;
   }
 
   @Override
   public int read() throws IOException {
     // Signal end of the stream
-    // TODO : Daniel : Review : What about chunked encoding, we will not have a Content-Length.
-    //        Should this also check if chunked, or does chunked never call this method?
     if (bytesRemaining <= 0) {
       return -1;
     }
@@ -111,9 +126,9 @@ public class HTTPInputStream extends InputStream {
     // If bodyBytes exist, they are left over bytes from parsing the preamble.
     // - Process these bytes first before reading from the delegate InputStream.
     if (bodyBytes != null) {
-      b = bodyBytes.get(bodyBytesIndex++);
+      b = bodyBytes[bodyBytesIndex++];
 
-      if (bodyBytesIndex >= bodyBytes.limit()) {
+      if (bodyBytesIndex >= bodyBytes.length) {
         bodyBytes = null;
       }
     } else {
@@ -148,11 +163,12 @@ public class HTTPInputStream extends InputStream {
     // If bodyBytes exist, they are left over bytes from parsing the preamble.
     // - Process these bytes first before reading from the delegate InputStream.
     if (bodyBytes != null) {
-      read = Math.min(bodyBytes.limit() - bodyBytesIndex, length);
-      System.arraycopy(bodyBytes.array(), bodyBytesIndex, buffer, offset, read);
+      int remaining = bodyBytes.length - bodyBytesIndex;
+      read = Math.min(remaining, length);
+      System.arraycopy(bodyBytes, bodyBytesIndex, buffer, offset, read);
       bodyBytesIndex += read;
 
-      if (bodyBytesIndex >= bodyBytes.limit()) {
+      if (bodyBytesIndex >= bodyBytes.length) {
         bodyBytes = null;
       }
     } else {
@@ -170,22 +186,23 @@ public class HTTPInputStream extends InputStream {
   private void commit() {
     committed = true;
 
+    // Note that isChunked() should take precedence over the fact that we have a Content-Length.
+    // - The client should not send both, but in the case they are both present we ignore Content-Length
     Long contentLength = request.getContentLength();
     boolean hasBody = (contentLength != null && contentLength > 0) || request.isChunked();
     if (!hasBody) {
       delegate = InputStream.nullInputStream();
-    } else if (contentLength != null) {
-      logger.trace("Client indicated it was sending an entity-body in the request. Handling body using Content-Length header {}.", contentLength);
     } else if (request.isChunked()) {
       logger.trace("Client indicated it was sending an entity-body in the request. Handling body using chunked encoding.");
-      // TODO : Daniel : Review : Can I pass this reference to the ChunkedInputStream instead of copying the bytes?
-      byte[] leftOverBytes = Arrays.copyOfRange(bodyBytes.array(), bodyBytes.position(), bodyBytes.limit());
-      delegate = new ChunkedInputStream(delegate, 1024, leftOverBytes);
+      delegate = new ChunkedInputStream(delegate, 1024, bodyBytes);
       bodyBytes = null;
+      bodyBytesIndex = 0;
 
       if (instrumenter != null) {
         instrumenter.chunkedRequest();
       }
+    } else if (contentLength != null) {
+      logger.trace("Client indicated it was sending an entity-body in the request. Handling body using Content-Length header {}.", contentLength);
     } else {
       logger.trace("Client indicated it was NOT sending an entity-body in the request");
     }

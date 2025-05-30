@@ -18,8 +18,8 @@ package io.fusionauth.http.io;
 import java.io.IOException;
 import java.io.InputStream;
 
-import io.fusionauth.http.ParseException;
 import io.fusionauth.http.util.HTTPTools;
+import static io.fusionauth.http.util.HTTPTools.makeParseException;
 
 /**
  * A filter InputStream that handles the chunked body while passing the body bytes down to the delegate stream.
@@ -144,7 +144,7 @@ public class ChunkedInputStream extends InputStream {
           return ChunkSize;
         }
 
-        throw makeParseException(ch);
+        throw makeParseException(ch, this);
       }
     },
 
@@ -154,7 +154,7 @@ public class ChunkedInputStream extends InputStream {
           return ChunkSizeLF;
         }
 
-        throw makeParseException(ch);
+        throw makeParseException(ch, this);
       }
     },
 
@@ -173,7 +173,7 @@ public class ChunkedInputStream extends InputStream {
           return ChunkCR;
         }
 
-        throw makeParseException(ch);
+        throw makeParseException(ch, this);
       }
     },
 
@@ -184,7 +184,7 @@ public class ChunkedInputStream extends InputStream {
           return length == 0 ? Complete : ChunkLF;
         }
 
-        throw makeParseException(ch);
+        throw makeParseException(ch, this);
       }
     },
 
@@ -197,7 +197,7 @@ public class ChunkedInputStream extends InputStream {
           return ChunkSize;
         }
 
-        throw makeParseException(ch);
+        throw makeParseException(ch, this);
       }
     },
 
@@ -209,10 +209,5 @@ public class ChunkedInputStream extends InputStream {
     };
 
     public abstract ChunkedBodyState next(byte ch, long length, long bytesRead);
-
-    ParseException makeParseException(byte b) {
-      char ch = (char) b;
-      return new ParseException("Invalid byte [" + ch + "] in state [" + this + "]", this.name());
-    }
   }
 }

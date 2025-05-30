@@ -1,5 +1,5 @@
 /*
- * Copyright (c) 2022, FusionAuth, All Rights Reserved
+ * Copyright (c) 2022-2025, FusionAuth, All Rights Reserved
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -30,15 +30,15 @@ public class LoadServlet extends HttpServlet {
 
   @Override
   protected void doPost(HttpServletRequest req, HttpServletResponse res) {
+    // Note that this should be mostly the same between all load tests.
+    // - See load-tests/self
     try (InputStream is = req.getInputStream()) {
       byte[] body = is.readAllBytes();
-      String result = Base64.getEncoder().encodeToString(body);
+      byte[] result = Base64.getEncoder().encode(body);
       res.setStatus(200);
-
-      PrintWriter writer = res.getWriter();
-      writer.write(result);
-      writer.flush();
-      writer.close();
+      res.setContentType("text/plain");
+      res.setContentLength(result.length);
+      res.getOutputStream().write(result);
     } catch (Exception e) {
       res.setStatus(500);
     }

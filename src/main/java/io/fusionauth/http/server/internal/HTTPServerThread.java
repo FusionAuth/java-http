@@ -82,7 +82,11 @@ public class HTTPServerThread extends Thread {
     }
 
     socket.setSoTimeout(0); // Always block
-    socket.bind(new InetSocketAddress(listener.getBindAddress(), listener.getPort()));
+    // TODO : Daniel : Review : Set the backlog queue length to 250. TBD if there is a better way to manage this so we can allow a high volume of incoming requests.
+    //       .
+    //       Note that Tomcat hs a 'acceptCount' which defaults to 100 which is the maximum length queue for incoming connections.
+    //            We may want to add this configuration on the HTTPListenerConfiguration.
+    socket.bind(new InetSocketAddress(listener.getBindAddress(), listener.getPort()), 200);
 
     if (instrumenter != null) {
       instrumenter.serverStarted();
@@ -96,7 +100,12 @@ public class HTTPServerThread extends Thread {
 
     while (running) {
       try {
+
         Socket clientSocket = socket.accept();
+
+        // TODO : Daniel : Review : I think this is fast enough? But in theory we could place the clientSocket in a queue
+        //                 and then work the queue to ensure we accept new connections as fast as we can.
+        //                 Pulling the sockets of the .accept() and then queueing them has been inferred as an option form reading the interwebs.
         clientSocket.setSoTimeout((int) configuration.getInitialReadTimeoutDuration().toMillis());
         if (logger.isTraceEnabled()) {
           String listenerAddress = listener.getBindAddress().toString() + ":" + listener.getPort();
@@ -113,6 +122,10 @@ public class HTTPServerThread extends Thread {
                               .name("HTTP client [" + clientSocket.getRemoteSocketAddress() + "]")
                               .start(runnable);
 
+        // TODO : Daniel : Review : Tomcat has a config for maxConnections which is the maximum number of active connections that can be "worked"
+        //        I think the size of clients would be equivalent to 'maxConnections'. We may want to add this config. Tomcat defaults to 8192.
+        //        Tomcat also has 'maxThreads' which defaults to 200 - this is per "connector", not sure how this is different than maxConnections.
+        //        Reading doc, perhaps 'maxConnections' is across all listeners (connectors)? So maybe we go close to the maxThreads config which is 200.
         clients.add(new ClientInfo(client, runnable, throughput));
       } catch (SocketTimeoutException ignore) {
         // Completely smother since this is expected with the SO_TIMEOUT setting in the constructor
