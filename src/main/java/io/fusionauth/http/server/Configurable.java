@@ -77,6 +77,8 @@ public interface Configurable<T extends Configurable<T>> {
    * @param validator The validator.
    * @return This.
    */
+  // TODO : Daniel : Review : It would be cool to offer some additional methods such as withOptionalExpectValidator?
+  //                 Or would there be another way that we could allow the caller to designate null as don't set?
   default T withExpectValidator(ExpectValidator validator) {
     configuration().withExpectValidator(validator);
     return (T) this;

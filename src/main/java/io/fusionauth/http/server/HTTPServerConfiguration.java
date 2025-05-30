@@ -95,7 +95,7 @@ public class HTTPServerConfiguration implements Configurable<HTTPServerConfigura
   }
 
   /**
-   * @return The expect validator, never null.
+   * @return The expect validator or null.
    */
   public ExpectValidator getExpectValidator() {
     return expectValidator;
@@ -274,7 +274,6 @@ public class HTTPServerConfiguration implements Configurable<HTTPServerConfigura
    */
   @Override
   public HTTPServerConfiguration withExpectValidator(ExpectValidator validator) {
-    Objects.requireNonNull(handler, "You cannot set ExpectValidator to null");
     this.expectValidator = validator;
     return this;
   }

@@ -291,19 +291,18 @@ public class HTTPWorker implements Runnable {
   }
 
   private boolean handleExpectContinue(HTTPRequest request) throws IOException {
-    // Invoke the validator.
     var expectResponse = new HTTPResponse();
-    configuration.getExpectValidator().validate(request, expectResponse);
-
-    // If we are not continuing, do not re-use this connection.
-    boolean expectContinue = expectResponse.getStatus() == 100;
+    var validator = configuration.getExpectValidator();
+    if (validator != null) {
+      validator.validate(request, expectResponse);
+    }
 
     // Write directly to the socket because the HTTPOutputStream.close() does a lot of extra work that we don't want
     OutputStream out = socket.getOutputStream();
     HTTPTools.writeResponsePreamble(expectResponse, out);
     out.flush();
 
-    return expectContinue;
+    return expectResponse.getStatus() == 100;
   }
 
   /**

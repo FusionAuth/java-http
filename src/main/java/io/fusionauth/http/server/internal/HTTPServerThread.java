@@ -285,7 +285,6 @@ public class HTTPServerThread extends Thread {
           }
 
           try {
-            System.out.println(" > socket.close() due to [" + message + "]");
             var socket = worker.getSocket();
             socket.close();
 

@@ -25,6 +25,7 @@ import java.nio.charset.StandardCharsets;
 import java.util.concurrent.atomic.AtomicBoolean;
 
 import io.fusionauth.http.HTTPValues.Headers;
+import io.fusionauth.http.server.AlwaysContinueExpectValidator;
 import io.fusionauth.http.server.CountingInstrumenter;
 import io.fusionauth.http.server.ExpectValidator;
 import io.fusionauth.http.server.HTTPHandler;
@@ -87,7 +88,9 @@ public class ExpectTest extends BaseTest {
     CountingInstrumenter instrumenter = new CountingInstrumenter();
     boolean[] validationOptions = {true, false};
     for (boolean validation : validationOptions) {
-      ExpectValidator expectValidator = validation ? validator : null;
+      ExpectValidator expectValidator = validation
+          ? validator                             // Custom
+          : new AlwaysContinueExpectValidator();  // Default
 
       try (HTTPServer ignore = makeServer(scheme, handler, instrumenter, expectValidator).start(); var client = makeClient(scheme, null)) {
         URI uri = makeURI(scheme, "");
