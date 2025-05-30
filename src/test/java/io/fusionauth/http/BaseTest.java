@@ -232,6 +232,14 @@ public abstract class BaseTest {
     verbose = false;
   }
 
+  @DataProvider
+  public Object[][] connections() {
+    return new Object[][]{
+        {Connections.Close},
+        {Connections.KeepAlive}
+    };
+  }
+
   @AfterMethod
   public void flush() {
     FileLogger fl = (FileLogger) FileLoggerFactory.FACTORY.getLogger(BaseTest.class);
@@ -316,14 +324,6 @@ public abstract class BaseTest {
     return new Object[][]{
         {"http"},
         {"https"}
-    };
-  }
-
-  @DataProvider
-  public Object[][] connections() {
-    return new Object[][]{
-        {Connections.Close},
-        {Connections.KeepAlive}
     };
   }
 
@@ -427,8 +427,7 @@ public abstract class BaseTest {
   protected void sleep(long millis) {
     try {
       Thread.sleep(millis);
-    } catch (InterruptedException e) {
-      // Ignore
+    } catch (InterruptedException ignore) {
     }
   }
 

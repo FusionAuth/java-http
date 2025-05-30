@@ -275,7 +275,7 @@ public class HTTP11SocketTest extends BaseSocketTest {
 
   @Test
   public void keepAlive_bodyNeverRead() throws Exception {
-    // Use case: Using keep alive, and the request handler doesn't ready the payload.
+    // Use case: Using keep alive, and the request handler doesn't read the payload.
     // - Ensure the HTTP worker is able to drain the bytes so the next request starts with an empty byte array.
     withRequest("""
         GET / HTTP/1.1\r

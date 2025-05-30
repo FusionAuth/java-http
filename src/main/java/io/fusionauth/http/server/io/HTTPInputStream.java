@@ -194,7 +194,6 @@ public class HTTPInputStream extends InputStream {
       logger.trace("Client indicated it was sending an entity-body in the request. Handling body using chunked encoding.");
       delegate = new ChunkedInputStream(delegate, 1024, bodyBytes);
       bodyBytes = null;
-      bodyBytesIndex = 0;
 
       if (instrumenter != null) {
         instrumenter.chunkedRequest();

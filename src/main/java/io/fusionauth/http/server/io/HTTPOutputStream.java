@@ -216,7 +216,6 @@ public class HTTPOutputStream extends OutputStream {
     }
 
     // +++++++++++ Step 2: Write the preamble. This must be first without any other output stream interference +++++++++++
-    // System.out.println("   > HTTPOutputStream commit() -- writeResponsePreamble");
     HTTPTools.writeResponsePreamble(response, delegate);
 
     // +++++++++++ Step 3: Bail if there is no content +++++++++++

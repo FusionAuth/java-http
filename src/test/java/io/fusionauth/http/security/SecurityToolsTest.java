@@ -1,5 +1,5 @@
 /*
- * Copyright (c) 2022, FusionAuth, All Rights Reserved
+ * Copyright (c) 2022-2025, FusionAuth, All Rights Reserved
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -38,7 +38,7 @@ public class SecurityToolsTest extends BaseTest {
 
   @BeforeClass
   public static void setUp() {
-    projectDir = java.nio.file.Path.of("");
+    projectDir = Path.of("");
   }
 
   @Test
