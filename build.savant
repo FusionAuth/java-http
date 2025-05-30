@@ -63,12 +63,12 @@ project(group: "io.fusionauth", name: "java-http", version: "0.4.0-RC.7", licens
 }
 
 // Plugins
-dependency = loadPlugin(id: "org.savantbuild.plugin:dependency:2.0.0-RC.7")
-java = loadPlugin(id: "org.savantbuild.plugin:java:2.0.0-RC.6")
-javaTestNG = loadPlugin(id: "org.savantbuild.plugin:java-testng:2.0.0-RC.6")
-idea = loadPlugin(id: "org.savantbuild.plugin:idea:2.0.0-RC.7")
-release = loadPlugin(id: "org.savantbuild.plugin:release-git:2.0.0-RC.6")
-pom = loadPlugin(id: "org.savantbuild.plugin:pom:2.0.0-RC.6")
+dependency = loadPlugin(id: "org.savantbuild.plugin:dependency:2.0.0")
+java = loadPlugin(id: "org.savantbuild.plugin:java:2.0.0")
+javaTestNG = loadPlugin(id: "org.savantbuild.plugin:java-testng:2.1.0")
+idea = loadPlugin(id: "org.savantbuild.plugin:idea:2.0.0")
+release = loadPlugin(id: "org.savantbuild.plugin:release-git:2.0.0")
+pom = loadPlugin(id: "org.savantbuild.plugin:pom:2.0.0")
 
 java.settings.javaVersion = "21"
 java.settings.compilerArguments = "--add-exports java.base/sun.security.x509=ALL-UNNAMED --add-exports java.base/sun.security.util=ALL-UNNAMED -XDignore.symbol.file"

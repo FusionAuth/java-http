@@ -369,8 +369,8 @@ public class CoreTest extends BaseTest {
     }
   }
 
-  @Test
-  public void large_body() throws Exception {
+  @Test(dataProvider = "schemes")
+  public void large_body(String scheme) throws Exception {
     // Ensure that when the body bytes overflow from the initial "left over" bytes read
     // during reading of the preamble, the remaining bytes read from the HTTPInputStream
     // properly use offset and lengths when reading.
@@ -395,27 +395,18 @@ public class CoreTest extends BaseTest {
     };
 
     var instrumenter = new CountingInstrumenter();
-    try (var ignore = makeServer("http", handler, instrumenter).start(); var socket = new Socket("127.0.0.1", 4242)) {
-      var out = socket.getOutputStream();
-      var request = """
-          GET / HTTP/1.1\r
-          Host: localhost:42\r
-          Content-Type: application/x-www-form-urlencoded\r
-          Content-Length: {contentLength}\r
-          \r
-          {body}
-          """.replace("{contentLength}", "" + bytes.length)
-             .replace("{body}", payload);
-      out.write(request.getBytes());
-      out.flush();
-      var in = socket.getInputStream();
+    try (var ignore = makeServer(scheme, handler, instrumenter).start();
+         var client = makeClient(scheme, null)) {
 
-      var responseBytes = in.readAllBytes();
-      var responseString = new String(responseBytes);
+      URI uri = makeURI(scheme, "");
+      var response = client.send(HttpRequest.newBuilder()
+                                            .uri(uri)
+                                            .POST(HttpRequest.BodyPublishers.ofString(payload))
+                                            .build(),
+          r -> BodySubscribers.ofByteArray());
 
-      assertEquals(responseBytes.length, 16918);
-      var payloadIndex = responseString.indexOf("\r\n\r\n") + 4;
-      assertEquals(responseString.substring(payloadIndex, responseBytes.length - 1), payload);
+      assertEquals(response.statusCode(), 200);
+      assertEquals(response.body(), bytes);
     }
   }
 

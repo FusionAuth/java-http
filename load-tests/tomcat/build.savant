@@ -15,8 +15,6 @@ import java.nio.file.Paths
  * either express or implied. See the License for the specific
  * language governing permissions and limitations under the License.
  */
-restifyVersion = "4.1.2"
-testngVersion = "7.6.1"
 
 project(group: "io.fusionauth", name: "tomcat", version: "0.1.10", licenses: ["ApacheV2_0"]) {
   workflow {
@@ -50,7 +48,7 @@ project(group: "io.fusionauth", name: "tomcat", version: "0.1.10", licenses: ["A
 // Plugins
 java = loadPlugin(id: "org.savantbuild.plugin:java:2.0.0")
 idea = loadPlugin(id: "org.savantbuild.plugin:idea:2.0.0")
-tomcat = loadPlugin(id: "org.savantbuild.plugin:tomcat:2.0.0")
+tomcat = loadPlugin(id: "org.savantbuild.plugin:tomcat:2.0.2")
 webapp = loadPlugin(id: "org.savantbuild.plugin:webapp:2.0.0")
 
 java.settings.javaVersion = "17"
@@ -73,6 +71,7 @@ target(name: "jar", description: "Builds the project JARs", dependsOn: ["compile
 
 target(name: "war", description: "Builds the project WAR (exploded and JAR)", dependsOn: ["jar"]) {
   webapp.build()
+  webapp.war()
 }
 
 target(name: "tomcat", description: "Builds the Tomcat runtime", dependsOn: ["war"]) {
@@ -81,4 +80,10 @@ target(name: "tomcat", description: "Builds the Tomcat runtime", dependsOn: ["wa
 
 target(name: "idea", description: "Updates the IntelliJ IDEA module file") {
   idea.iml()
+}
+
+target(name: "start", description: "Starts the Tomcat server for load testing!", dependsOn: ["tomcat"]) {
+  if (new ProcessBuilder('./catalina.sh', 'run').directory(new File("build/dist/tomcat/apache-tomcat/bin")).inheritIO().start().waitFor() != 0) {
+    fail("Unable to start the server!")
+  }
 }

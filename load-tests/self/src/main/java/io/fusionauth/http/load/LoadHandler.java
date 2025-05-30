@@ -22,13 +22,14 @@ import java.nio.charset.StandardCharsets;
 import java.util.Base64;
 import java.util.HashMap;
 import java.util.Map;
+import java.util.concurrent.ConcurrentHashMap;
 
 import io.fusionauth.http.server.HTTPHandler;
 import io.fusionauth.http.server.HTTPRequest;
 import io.fusionauth.http.server.HTTPResponse;
 
 public class LoadHandler implements HTTPHandler {
-  private final Map<Integer, byte[]> Blobs = new HashMap<>();
+  private static final Map<Integer, byte[]> Blobs = new HashMap<>();
 
   @Override
   public void handle(HTTPRequest req, HTTPResponse res) {
@@ -55,32 +56,31 @@ public class LoadHandler implements HTTPHandler {
   }
 
   private void handleFile(HTTPRequest req, HTTPResponse res) {
-    System.out.println("/file");
     int size = 1024 * 1024;
     var requestedSize = req.getURLParameter("size");
     if (requestedSize != null) {
       size = Integer.parseInt(requestedSize);
-      System.out.println("Requested size: " + size);
-    } else {
-      System.out.println("Default size: " + size);
     }
 
+    // Ensure we only build one file
     byte[] blob = Blobs.get(size);
     if (blob == null) {
-      System.out.println("Build file with size : " + size);
-      String s = "Lorem ipsum dolor sit amet";
-      String body = s.repeat(size / s.length() + (size % s.length()));
-      assert body.length() == size;
-      Blobs.put(size, body.getBytes(StandardCharsets.UTF_8));
-      blob = Blobs.get(size);
-      assert blob != null;
-    } else {
-      System.out.println("Already built file with size: " + size);
+      synchronized (Blobs) {
+        blob = Blobs.get(size);
+        if (blob == null) {
+          System.out.println("Build file with size : " + size);
+          String s = "Lorem ipsum dolor sit amet";
+          String body = s.repeat(size / s.length() + (size % s.length()));
+          assert body.length() == size;
+          Blobs.put(size, body.getBytes(StandardCharsets.UTF_8));
+          blob = Blobs.get(size);
+          assert blob != null;
+        }
+      }
     }
 
     res.setStatus(200);
     res.setContentType("application/octet-stream");
-    System.out.println("Write back a file with [" + blob.length + "] bytes");
     res.setContentLength(blob.length);
 
     try (OutputStream os = res.getOutputStream()) {
