@@ -224,7 +224,6 @@ public class HTTPWorker implements Runnable {
       if (Thread.currentThread().isInterrupted()) {
         // Close socket only. We do not want to potentially delay the shutdown at all.
         logger.debug("[{}] Closing socket. Server is shutting down.", Thread.currentThread().threadId());
-        // TODO : Daniel : if I call closeSocketOnly, I am not calling instrumenter.connectionClosed is that ok?
         closeSocketOnly(CloseSockerReason.Expected);
       }
     } catch (IOException io) {

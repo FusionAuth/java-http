@@ -131,7 +131,7 @@ public class HTTPServerThread extends Thread {
         // This should only happen when the server is shutdown
         if (socket.isClosed()) {
           running = false;
-          logger.debug("The server socket was closed. Shutting down the server.", e);
+          logger.debug("The server socket was closed. Shutting down the server.");
         } else {
           logger.error("An exception was thrown while accepting incoming connections.", e);
         }

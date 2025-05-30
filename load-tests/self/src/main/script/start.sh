@@ -16,6 +16,14 @@
 # language governing permissions and limitations under the License.
 #
 
+SOURCE="${BASH_SOURCE[0]}"
+while [[ -h ${SOURCE} ]]; do # resolve $SOURCE until the file is no longer a symlink
+  SCRIPT_DIR="$(cd -P "$(dirname "${SOURCE}")" >/dev/null && pwd)"
+  SOURCE="$(readlink "${SOURCE}")"
+  [[ ${SOURCE} != /* ]] && SOURCE="${SCRIPT_DIR}/${SOURCE}" # if $SOURCE was a relative symlink, we need to resolve it relative to the path where the symlink file was located
+done
+SCRIPT_DIR="$(cd -P "$(dirname "${SOURCE}")" > /dev/null && pwd)"
+
 # Grab the path
 if [[ ! -d lib ]]; then
   echo "Unable to locate library files needed to run the load tests. [lib]. Ensure you run this from build/dist."
@@ -33,6 +41,4 @@ if [[ $# -gt 1 && $1 == "--suspend" ]]; then
   shift
 fi
 
-# TBD if this is necessary. I think the issues I'm seeing are with Apache benchmark itself.
-ulimit -n 10240
-~/dev/java/current21/bin/java ${suspend} -cp "${CLASSPATH}" io.fusionauth.http.load.Main
+~/dev/java/current21/bin/java ${suspend} -cp "${CLASSPATH}" -Dio.fusionauth.http.server.stats="${SCRIPT_DIR}" io.fusionauth.http.load.Main
