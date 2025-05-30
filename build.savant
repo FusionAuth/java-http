@@ -71,9 +71,8 @@ release = loadPlugin(id: "org.savantbuild.plugin:release-git:2.0.0")
 pom = loadPlugin(id: "org.savantbuild.plugin:pom:2.0.0")
 
 java.settings.javaVersion = "21"
-java.settings.compilerArguments = "--add-exports java.base/sun.security.x509=ALL-UNNAMED --add-exports java.base/sun.security.util=ALL-UNNAMED -XDignore.symbol.file"
 javaTestNG.settings.javaVersion = "21"
-javaTestNG.settings.jvmArguments = "--add-exports java.base/sun.security.x509=ALL-UNNAMED --add-exports java.base/sun.security.util=ALL-UNNAMED"
+javaTestNG.settings.jvmArguments = "--add-exports java.base/sun.security.x509=ALL-UNNAMED --add-exports java.base/sun.security.util=ALL-UNNAMED "
 javaTestNG.settings.testngArguments = "-listener io.fusionauth.http.BaseTest\$TestListener"
 
 target(name: "clean", description: "Cleans the build directory") {
@@ -81,7 +80,11 @@ target(name: "clean", description: "Cleans the build directory") {
 }
 
 target(name: "compile", description: "Compiles the Java source files") {
-  java.compile()
+  // We want to file compile on prod code if we need any -add-exports, so separate the prod and test compiles
+  java.settings.compilerArguments = ""
+  java.compileMain()
+  java.settings.compilerArguments = "--add-exports java.base/sun.security.x509=ALL-UNNAMED --add-exports java.base/sun.security.util=ALL-UNNAMED -XDignore.symbol.file"
+  java.compileTest()
 }
 
 target(name: "jar", description: "Builds the project JARs", dependsOn: ["compile"]) {
