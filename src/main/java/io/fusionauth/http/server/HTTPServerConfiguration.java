@@ -1,5 +1,5 @@
 /*
- * Copyright (c) 2022-2023, FusionAuth, All Rights Reserved
+ * Copyright (c) 2022-2025, FusionAuth, All Rights Reserved
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -51,6 +51,8 @@ public class HTTPServerConfiguration implements Configurable<HTTPServerConfigura
   private LoggerFactory loggerFactory = SystemOutLoggerFactory.FACTORY;
 
   private int maxBytesToDrain = 128 * 1024; // 128k bytes
+
+  private int maxPendingSocketConnections = 200;
 
   private int maxResponseChunkSize = 16 * 1024; // 16k bytes
 
@@ -152,6 +154,19 @@ public class HTTPServerConfiguration implements Configurable<HTTPServerConfigura
    */
   public int getMaxBytesToDrain() {
     return maxBytesToDrain;
+  }
+
+  /**
+   * The maximum number of pending socket connections per HTTP listener.
+   * <p>
+   * This number represents how many pending socket connections are allowed to queue before they are rejected. Once the connection is
+   * accepted by the server socket, a client socket is created and handed to an HTTP Worker. This queue length only needs to be large enough
+   * to buffer the incoming requests as fast as we can accept them and hand them to a worker.
+   *
+   * @return The maximum number of pending socket connections per HTTP listener. Defaults to 200.
+   */
+  public int getMaxPendingSocketConnections() {
+    return maxPendingSocketConnections;
   }
 
   /**
@@ -344,6 +359,15 @@ public class HTTPServerConfiguration implements Configurable<HTTPServerConfigura
   public HTTPServerConfiguration withLoggerFactory(LoggerFactory loggerFactory) {
     Objects.requireNonNull(loggerFactory, "You cannot set LoggerFactory to null");
     this.loggerFactory = loggerFactory;
+    return this;
+  }
+
+  /**
+   * {@inheritDoc}
+   */
+  @Override
+  public HTTPServerConfiguration withMaxPendingSocketConnections(int maxPendingSocketConnections) {
+    this.maxPendingSocketConnections = maxPendingSocketConnections;
     return this;
   }
 

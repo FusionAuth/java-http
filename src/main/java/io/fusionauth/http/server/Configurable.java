@@ -155,6 +155,22 @@ public interface Configurable<T extends Configurable<T>> {
   }
 
   /**
+   * Sets the maximum number of pending socket connections per HTTP listener.
+   * <p>
+   * This number represents how many pending socket connections are allowed to queue before they are rejected. Once the connection is
+   * accepted by the server socket, a client socket is created and handed to an HTTP Worker. This queue length only needs to be large enough
+   * to buffer the incoming requests as fast as we can accept them and hand them to a worker.
+   * <p>
+   * Defaults to 200.
+   *
+   * @return This.
+   */
+  default T withMaxPendingSocketConnections(int maxPendingSocketConnections) {
+    configuration().withMaxPendingSocketConnections(maxPendingSocketConnections);
+    return (T) this;
+  }
+
+  /**
    * This configures the maximum size of a chunk in the response when the server is using chunked response encoding. Defaults to 16k.
    *
    * @param size The size in bytes.
