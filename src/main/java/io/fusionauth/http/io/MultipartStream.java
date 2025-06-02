@@ -24,16 +24,21 @@ import java.nio.charset.Charset;
 import java.nio.charset.StandardCharsets;
 import java.nio.file.Files;
 import java.nio.file.Path;
+import java.nio.file.Paths;
 import java.util.HashMap;
 import java.util.LinkedList;
 import java.util.List;
 import java.util.Map;
+import java.util.Objects;
 
 import io.fusionauth.http.FileInfo;
+import io.fusionauth.http.FileUploadDisabled;
+import io.fusionauth.http.FileUploadTooLarge;
 import io.fusionauth.http.HTTPValues.ContentTypes;
 import io.fusionauth.http.HTTPValues.ControlBytes;
 import io.fusionauth.http.HTTPValues.DispositionParameters;
 import io.fusionauth.http.HTTPValues.Headers;
+import io.fusionauth.http.MultipartRequestTooLarge;
 import io.fusionauth.http.ParseException;
 import io.fusionauth.http.server.RequestPreambleState;
 import io.fusionauth.http.util.HTTPTools;
@@ -49,17 +54,58 @@ public class MultipartStream {
 
   private final byte[] buffer;
 
+  private final MultipartProcessorConfiguration configuration;
+
   private final InputStream input;
 
   private int boundaryLength;
 
   private int boundaryStart;
 
+  private long bytesRead;
+
   private int current;
 
   private int end;
 
   private int partialBoundary;
+
+  /**
+   * Constructs a {@code MultipartStream} with a multipart processor configuration.
+   * <p>
+   * Note that the buffer must be at least big enough to contain the boundary string, plus 4 characters for CR/LF and double dash, plus at
+   * least one byte of data.  Too small a buffer size setting will degrade performance.
+   *
+   * @param input         The {@code InputStream} to serve as a data source.
+   * @param boundary      The token used for dividing the stream into {@code encapsulations}.
+   * @param configuration The configuration used to parse the stream.
+   * @throws IllegalArgumentException If the buffer size is too small
+   */
+  public MultipartStream(final InputStream input, final byte[] boundary, final MultipartProcessorConfiguration configuration) {
+    Objects.requireNonNull(input);
+    Objects.requireNonNull(boundary);
+    Objects.requireNonNull(configuration);
+    this.configuration = configuration;
+
+    int bufSize = configuration.getMultipartBufferSize();
+    // We prepend CR/LF to the boundary to chop trailing CRLF from body-data tokens.
+    if (bufSize < boundary.length * 2) {
+      throw new IllegalArgumentException("The buffer size specified for the MultipartStream is too small. Must be double the boundary length.");
+    }
+
+    this.input = input;
+    this.buffer = new byte[bufSize];
+    this.boundary = new byte[boundary.length + 4]; // CRLF--<boundary> (then we manually handle CRLF or --)
+    this.boundaryStart = 2; // Initially we start after the CRLF
+    this.boundaryLength = boundary.length + 2; // Initially we only analyze the boundary plus the dashes
+
+    // Set up the full boundary
+    System.arraycopy(ControlBytes.MultipartBoundaryPrefix, 0, this.boundary, 0, 4);
+    System.arraycopy(boundary, 0, this.boundary, 4, boundary.length);
+
+    current = 0;
+    end = 0;
+  }
 
   /**
    * Constructs a {@code MultipartStream} with a custom size buffer.
@@ -87,6 +133,9 @@ public class MultipartStream {
     this.boundary = new byte[boundary.length + 4]; // CRLF--<boundary> (then we manually handle CRLF or --)
     this.boundaryStart = 2; // Initially we start after the CRLF
     this.boundaryLength = boundary.length + 2; // Initially we only analyze the boundary plus the dashes
+    // Take the defaults, but enable file uploads
+    this.configuration = new MultipartProcessorConfiguration();
+    this.configuration.setFileUploadEnabled(true);
 
     // Set up the full boundary
     System.arraycopy(ControlBytes.MultipartBoundaryPrefix, 0, this.boundary, 0, 4);
@@ -104,7 +153,8 @@ public class MultipartStream {
    * @throws IOException    If any I/O operation failed.
    * @throws ParseException If the input is not a proper multipart body and could not be processed.
    */
-  public void process(Map<String, List<String>> parameters, List<FileInfo> files) throws IOException, ParseException {
+  public void process(Map<String, List<String>> parameters, List<FileInfo> files)
+      throws IOException, ParseException {
     // Initialize the buffer with enough bytes to analyze one boundary
     if (!reload(boundaryLength + 2)) {
       throw new ParseException("Invalid multipart body. The body is empty.");
@@ -294,7 +344,13 @@ public class MultipartStream {
 
     PartProcessor processor;
     if (isFile) {
-      processor = new FilePartProcessor(contentTypeString, encoding, filename, name);
+      // TODO : Daniel : Fail. We could return a 400, but that means we need to try and drain the InputStream which could be very large.
+      //                       But maybe that is ok, this would be a server level configuration, so perhaps this is reasonable to fail hard.
+      if (!configuration.isFileUploadEnabled()) {
+        throw new FileUploadDisabled();
+      }
+
+      processor = new FilePartProcessor(contentTypeString, encoding, filename, name, configuration.getMaxFileSize());
     } else {
       processor = new ParameterPartProcessor(encoding);
     }
@@ -346,7 +402,15 @@ public class MultipartStream {
 
     // Load until we have enough
     while (end - current < minimumToLoad) {
-      end += input.read(buffer, start, buffer.length - start);
+      int read = input.read(buffer, start, buffer.length - start);
+      // Keep track of all bytes read for this multipart stream. Fail if the length has been exceeded.
+      bytesRead += read;
+      if (configuration != null) {
+        if (bytesRead > configuration.getMaxRequestSize()) {
+          throw new MultipartRequestTooLarge(configuration.getMaxRequestSize());
+        }
+      }
+      end += read;
       if (end == -1) {
         return false;
       }
@@ -375,18 +439,23 @@ public class MultipartStream {
 
     private final String filename;
 
+    private final long maxFileSize;
+
     private final String name;
 
     private final OutputStream output;
 
     private final Path path;
 
-    private FilePartProcessor(String contentType, Charset encoding, String filename, String name) throws IOException {
+    private long bytesWritten;
+
+    private FilePartProcessor(String contentType, Charset encoding, String filename, String name, long maxFileSize) throws IOException {
       this.contentType = contentType;
       this.encoding = encoding;
       this.filename = filename;
       this.name = name;
-      this.path = Files.createTempFile("java-http", "file-upload");
+      this.maxFileSize = maxFileSize;
+      path = Files.createTempFile(Paths.get(configuration.getTemporaryFileLocation()), configuration.getTemporaryFilenamePrefix(), configuration.getTemporaryFilenameSuffix());
       this.output = Files.newOutputStream(this.path);
     }
 
@@ -397,6 +466,18 @@ public class MultipartStream {
 
     @Override
     public void process(int start, int end) throws IOException {
+      int len = end - start;
+      bytesWritten += len;
+
+      // TODO : Daniel : Review : Is there a better place to do this? We can't do it while reading from the InputStream
+      //        because we could have one to many parts. We don't want to buffer before writing to the file, so I think we have to just
+      //        wait and keep track of how many bytes we have written to the file before failing?
+      // TODO : Daniel : Review : We have not kept track of the file we opened here, so we need to either add a file listener, and have someone
+      //        else delete the file, we could delete it here, or someone could catch this exception and review all in flight files and then delete?
+      if (bytesWritten > maxFileSize) {
+        throw new FileUploadTooLarge(maxFileSize);
+      }
+
       output.write(buffer, start, end - start);
     }
 

@@ -90,7 +90,10 @@ public class MultipartTest extends BaseTest {
       URI uri = makeURI(scheme, "");
       var client = makeClient(scheme, null);
       var response = client.send(
-          HttpRequest.newBuilder().uri(uri).header(Headers.ContentType, "multipart/form-data; boundary=----WebKitFormBoundaryTWfMVJErBoLURJIe").POST(BodyPublishers.ofString(Body)).build(),
+          HttpRequest.newBuilder()
+                     .uri(uri)
+                     .header(Headers.ContentType, "multipart/form-data; boundary=----WebKitFormBoundaryTWfMVJErBoLURJIe")
+                     .POST(BodyPublishers.ofString(Body)).build(),
           r -> BodySubscribers.ofString(StandardCharsets.UTF_8)
       );
 

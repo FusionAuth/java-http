@@ -46,6 +46,7 @@ import io.fusionauth.http.HTTPValues.ContentTypes;
 import io.fusionauth.http.HTTPValues.Headers;
 import io.fusionauth.http.HTTPValues.TransferEncodings;
 import io.fusionauth.http.body.BodyException;
+import io.fusionauth.http.io.MultipartProcessor;
 import io.fusionauth.http.io.MultipartStream;
 import io.fusionauth.http.util.HTTPTools;
 import io.fusionauth.http.util.HTTPTools.HeaderValue;
@@ -74,6 +75,7 @@ public class HTTPRequest implements Buildable<HTTPRequest> {
 
   private final List<Locale> locales = new LinkedList<>();
 
+  // Note this is only used when a multipart processor is not provided.
   private final int multipartBufferSize;
 
   private final Map<String, List<String>> urlParameters = new HashMap<>();
@@ -103,6 +105,8 @@ public class HTTPRequest implements Buildable<HTTPRequest> {
   private boolean multipart;
 
   private String multipartBoundary;
+
+  private MultipartProcessor multipartProcessor;
 
   private String path = "/";
 
@@ -352,9 +356,15 @@ public class HTTPRequest implements Buildable<HTTPRequest> {
         byte[] body = getBodyBytes();
         HTTPTools.parseEncodedData(body, 0, body.length, formData);
       } else if (isMultipart()) {
-        MultipartStream stream = new MultipartStream(inputStream, getMultipartBoundary().getBytes(), multipartBufferSize);
         try {
-          stream.process(formData, files);
+          if (multipartProcessor != null) {
+            multipartProcessor.process(inputStream, formData, files, multipartBoundary.getBytes());
+          } else {
+            // A multipart processor has not been set. The request will be parsed and processed without any configuration.
+            // TODO : Daniel : Review : We may want to just yank this code and either no-op or fail if a processor is not set.
+            MultipartStream stream = new MultipartStream(inputStream, multipartBoundary.getBytes(), multipartBufferSize);
+            stream.process(formData, files);
+          }
         } catch (IOException e) {
           throw new BodyException("Invalid multipart body.", e);
         }
@@ -656,6 +666,10 @@ public class HTTPRequest implements Buildable<HTTPRequest> {
     for (String value : values) {
       decodeHeader(name, value);
     }
+  }
+
+  public void setMultiPartProcessor(MultipartProcessor multipartProcessor) {
+    this.multipartProcessor = multipartProcessor;
   }
 
   public void setURLParameter(String name, String value) {
