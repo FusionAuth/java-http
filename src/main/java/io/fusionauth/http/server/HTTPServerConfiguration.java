@@ -21,6 +21,7 @@ import java.util.ArrayList;
 import java.util.List;
 import java.util.Objects;
 
+import io.fusionauth.http.io.MultipartProcessorConfiguration;
 import io.fusionauth.http.log.LoggerFactory;
 import io.fusionauth.http.log.SystemOutLoggerFactory;
 
@@ -57,6 +58,8 @@ public class HTTPServerConfiguration implements Configurable<HTTPServerConfigura
   private long minimumWriteThroughput = 16 * 1024; // Per second
 
   private int multipartBufferSize = 16 * 1024;
+
+  private MultipartProcessorConfiguration multipartProcessorConfiguration;
 
   private int numberOfWorkerThreads = 40;
 
@@ -148,8 +151,18 @@ public class HTTPServerConfiguration implements Configurable<HTTPServerConfigura
     return minimumWriteThroughput;
   }
 
+  // Use the configuration found in the MultipartProcessorConfiguration instead.
+  @Deprecated
   public int getMultipartBufferSize() {
     return multipartBufferSize;
+  }
+
+  /**
+   *
+   * @return the multipart processor configuration.
+   */
+  public MultipartProcessorConfiguration getMultipartProcessorConfiguration() {
+    return multipartProcessorConfiguration;
   }
 
   /**
@@ -365,6 +378,14 @@ public class HTTPServerConfiguration implements Configurable<HTTPServerConfigura
     }
 
     this.multipartBufferSize = multipartBufferSize;
+    return this;
+  }
+
+  @Override
+  public HTTPServerConfiguration withMultipartConfiguration(MultipartProcessorConfiguration multipartProcessorConfiguration) {
+    Objects.requireNonNull(multipartProcessorConfiguration, "You cannot set the multipart processor configuration to null");
+
+    this.multipartProcessorConfiguration = multipartProcessorConfiguration;
     return this;
   }
 

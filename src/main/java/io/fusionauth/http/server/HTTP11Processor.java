@@ -21,6 +21,7 @@ import java.nio.channels.SelectionKey;
 import java.util.concurrent.Future;
 
 import io.fusionauth.http.io.BlockingByteBufferOutputStream;
+import io.fusionauth.http.io.MultipartProcessor;
 import io.fusionauth.http.log.Logger;
 import io.fusionauth.http.util.ThreadPool;
 
@@ -73,7 +74,8 @@ public class HTTP11Processor implements HTTPProcessor {
     this.threadPool = threadPool;
     this.state = ProcessorState.Read;
 
-    this.request = new HTTPRequest(configuration.getContextPath(), configuration.getMultipartBufferSize(), listener.isTLS() ? "https" : "http", listener.getPort(), ipAddress);
+    this.request = new HTTPRequest(configuration.getContextPath(), listener.isTLS() ? "https" : "http", listener.getPort(), ipAddress);
+    this.request.setMultiPartProcessor(new MultipartProcessor(configuration.getMultipartProcessorConfiguration()));
     this.requestProcessor = new HTTPRequestProcessor(configuration, request);
 
     BlockingByteBufferOutputStream outputStream = new BlockingByteBufferOutputStream(notifier, configuration.getResponseBufferSize(), configuration.getMaxOutputBufferQueueLength());
