@@ -34,7 +34,7 @@ public class HTTPServerConfiguration implements Configurable<HTTPServerConfigura
 
   private Path baseDir = Path.of("");
 
-  private int chunkedBufferSize = 4 * 1024; // 4k bytes
+  private int chunkedBufferSize = 2 * 1024; // 2k bytes
 
   private boolean compressByDefault = true;
 
@@ -91,6 +91,9 @@ public class HTTPServerConfiguration implements Configurable<HTTPServerConfigura
     return baseDir;
   }
 
+  /**
+   * @return the length of the buffer used to parse a chunked request.
+   */
   public int getChunkedBufferSize() {
     return chunkedBufferSize;
   }
