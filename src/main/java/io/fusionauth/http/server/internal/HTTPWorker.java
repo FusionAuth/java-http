@@ -28,6 +28,7 @@ import io.fusionauth.http.HTTPValues.Headers;
 import io.fusionauth.http.HTTPValues.Protocols;
 import io.fusionauth.http.ParseException;
 import io.fusionauth.http.TooManyBytesToDrainException;
+import io.fusionauth.http.io.PushbackInputStream;
 import io.fusionauth.http.log.Logger;
 import io.fusionauth.http.server.HTTPHandler;
 import io.fusionauth.http.server.HTTPListenerConfiguration;
@@ -53,6 +54,8 @@ public class HTTPWorker implements Runnable {
   private final HTTPBuffers buffers;
 
   private final HTTPServerConfiguration configuration;
+
+  private final PushbackInputStream inputStream;
 
   private final Instrumenter instrumenter;
 
@@ -81,6 +84,7 @@ public class HTTPWorker implements Runnable {
     this.throughput = throughput;
     this.buffers = new HTTPBuffers(configuration);
     this.logger = configuration.getLoggerFactory().getLogger(HTTPWorker.class);
+    this.inputStream = new PushbackInputStream();
     this.state = State.Read;
     this.startInstant = System.currentTimeMillis();
     logger.trace("[{}] Starting HTTP worker.", Thread.currentThread().threadId());
@@ -105,7 +109,7 @@ public class HTTPWorker implements Runnable {
 
     try {
       if (instrumenter != null) {
-        instrumenter.threadStarted();
+        instrumenter.workerStarted();
       }
 
       while (true) {
@@ -120,23 +124,32 @@ public class HTTPWorker implements Runnable {
         HTTPOutputStream outputStream = new HTTPOutputStream(configuration, request.getAcceptEncodings(), response, throughputOutputStream, buffers, () -> state = State.Write);
         response.setOutputStream(outputStream);
 
-        var inputStream = new ThroughputInputStream(socket.getInputStream(), throughput);
+        // Update the delegate and preserve the left-over bytes in the PushBackInputStream
+        // TODO : Daniel : Review : I think we have to hold this reference in the worker and just update the delegate to preserve the buffer
+        //        for the next preamble read.
+        //        Daniel : Is there a risk of the preamble not needing the entire set of left over bytes and it trying to push
+        //                  back bytes from it's own buffer? This would fail because we check that buffer is null when calling push.
+        //                 But it would cause this request to fail.
+        inputStream.setDelegate(new ThroughputInputStream(socket.getInputStream(), throughput));
 
         // Not this line of code will block
         // - When a client is using Keep-Alive - we will loop and block here while we wait for the client to send us bytes.
         byte[] requestBuffer = buffers.requestBuffer();
-        byte[] bodyBytes = HTTPTools.parseRequestPreamble(inputStream, request, requestBuffer, instrumenter, () -> state = State.Read);
-        if (bodyBytes != null) {
-          logger.trace("[{}] Preamble parser had [{}] left over bytes. These will be used in the HTTPInputStream.", bodyBytes.length);
+        HTTPTools.parseRequestPreamble(inputStream, request, requestBuffer, instrumenter, () -> state = State.Read);
+        if (logger.isTraceEnabled()) {
+          int availableBufferedBytes = inputStream.getAvailableBufferedBytesRemaining();
+          if (availableBufferedBytes != 0) {
+            logger.trace("[{}] Preamble parser had [{}] left over bytes. These will be used in the HTTPInputStream.", availableBufferedBytes);
+          }
         }
 
         // Once we have performed an initial read, we can count this as a handled request.
         handledRequests++;
         if (instrumenter != null) {
-          instrumenter.acceptedRequests();
+          instrumenter.acceptedRequest();
         }
 
-        httpInputStream = new HTTPInputStream(configuration, request, inputStream, bodyBytes);
+        httpInputStream = new HTTPInputStream(configuration, request, inputStream);
         request.setInputStream(httpInputStream);
 
         // Set the Connection response header as soon as possible
@@ -171,31 +184,32 @@ public class HTTPWorker implements Runnable {
         logger.trace("[{}] Set state [{}]. Call the request handler.", Thread.currentThread().threadId(), state);
         configuration.getHandler().handle(request, response);
         logger.trace("[{}] Handler completed successfully", Thread.currentThread().threadId());
+        response.close();
 
-        // Drain the InputStream before closing the HTTP Response
+        // TODO : Daniel : Test
+        //                 Send a request body -> Handler ignores - does not read InputStream
+        //                 Handler, writes a large response. This should flush the OutputStream implicitly even w/out calling HTTPOutputStream.close()
+
+        boolean keepSocketAlive = keepSocketAlive(request, response);
+        // Close the socket.
+        if (!keepSocketAlive) {
+          logger.trace("[{}] Closing socket. No Keep-Alive.", Thread.currentThread().threadId());
+          closeSocketOnly(CloseSocketReason.Expected);
+        }
+
+        // Transition to Keep-Alive state and reset the SO timeout
+        state = State.KeepAlive;
+        int soTimeout = (int) configuration.getKeepAliveTimeoutDuration().toMillis();
+        logger.trace("[{}] Enter Keep-Alive state [{}] Reset socket timeout [{}].", Thread.currentThread().threadId(), state, soTimeout);
+        socket.setSoTimeout(soTimeout);
+
+        // Drain the InputStream so we can complete this request
         long startDrain = System.currentTimeMillis();
         int drained = httpInputStream.drain();
         if (drained > 0 && logger.isTraceEnabled()) {
           long drainDuration = System.currentTimeMillis() - startDrain;
           logger.trace("[{}] Drained [{}] bytes from the InputStream. Duration [{}] ms.", Thread.currentThread().threadId(), drained, drainDuration);
         }
-
-        // TODO : Daniel : Review : If we must drain the InputStream prior to calling close, it seems like this would be a problem since the request handler
-        //       could also call close()? Perhaps that is ok? Or we could remove that option for the request handler.
-        response.close();
-
-        // Transition to Keep-Alive state and reset the SO timeout
-        if (keepSocketAlive(request, response)) {
-          state = State.KeepAlive;
-          int soTimeout = (int) configuration.getKeepAliveTimeoutDuration().toMillis();
-          logger.trace("[{}] Enter Keep-Alive state [{}] Reset socket timeout [{}].", Thread.currentThread().threadId(), state, soTimeout);
-          socket.setSoTimeout(soTimeout);
-          continue;
-        }
-
-        // Close the socket.
-        logger.trace("[{}] Closing socket. No Keep-Alive.", Thread.currentThread().threadId());
-        closeSocketOnly(CloseSocketReason.Expected);
       }
     } catch (ConnectionClosedException e) {
       // The client closed the socket. Trace log this since it is an expected case.
@@ -206,8 +220,6 @@ public class HTTPWorker implements Runnable {
       // - Close the connection, unless we drain it, the connection cannot be re-used.
       // - Treating this as an expected case because if we are in a keep-alive state, no big deal, the client can just re-open the request. If we
       //   are not ina keep alive state, the request does not need to be re-used anyway.
-      // TODO : Daniel : Review : We could add something to the instrumenter? In theory we could try and write back a failure, but that will most likely
-      //        not be read because the client will get a socket reset when they try to read the response because we never drained the InputStream
       logger.debug("[{}] Closing socket [{}]. Too many bytes remaining in the InputStream. Drained [{}] bytes. Configured maximum bytes [{}].", Thread.currentThread().threadId(), state, e.getDrainedBytes(), e.getMaximumDrainedBytes());
       closeSocketOnly(CloseSocketReason.Expected);
     } catch (SocketTimeoutException e) {
@@ -241,7 +253,7 @@ public class HTTPWorker implements Runnable {
       closeSocketOnError(response, status);
     } finally {
       if (instrumenter != null) {
-        instrumenter.threadExited();
+        instrumenter.workerStopped();
       }
     }
   }
@@ -295,10 +307,7 @@ public class HTTPWorker implements Runnable {
 
   private boolean handleExpectContinue(HTTPRequest request) throws IOException {
     var expectResponse = new HTTPResponse();
-    var validator = configuration.getExpectValidator();
-    if (validator != null) {
-      validator.validate(request, expectResponse);
-    }
+    configuration.getExpectValidator().validate(request, expectResponse);
 
     // Write directly to the socket because the HTTPOutputStream.close() does a lot of extra work that we don't want
     OutputStream out = socket.getOutputStream();

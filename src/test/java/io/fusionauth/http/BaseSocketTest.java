@@ -19,11 +19,30 @@ import java.net.Socket;
 import java.nio.charset.StandardCharsets;
 import java.time.Duration;
 
+import io.fusionauth.http.server.HTTPHandler;
 import io.fusionauth.http.server.HTTPServer;
 
+/**
+ * A base class to provide some helpers for socket based tests. A socket test doesn't use an HTTP client, but instead manually writes to the
+ * socket in order to have more control over the input.
+ *
+ * @author Daniel DeGroff
+ */
 public abstract class BaseSocketTest extends BaseTest {
-  private void assertResponse(String request, String response) throws Exception {
-    try (HTTPServer ignore = makeServer("http", (req, res) -> res.setStatus(200))
+  protected Builder withRequest(String request) {
+    return new Builder(request);
+  }
+
+  private void assertResponse(String request, String chunkedExtension, String response) throws Exception {
+    HTTPHandler handler = (req, res) -> {
+      // Read the request body
+      byte[] bodyBytes = req.getInputStream().readAllBytes();
+      System.out.println(bodyBytes.length);
+
+      res.setStatus(200);
+    };
+
+    try (HTTPServer ignore = makeServer("http", handler)
         .withInitialReadTimeout(Duration.ofMinutes(2))
         .withReadThroughputCalculationDelayDuration(Duration.ofMinutes(2))
         .withWriteThroughputCalculationDelayDuration(Duration.ofMinutes(2))
@@ -50,13 +69,20 @@ public abstract class BaseSocketTest extends BaseTest {
         //noinspection ExtractMethodRecommender
         var result = "";
         // Chunk in 100 byte increments. Using a smaller chunk size to ensure we don't end up with a single chunk.
-        for (var i = 0; i < body.length(); i += 100) {
-          var endIndex = Math.min(i + 100, body.length());
+        int chunkSize = 100;
+        for (var i = 0; i < body.length(); i += chunkSize) {
+          var endIndex = Math.min(i + chunkSize, body.length());
           var chunk = body.substring(i, endIndex);
           var chunkLength = chunk.getBytes(StandardCharsets.UTF_8).length;
           String hex = Integer.toHexString(chunkLength);
           //noinspection StringConcatenationInLoop
-          result += (hex + "\r\n" + body.substring(i, endIndex) + "\r\n");
+          result += hex;
+
+          if (chunkedExtension != null) {
+            result += chunkedExtension;
+          }
+
+          result += ("\r\n" + chunk + "\r\n");
         }
         body = result + "0\r\n\r\n";
       }
@@ -66,17 +92,14 @@ public abstract class BaseSocketTest extends BaseTest {
 
       var os = socket.getOutputStream();
       os.write(request.getBytes(StandardCharsets.UTF_8));
-      os.flush();
 
       assertHTTPResponseEquals(socket, response);
     }
   }
 
-  protected Builder withRequest(String request) {
-    return new Builder(request);
-  }
-
   protected class Builder {
+    public String chunkedExtension;
+
     public String request;
 
     public Builder(String request) {
@@ -84,7 +107,12 @@ public abstract class BaseSocketTest extends BaseTest {
     }
 
     public void expectResponse(String response) throws Exception {
-      assertResponse(request, response);
+      assertResponse(request, chunkedExtension, response);
+    }
+
+    public Builder withChunkedExtension(String extension) {
+      chunkedExtension = extension;
+      return this;
     }
   }
 }

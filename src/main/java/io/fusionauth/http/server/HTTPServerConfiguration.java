@@ -34,6 +34,8 @@ public class HTTPServerConfiguration implements Configurable<HTTPServerConfigura
 
   private Path baseDir = Path.of("");
 
+  private int chunkedBufferSize = 4 * 1024; // 4k bytes
+
   private boolean compressByDefault = true;
 
   private String contextPath = "";
@@ -89,6 +91,10 @@ public class HTTPServerConfiguration implements Configurable<HTTPServerConfigura
     return baseDir;
   }
 
+  public int getChunkedBufferSize() {
+    return chunkedBufferSize;
+  }
+
   /**
    * @return The context page that the entire server serves requests under or null.
    */
@@ -97,7 +103,7 @@ public class HTTPServerConfiguration implements Configurable<HTTPServerConfigura
   }
 
   /**
-   * @return The expect validator or null.
+   * @return The expect validator. Cannot be null and is required.
    */
   public ExpectValidator getExpectValidator() {
     return expectValidator;
@@ -270,6 +276,19 @@ public class HTTPServerConfiguration implements Configurable<HTTPServerConfigura
    * {@inheritDoc}
    */
   @Override
+  public HTTPServerConfiguration withChunkedBufferSize(int chunkedBufferSize) {
+    if (chunkedBufferSize <= 1024) {
+      throw new IllegalArgumentException("The chunked buffer size must be greater than or equal to 1024 bytes");
+    }
+
+    this.chunkedBufferSize = chunkedBufferSize;
+    return this;
+  }
+
+  /**
+   * {@inheritDoc}
+   */
+  @Override
   public HTTPServerConfiguration withCompressByDefault(boolean compressByDefault) {
     this.compressByDefault = compressByDefault;
     return this;
@@ -289,6 +308,7 @@ public class HTTPServerConfiguration implements Configurable<HTTPServerConfigura
    */
   @Override
   public HTTPServerConfiguration withExpectValidator(ExpectValidator validator) {
+    Objects.requireNonNull(handler, "You cannot set ExpectValidator to null");
     this.expectValidator = validator;
     return this;
   }
@@ -385,8 +405,6 @@ public class HTTPServerConfiguration implements Configurable<HTTPServerConfigura
    */
   @Override
   public HTTPServerConfiguration withMaximumBytesToDrain(int maxBytesToDrain) {
-    // TODO : Daniel : Review : This is a large number... any opinion on this limit?
-    //        The JDK HTTP server defaults to 64k. See ServerConfig.DEFAULT_DRAIN_AMOUNT
     if (maxBytesToDrain <= 1024 || maxBytesToDrain >= 256 * 1024 * 1024) {
       throw new IllegalArgumentException("The maximum bytes to drain must be greater than or equal to 1024 and less than or equal to 268,435,456 (256 megabytes)");
     }

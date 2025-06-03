@@ -15,6 +15,7 @@
  */
 package io.fusionauth.http;
 
+import org.testng.annotations.DataProvider;
 import org.testng.annotations.Test;
 
 /**
@@ -37,6 +38,18 @@ public class HTTP11SocketTest extends BaseSocketTest {
         content-length: 0\r
         \r
         """);
+  }
+
+  @DataProvider(name = "chunk-extensions")
+  public Object[][] chunkExtensions() {
+    return new Object[][]{
+        {";foo=bar"},          // Single extension
+        {";foo"},              // Single extension, no value
+        {";foo="},             // Single extension, no value, with =
+        {";foo=bar;bar=baz"},  // Two extensions
+        {";foo=bar;bar="},     // Two extensions, second no value
+        {";foo=bar;bar"},      // Two extensions, second no value, with =
+    };
   }
 
   @Test
@@ -68,6 +81,7 @@ public class HTTP11SocketTest extends BaseSocketTest {
         Host: cyberdyne-systems.com\r
         Host: cyberdyne-systems.com\r
         Content-Type: plain/text\r
+        Transfer-Encoding: chunked\r
         Content-Length: {contentLength}\r
         \r
         {body}
@@ -349,6 +363,26 @@ public class HTTP11SocketTest extends BaseSocketTest {
         content-length: 0\r
         \r
         """);
+  }
+
+  @Test(dataProvider = "chunk-extensions")
+  public void transfer_encoding_chunked_extensions(String chunkExtension) throws Exception {
+    // Ensure we can properly ignore chunked extensions
+    withRequest("""
+        GET / HTTP/1.1\r
+        Host: cyberdyne-systems.com\r
+        Content-Type: plain/text\r
+        Transfer-Encoding: chunked\r
+        \r
+        {body}
+        """
+    ).withChunkedExtension(chunkExtension)
+     .expectResponse("""
+         HTTP/1.1 200 \r
+         connection: keep-alive\r
+         content-length: 0\r
+         \r
+         """);
   }
 
   /**

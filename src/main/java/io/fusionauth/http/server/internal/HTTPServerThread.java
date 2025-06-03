@@ -117,12 +117,6 @@ public class HTTPServerThread extends Thread {
                               .name("HTTP client [" + clientSocket.getRemoteSocketAddress() + "]")
                               .start(runnable);
 
-        // TODO : Daniel : Review : Tomcat has a config for maxConnections which is the maximum number of active connections that can be "worked"
-        //        I think the size of clients would be equivalent to 'maxConnections'. We may want to add this config. Tomcat defaults to 8192.
-        //        Tomcat also has 'maxThreads' which defaults to 200 - this is per "connector", not sure how this is different than maxConnections.
-        //        Reading doc, perhaps 'maxConnections' is across all listeners (connectors)? So maybe we go close to the maxThreads config which is 200.
-        //        Without a config, we may be vulnerable to a DOS attack, so if we did want to do something, I would suggest using a blocking queue
-        //        for the clients collection and cause it to block when we reach capacity.
         clients.add(new ClientInfo(client, runnable, throughput));
       } catch (SocketTimeoutException ignore) {
         // Completely smother since this is expected with the SO_TIMEOUT setting in the constructor

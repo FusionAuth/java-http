@@ -57,7 +57,7 @@ public class Main {
       // Try to report every 15 seconds. If nothing has changed, skip.
       do {
         //noinspection BusyWait
-        Thread.sleep(Duration.ofSeconds(15).toMillis());
+        Thread.sleep(Duration.ofSeconds(2).toMillis());
 
         // Cut down on noise if we are not running any requests.
         var snapshot = new Snapshot(instrumenter);
@@ -88,7 +88,10 @@ public class Main {
       Files.createFile(outputFile);
     }
 
-    System.out.println("Server instrumentation output file. Watch this file for server statistics during your load test.\n - " + outputFile);
+    System.out.println("""
+        Server instrumentation output file created. Watch this file for server statistics during your load test.
+        > watch cat {outputFile}
+        """.replace("{outputFile}", outputFile.toString()));
     return outputFile;
   }
 
@@ -98,24 +101,24 @@ public class Main {
             -------------------------------------------
              - Servers started:    [%,d]
              - Active workers:     [%,d]
+             - Total connections:  [%,d]
              - Accepted requests:  [%,d]
              - Bad requests:       [%,d]
+             - Closed connections: [%,d]
              - Chunked requests:   [%,d]
              - Chunked responses:  [%,d]
-             - Closed connections: [%,d]
-             - Total connections:  [%,d]
              - Bytes read:         [%,d]
              - Bytes written:      [%,d]
             """,
         snapshot.now,
-        snapshot.serversStarted,
-        snapshot.activeWorkers,
+        snapshot.servers,
+        snapshot.workers,
+        snapshot.acceptedConnections,
         snapshot.acceptedRequests,
         snapshot.badRequests,
+        snapshot.closedConnections,
         snapshot.chunkedRequests,
         snapshot.chunkedResponses,
-        snapshot.closedConnections,
-        snapshot.totalConnections,
         snapshot.bytesRead,
         snapshot.bytesWritten);
 
@@ -125,9 +128,9 @@ public class Main {
   }
 
   private static class Snapshot {
-    public long acceptedRequests;
+    public long acceptedConnections;
 
-    public long activeWorkers;
+    public long acceptedRequests;
 
     public long badRequests;
 
@@ -143,20 +146,20 @@ public class Main {
 
     public long now;
 
-    public long serversStarted;
+    public long servers;
 
-    public long totalConnections;
+    public long workers;
 
     public Snapshot(ThreadSafeCountingInstrumenter instrumenter) {
       now = System.currentTimeMillis();
-      serversStarted = instrumenter.getStartedCount();
-      activeWorkers = instrumenter.getThreadCount();
+      servers = instrumenter.getServers();
+      workers = instrumenter.getWorkers();
+      acceptedConnections = instrumenter.getAcceptedConnections();
       acceptedRequests = instrumenter.getAcceptedRequests();
       badRequests = instrumenter.getBadRequests();
       chunkedRequests = instrumenter.getChunkedRequests();
       chunkedResponses = instrumenter.getChunkedResponses();
       closedConnections = instrumenter.getClosedConnections();
-      totalConnections = instrumenter.getConnections();
       bytesRead = instrumenter.getBytesRead();
       bytesWritten = instrumenter.getBytesWritten();
     }
@@ -167,12 +170,12 @@ public class Main {
         return false;
       }
       Snapshot snapshot = (Snapshot) o;
-      return now == snapshot.now && serversStarted == snapshot.serversStarted && activeWorkers == snapshot.activeWorkers && acceptedRequests == snapshot.acceptedRequests && badRequests == snapshot.badRequests && chunkedRequests == snapshot.chunkedRequests && chunkedResponses == snapshot.chunkedResponses && closedConnections == snapshot.closedConnections && totalConnections == snapshot.totalConnections && bytesRead == snapshot.bytesRead && bytesWritten == snapshot.bytesWritten;
+      return now == snapshot.now && servers == snapshot.servers && workers == snapshot.workers && acceptedRequests == snapshot.acceptedRequests && badRequests == snapshot.badRequests && chunkedRequests == snapshot.chunkedRequests && chunkedResponses == snapshot.chunkedResponses && closedConnections == snapshot.closedConnections && acceptedConnections == snapshot.acceptedConnections && bytesRead == snapshot.bytesRead && bytesWritten == snapshot.bytesWritten;
     }
 
     @Override
     public int hashCode() {
-      return Objects.hash(now, serversStarted, activeWorkers, acceptedRequests, badRequests, chunkedRequests, chunkedResponses, closedConnections, totalConnections, bytesRead, bytesWritten);
+      return Objects.hash(now, servers, workers, acceptedRequests, badRequests, chunkedRequests, chunkedResponses, closedConnections, acceptedConnections, bytesRead, bytesWritten);
     }
   }
 }

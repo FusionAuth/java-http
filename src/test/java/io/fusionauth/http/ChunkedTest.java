@@ -28,7 +28,6 @@ import java.nio.charset.StandardCharsets;
 import java.nio.file.Files;
 import java.nio.file.Path;
 import java.nio.file.Paths;
-import java.util.function.Supplier;
 
 import com.inversoft.net.ssl.SSLTools;
 import com.inversoft.rest.RESTClient;
@@ -43,35 +42,95 @@ import static org.testng.Assert.assertTrue;
 import static org.testng.Assert.fail;
 
 /**
- * Tests the HTTP server.
+ * Tests various chunked Transfer-Encoding capabilities of the HTTP server.
  *
  * @author Brian Pontarelli
  */
 public class ChunkedTest extends BaseTest {
   public static final String ExpectedResponse = "{\"version\":\"42\"}";
 
-  public static final String RequestBody = "{\"message\":\"Hello World\"";
+  public static final String RequestBody = "{\"message\":\"Hello World\"}";
+
+  @SuppressWarnings({"SpellCheckingInspection", "GrazieInspection"})
+  @Test(dataProvider = "schemes")
+  public void chunkedRequest_doNotReadTheInputStream(String scheme) throws Exception {
+    // Use a large chunked request
+    String responseBody = "These pretzels are making me thirsty. ".repeat(16_000);
+    byte[] responseBodyBytes = responseBody.getBytes(StandardCharsets.UTF_8);
+
+    HTTPHandler handler = (req, res) -> {
+      assertTrue(req.isChunked());
+
+      //
+      // Nobody read the InputStream, the InputStream has gone bad!
+      //                        - William Lichter (Can't Hardly Wait)
+
+      // This will cause us to have to drain the entire InputStream.
+
+      byte[] responseBytes = ExpectedResponse.getBytes(StandardCharsets.UTF_8);
+      res.setHeader(Headers.ContentType, "application/json");
+      res.setHeader("Content-Length", responseBytes.length + "");
+      res.setStatus(200);
+
+      try {
+        OutputStream outputStream = res.getOutputStream();
+        outputStream.write(responseBytes);
+      } catch (IOException e) {
+        throw new RuntimeException(e);
+      }
+    };
+
+    CountingInstrumenter instrumenter = new CountingInstrumenter();
+    try (var client = makeClient(scheme, null); HTTPServer ignore = makeServer(scheme, handler, instrumenter)
+        // Ensure we can drain the entire body. In practice, the number of bytes drained will be larger than the body
+        // because it is encoded using Transfer-Encoding: chunked which contains other data. So double it for good measure.
+        .withMaximumBytesToDrain(responseBodyBytes.length * 2)
+        .start()) {
+      URI uri = makeURI(scheme, "");
+
+      // This ensures we are not just passing the test because we interrupt the InputStream and cause it to not hang.
+      for (int i = 0; i < 1_000; i++) {
+        var response = client.send(HttpRequest.newBuilder()
+                                              .uri(uri)
+                                              .header(Headers.ContentType, "text/plain")
+                                              .POST(BodyPublishers.ofInputStream(() ->
+                                                  new ByteArrayInputStream(responseBodyBytes)))
+                                              .build(),
+            r -> BodySubscribers.ofString(StandardCharsets.UTF_8)
+        );
+
+        assertEquals(response.statusCode(), 200);
+        assertEquals(response.body(), ExpectedResponse);
+        // We didn't read the InputStream, but the drain() will have - so this will count as a chunkedRequest.
+        assertEquals(instrumenter.getChunkedRequests(), i + 1);
+      }
+    }
+  }
 
   @Test(dataProvider = "schemes")
   public void chunkedRequest(String scheme) throws Exception {
+    // Use a large chunked request
+    String responseBody = "These pretzels are making me thirsty. ".repeat(16_000);
+    byte[] responseBodyBytes = responseBody.getBytes(StandardCharsets.UTF_8);
+
     HTTPHandler handler = (req, res) -> {
       assertTrue(req.isChunked());
 
       try {
         byte[] body = req.getInputStream().readAllBytes();
-        assertEquals(new String(body), RequestBody);
+        assertEquals(body, responseBodyBytes);
       } catch (IOException e) {
         fail("Unable to parse body", e);
       }
 
-      res.setHeader(Headers.ContentType, "text/plain");
-      res.setHeader("Content-Length", "16");
+      byte[] responseBytes = ExpectedResponse.getBytes(StandardCharsets.UTF_8);
+      res.setHeader(Headers.ContentType, "application/json");
+      res.setHeader("Content-Length", responseBytes.length + "");
       res.setStatus(200);
 
       try {
         OutputStream outputStream = res.getOutputStream();
-        outputStream.write(ExpectedResponse.getBytes());
-        outputStream.close();
+        outputStream.write(responseBytes);
       } catch (IOException e) {
         throw new RuntimeException(e);
       }
@@ -80,15 +139,22 @@ public class ChunkedTest extends BaseTest {
     CountingInstrumenter instrumenter = new CountingInstrumenter();
     try (var client = makeClient(scheme, null); HTTPServer ignore = makeServer(scheme, handler, instrumenter).start()) {
       URI uri = makeURI(scheme, "");
-      Supplier<InputStream> supplier = () -> new ByteArrayInputStream(RequestBody.getBytes());
-      var response = client.send(
-          HttpRequest.newBuilder().uri(uri).header(Headers.ContentType, "application/json").POST(BodyPublishers.ofInputStream(supplier)).build(),
-          r -> BodySubscribers.ofString(StandardCharsets.UTF_8)
-      );
 
-      assertEquals(response.statusCode(), 200);
-      assertEquals(response.body(), ExpectedResponse);
-      assertEquals(instrumenter.getChunkedRequests(), 1);
+      // This ensures we are not just passing the test because we interrupt the InputStream and cause it to not hang.
+      for (int i = 0; i < 1_000; i++) {
+        var response = client.send(HttpRequest.newBuilder()
+                                              .uri(uri)
+                                              .header(Headers.ContentType, "text/plain")
+                                              .POST(BodyPublishers.ofInputStream(() ->
+                                                  new ByteArrayInputStream(responseBodyBytes)))
+                                              .build(),
+            r -> BodySubscribers.ofString(StandardCharsets.UTF_8)
+        );
+
+        assertEquals(response.statusCode(), 200);
+        assertEquals(response.body(), ExpectedResponse);
+        assertEquals(instrumenter.getChunkedRequests(), (i + 1));
+      }
     }
   }
 
@@ -223,6 +289,7 @@ public class ChunkedTest extends BaseTest {
 
   @Test(dataProvider = "schemes", groups = "performance")
   public void performanceChunked(String scheme) throws Exception {
+    verbose = true;
     String responseBody = "These pretzels are making me thirsty. ".repeat(16_000);
     byte[] responseBodyBytes = responseBody.getBytes(StandardCharsets.UTF_8);
 
@@ -270,15 +337,75 @@ public class ChunkedTest extends BaseTest {
       // HTTP
       // Chunked Performance: Iterations [15,000] Response body [608,000] bytes. Final average is [0.563467] ms.
       // Chunked Performance: Iterations [15,000] Response body [608,000] bytes. Final average is [0.572667] ms
+      // - With updates to ChunkedInputStream to read 1 byte at a time until we find the chunkSize
+      // Chunked Performance: Iterations [15,000] Response body [608,000] bytes. Final average is [0.567000] ms.
+      // - With updates to loop on processChunk
+      // Chunked Performance: Iterations [15,000] Response body [608,000] bytes. Final average is [0.587400] ms.
+      // Chunked Performance: Iterations [15,000] Response body [608,000] bytes. Final average is [0.588800] ms.
+      // - With only a larger buffer size
+      // Chunked Performance: Iterations [15,000] Response body [608,000] bytes. Final average is [0.560933] ms.
 
       // HTTPS
       // Chunked Performance: Iterations [15,000] Response body [608,000] bytes. Final average is [0.998800] ms.
       // Chunked Performance: Iterations [15,000] Response body [608,000] bytes. Final average is [1.025333] ms.
+      // - With updates to ChunkedInputStream to read 1 byte at a time until we find the chunkSize
+      // Chunked Performance: Iterations [15,000] Response body [608,000] bytes. Final average is [1.047000] ms.
+      // - With updates to loop on processChunk
+      // Chunked Performance: Iterations [15,000] Response body [608,000] bytes. Final average is [0.984133] ms.
+      // Chunked Performance: Iterations [15,000] Response body [608,000] bytes. Final average is [0.997933] ms.
+      // - With only a larger buffer size
+      // Chunked Performance: Iterations [15,000] Response body [608,000] bytes. Final average is [1.000400] ms.
     }
 
     // We are using keep-alive, so expect 1 connection, and the total requests accepted, and chunked responses should equal the iteration count.
     assertEquals(instrumenter.getConnections(), 1);
     assertEquals(instrumenter.getChunkedResponses(), iterations);
     assertEquals(instrumenter.getAcceptedRequests(), iterations);
+  }
+
+  @Test(dataProvider = "schemes")
+  public void smallChunkedRequest(String scheme) throws Exception {
+    // Use a very small chunked request. This is testing various buffer sizes.
+
+    HTTPHandler handler = (req, res) -> {
+      assertTrue(req.isChunked());
+
+      try {
+        byte[] body = req.getInputStream().readAllBytes();
+        assertEquals(new String(body), RequestBody);
+      } catch (IOException e) {
+        fail("Unable to parse body", e);
+      }
+
+      byte[] responseBytes = ExpectedResponse.getBytes(StandardCharsets.UTF_8);
+      res.setHeader(Headers.ContentType, "application/json");
+      res.setHeader("Content-Length", responseBytes.length + "");
+      res.setStatus(200);
+
+      try {
+        OutputStream outputStream = res.getOutputStream();
+        outputStream.write(responseBytes);
+      } catch (IOException e) {
+        throw new RuntimeException(e);
+      }
+    };
+
+    CountingInstrumenter instrumenter = new CountingInstrumenter();
+    try (var client = makeClient(scheme, null); HTTPServer ignore = makeServer(scheme, handler, instrumenter).start()) {
+      URI uri = makeURI(scheme, "");
+      var response = client.send(
+          HttpRequest.newBuilder()
+                     .uri(uri)
+                     .header(Headers.ContentType, "application/json")
+                     .POST(BodyPublishers.ofInputStream(() ->
+                         new ByteArrayInputStream(RequestBody.getBytes())))
+                     .build(),
+          r -> BodySubscribers.ofString(StandardCharsets.UTF_8)
+      );
+
+      assertEquals(response.statusCode(), 200);
+      assertEquals(response.body(), ExpectedResponse);
+      assertEquals(instrumenter.getChunkedRequests(), 1);
+    }
   }
 }

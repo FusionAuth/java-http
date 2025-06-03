@@ -284,6 +284,7 @@ public class HTTPResponse {
   /**
    * Reset the OutputStream.
    */
+  // TODO : Daniel : Review : This is used by prime-mvc. Is there any other way to handle this?
   public void resetOutputStream() {
     if (outputStream.isCommitted()) {
       throw new IllegalStateException("The HTTPResponse can't be reset after it has been committed, meaning at least one byte was written back to the client.");

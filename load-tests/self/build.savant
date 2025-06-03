@@ -86,3 +86,9 @@ target(name: "start", description: "Starts the java-http server for load testing
     fail("Unable to start the server!")
   }
 }
+
+target(name: "suspend", description: "Starts the java-http server for load testing! ", dependsOn: ["app"]) {
+  if (new ProcessBuilder('./start.sh', '--suspend').directory(new File("build/dist")).inheritIO().start().waitFor() != 0) {
+    fail("Unable to start the server!")
+  }
+}

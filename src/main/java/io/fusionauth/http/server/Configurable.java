@@ -47,6 +47,17 @@ public interface Configurable<T extends Configurable<T>> {
   }
 
   /**
+   * Sets the buffer size for the chunked input stream. Defaults to 4k.
+   *
+   * @param chunkedBufferSize the buffer size used to read a request body that was encoded using 'chunked' transfer-encoding.
+   * @return This.
+   */
+  default T withChunkedBufferSize(int chunkedBufferSize) {
+    configuration().withChunkedBufferSize(chunkedBufferSize);
+    return (T) this;
+  }
+
+  /**
    * Sets the default compression behavior for the HTTP response. This behavior can be optionally set per response. See
    * {@link HTTPResponse#setCompress(boolean)}. Defaults to true.
    *
@@ -73,12 +84,12 @@ public interface Configurable<T extends Configurable<T>> {
 
   /**
    * Sets an ExpectValidator that is used if a client sends the server a {@code Expect: 100-continue} header.
+   * <p>
+   * Must not be null.
    *
    * @param validator The validator.
    * @return This.
    */
-  // TODO : Daniel : Review : It would be cool to offer some additional methods such as withOptionalExpectValidator?
-  //                 Or would there be another way that we could allow the caller to designate null as don't set?
   default T withExpectValidator(ExpectValidator validator) {
     configuration().withExpectValidator(validator);
     return (T) this;
@@ -86,6 +97,8 @@ public interface Configurable<T extends Configurable<T>> {
 
   /**
    * Sets the handler that will process the requests.
+   * <p>
+   * Must not be null.
    *
    * @param handler The handler that processes the requests.
    * @return This.

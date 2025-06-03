@@ -465,7 +465,7 @@ public abstract class BaseTest {
     var remainingBytes = is.readAllBytes();
     String fullResponse = actualResponse + new String(remainingBytes, StandardCharsets.UTF_8);
     // Use assertEquals so we can get Eclipse error formatting
-    assertEquals(expectedResponse, fullResponse);
+    assertEquals(fullResponse, expectedResponse);
   }
 
   @SuppressWarnings("unused")

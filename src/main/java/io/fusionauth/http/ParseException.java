@@ -23,6 +23,8 @@ package io.fusionauth.http;
 public class ParseException extends RuntimeException {
   private final String state;
 
+  private Integer index;
+
   public ParseException() {
     this.state = null;
   }
@@ -35,6 +37,22 @@ public class ParseException extends RuntimeException {
   public ParseException(String message, String state) {
     super(message);
     this.state = state;
+  }
+
+  public int getIndex() {
+    return index;
+  }
+
+  public void setIndex(int index) {
+    this.index = index;
+  }
+
+  public String getMessage() {
+    var message = super.getMessage();
+    if (index != null) {
+      message += " Occurred at index [" + index + "]";
+    }
+    return message;
   }
 
   public String getState() {
