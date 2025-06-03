@@ -74,7 +74,10 @@ public class ChunkedInputStream extends InputStream {
         // We need to push back any remaining bytes to the InputStream since we may have read more bytes than we needed.
         int leftOver = bufferLength - bufferIndex;
         if (leftOver > 0) {
-          ((PushbackInputStream) delegate).push(buffer, bufferIndex, leftOver);
+          // TODO : Daniel : Review : This doesn't seem like a good idea. It will fail silently, but this is required.
+          if (delegate instanceof PushbackInputStream pis) {
+            pis.push(buffer, bufferIndex, leftOver);
+          }
         }
 
         return -1;
@@ -106,7 +109,10 @@ public class ChunkedInputStream extends InputStream {
           // We need to push back any remaining bytes to the InputStream since we may have read more bytes than we needed.
           int leftOver = bufferLength - bufferIndex;
           if (leftOver > 0) {
-            ((PushbackInputStream) delegate).push(buffer, bufferIndex, leftOver);
+            // TODO : Daniel : Review : This doesn't seem like a good idea. It will fail silently, but this is required.
+            if (delegate instanceof PushbackInputStream pis) {
+              pis.push(buffer, bufferIndex, leftOver);
+            }
           }
           return -1;
         }

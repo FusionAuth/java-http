@@ -157,8 +157,10 @@ public class HTTPInputStream extends InputStream {
     if (!request.isChunked()) {
       int extraBytes = (int) (read - bytesRemaining);
       if (extraBytes > 0) {
-        // TODO : Daniel : I could set the ref type to PushBackInputStream so I don't have to cast.
-        ((PushbackInputStream) delegate).push(buffer, (int) bytesRemaining, extraBytes);
+        // TODO : Daniel : Review : This doesn't seem like a good idea. It will fail silently, but this is required.
+        if (delegate instanceof PushbackInputStream pis) {
+          pis.push(buffer, (int) bytesRemaining, extraBytes);
+        }
       }
     }
 
@@ -182,7 +184,6 @@ public class HTTPInputStream extends InputStream {
     } else if (request.isChunked()) {
       logger.trace("Client indicated it was sending an entity-body in the request. Handling body using chunked encoding.");
       delegate = new ChunkedInputStream(delegate, chunkedBufferSize);
-
       if (instrumenter != null) {
         instrumenter.chunkedRequest();
       }
