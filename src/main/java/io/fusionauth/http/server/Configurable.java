@@ -184,6 +184,18 @@ public interface Configurable<T extends Configurable<T>> {
   }
 
   /**
+   * Sets the base directory for this server. This is passed to the HTTPContext, which is available from this class. This defaults to the
+   * current working directory of the process. Defaults to 100,000.
+   *
+   * @param maxRequestsPerConnection The maximum number of requests that can be handled by a single persistent connection.
+   * @return This.
+   */
+  default T withMaxRequestsPerConnection(int maxRequestsPerConnection) {
+    configuration().withMaxRequestsPerConnection(maxRequestsPerConnection);
+    return (T) this;
+  }
+
+  /**
    * This configures the maximum size of a chunk in the response when the server is using chunked response encoding. Defaults to 16k.
    *
    * @param size The size in bytes.

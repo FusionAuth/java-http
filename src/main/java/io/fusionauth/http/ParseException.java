@@ -25,10 +25,6 @@ public class ParseException extends RuntimeException {
 
   private Integer index;
 
-  public ParseException() {
-    this.state = null;
-  }
-
   public ParseException(String message) {
     super(message);
     this.state = null;

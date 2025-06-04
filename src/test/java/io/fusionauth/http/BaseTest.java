@@ -350,11 +350,6 @@ public abstract class BaseTest {
       // Sockets are pretty resilient, so this will be closed by the server, but we'll just see that close are zero bytes read. If we were
       // to continue writing above, then that likely would throw an exception because the pipe would be broken
 
-      // TODO : Daniel :
-      //        In many cases we still return a 400 to the client when a request is invalid. So there will be bytes to read.
-      //        We could require the caller to provide and expect status code, and or response body.
-      //        Currently, this is just used by one test, so I have hard coded the expected response.
-
       byte[] buffer = is.readAllBytes();
       assertEquals(new String(buffer), """
           HTTP/1.1 400 \r

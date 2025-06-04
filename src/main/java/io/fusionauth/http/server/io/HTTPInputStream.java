@@ -106,26 +106,15 @@ public class HTTPInputStream extends InputStream {
 
     return total;
   }
-
+  private final byte[] b1 = new byte[1];
   @Override
   public int read() throws IOException {
-    // TODO : Daniel : Review : Does this work for chunked requests? bytesRemaining will be 0 if this is not a fixed length request.
-    // Signal end of the stream
-    if (bytesRemaining <= 0) {
-      return -1;
+    var read = read(b1);
+    if (read <= 0) {
+      return read;
     }
 
-    if (!committed) {
-      commit();
-    }
-
-    int b = delegate.read();
-    if (instrumenter != null) {
-      instrumenter.readFromClient(1);
-    }
-
-    bytesRemaining--;
-    return b;
+    return b1[0] & 0xFF;
   }
 
   @Override

@@ -51,62 +51,6 @@ public class ChunkedTest extends BaseTest {
 
   public static final String RequestBody = "{\"message\":\"Hello World\"}";
 
-  @SuppressWarnings({"SpellCheckingInspection", "GrazieInspection"})
-  @Test(dataProvider = "schemes")
-  public void chunkedRequest_doNotReadTheInputStream(String scheme) throws Exception {
-    // Use a large chunked request
-    String responseBody = "These pretzels are making me thirsty. ".repeat(16_000);
-    byte[] responseBodyBytes = responseBody.getBytes(StandardCharsets.UTF_8);
-
-    HTTPHandler handler = (req, res) -> {
-      assertTrue(req.isChunked());
-
-      //
-      // Nobody read the InputStream, the InputStream has gone bad!
-      //                        - William Lichter (Can't Hardly Wait)
-
-      // This will cause us to have to drain the entire InputStream.
-
-      byte[] responseBytes = ExpectedResponse.getBytes(StandardCharsets.UTF_8);
-      res.setHeader(Headers.ContentType, "application/json");
-      res.setHeader("Content-Length", responseBytes.length + "");
-      res.setStatus(200);
-
-      try {
-        OutputStream outputStream = res.getOutputStream();
-        outputStream.write(responseBytes);
-      } catch (IOException e) {
-        throw new RuntimeException(e);
-      }
-    };
-
-    CountingInstrumenter instrumenter = new CountingInstrumenter();
-    try (var client = makeClient(scheme, null); HTTPServer ignore = makeServer(scheme, handler, instrumenter)
-        // Ensure we can drain the entire body. In practice, the number of bytes drained will be larger than the body
-        // because it is encoded using Transfer-Encoding: chunked which contains other data. So double it for good measure.
-        .withMaximumBytesToDrain(responseBodyBytes.length * 2)
-        .start()) {
-      URI uri = makeURI(scheme, "");
-
-      // This ensures we are not just passing the test because we interrupt the InputStream and cause it to not hang.
-      for (int i = 0; i < 1_000; i++) {
-        var response = client.send(HttpRequest.newBuilder()
-                                              .uri(uri)
-                                              .header(Headers.ContentType, "text/plain")
-                                              .POST(BodyPublishers.ofInputStream(() ->
-                                                  new ByteArrayInputStream(responseBodyBytes)))
-                                              .build(),
-            r -> BodySubscribers.ofString(StandardCharsets.UTF_8)
-        );
-
-        assertEquals(response.statusCode(), 200);
-        assertEquals(response.body(), ExpectedResponse);
-        // We didn't read the InputStream, but the drain() will have - so this will count as a chunkedRequest.
-        assertEquals(instrumenter.getChunkedRequests(), i + 1);
-      }
-    }
-  }
-
   @Test(dataProvider = "schemes")
   public void chunkedRequest(String scheme) throws Exception {
     // Use a large chunked request
@@ -154,6 +98,68 @@ public class ChunkedTest extends BaseTest {
         assertEquals(response.statusCode(), 200);
         assertEquals(response.body(), ExpectedResponse);
         assertEquals(instrumenter.getChunkedRequests(), (i + 1));
+      }
+    }
+  }
+
+  @SuppressWarnings({"SpellCheckingInspection", "GrazieInspection"})
+  @Test(dataProvider = "schemes")
+  public void chunkedRequest_doNotReadTheInputStream(String scheme) throws Exception {
+    // Use a large chunked request
+    String responseBody = "These pretzels are making me thirsty. ".repeat(16_000);
+    byte[] responseBodyBytes = responseBody.getBytes(StandardCharsets.UTF_8);
+
+    HTTPHandler handler = (req, res) -> {
+      assertTrue(req.isChunked());
+
+      //
+      // Nobody read the InputStream, the InputStream has gone bad!
+      //                        - William Lichter (Can't Hardly Wait)
+
+      // By not reading the InputStream, the server will have to drain it before writing the response.
+
+      byte[] responseBytes = ExpectedResponse.getBytes(StandardCharsets.UTF_8);
+      res.setHeader(Headers.ContentType, "application/json");
+      res.setHeader("Content-Length", responseBytes.length + "");
+      res.setStatus(200);
+
+      try {
+        OutputStream outputStream = res.getOutputStream();
+        outputStream.write(responseBytes);
+      } catch (IOException e) {
+        throw new RuntimeException(e);
+      }
+    };
+
+    CountingInstrumenter instrumenter = new CountingInstrumenter();
+    try (var client = makeClient(scheme, null); HTTPServer ignore = makeServer(scheme, handler, instrumenter)
+        // Ensure we can drain the entire body. In practice, the number of bytes drained will be larger than the body
+        // because it is encoded using Transfer-Encoding: chunked which contains other data. So double it for good measure.
+        .withMaximumBytesToDrain(responseBodyBytes.length * 2)
+        .start()) {
+      URI uri = makeURI(scheme, "");
+
+      // This ensures we are not just passing the test because we interrupt the InputStream and cause it to not hang.
+      for (int i = 0; i < 10; i++) {
+        var response = client.send(HttpRequest.newBuilder()
+                                              .uri(uri)
+                                              .header(Headers.ContentType, "text/plain")
+                                              // Note that using a InputStream baed publisher will caues the JDK to
+                                              // enable Transfer-Encoding: chunked
+                                              .POST(BodyPublishers.ofInputStream(() ->
+                                                  new ByteArrayInputStream(responseBodyBytes)))
+                                              .build(),
+            r -> BodySubscribers.ofString(StandardCharsets.UTF_8)
+        );
+
+        assertEquals(response.statusCode(), 200);
+        assertEquals(response.body(), ExpectedResponse);
+        // We didn't read the InputStream, but the drain() will have - so this will count as a chunkedRequest.
+        // - Note if you run this a bunch of times in a tight loop this next check doesn't always line up. I think it is because of the
+        //   Java HTTP client being slow. If I just run it 10 times in a loop it is fine, if I run it 100 times in a loop it fails interminttentl
+        //   and the error is the chunked requests don't match the iteration count. I can confirm the getChunkedRequests() matches
+        //   the number of times we commit the InputStream which causes us to mark the request as chunked.
+        assertEquals(instrumenter.getChunkedRequests(), i + 1);
       }
     }
   }

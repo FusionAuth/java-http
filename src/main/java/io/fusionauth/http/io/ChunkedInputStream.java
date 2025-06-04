@@ -18,6 +18,7 @@ package io.fusionauth.http.io;
 import java.io.IOException;
 import java.io.InputStream;
 
+import io.fusionauth.http.ChunkException;
 import io.fusionauth.http.ParseException;
 import io.fusionauth.http.util.HTTPTools;
 import static io.fusionauth.http.util.HTTPTools.makeParseException;
@@ -75,6 +76,13 @@ public class ChunkedInputStream extends InputStream {
         int leftOver = bufferLength - bufferIndex;
         if (leftOver > 0) {
           // TODO : Daniel : Review : This doesn't seem like a good idea. It will fail silently, but this is required.
+          //        Discuss with Brian.
+          //        .
+          //        Options:
+          //         - Leave as is
+          //         - Throw a OverReadException that is caught by the HTTPInputStream which has a typed ref to PushbackInputStream and handled.
+          //         - Keep a typed ref for PushbackInputStream, but this messes up the 'commit' path in HTTPInputStream that swaps the pointer.
+          //                So we could re-work how we handle a chunked request body - instead of swapping out pointers we do something else?
           if (delegate instanceof PushbackInputStream pis) {
             pis.push(buffer, bufferIndex, leftOver);
           }
@@ -110,6 +118,7 @@ public class ChunkedInputStream extends InputStream {
           int leftOver = bufferLength - bufferIndex;
           if (leftOver > 0) {
             // TODO : Daniel : Review : This doesn't seem like a good idea. It will fail silently, but this is required.
+            //        Discuss with Brian.
             if (delegate instanceof PushbackInputStream pis) {
               pis.push(buffer, bufferIndex, leftOver);
             }
@@ -155,6 +164,10 @@ public class ChunkedInputStream extends InputStream {
 
         // TODO : If we wanted to handle more than one chunk at a time, I think we would potentially continue here
         //        and see if we can get more than one chunk completed before copying back to the destination.
+        //        Discuss with Brian.
+        //        Should we try this right now, or is this ok? Load testing with a small body,
+        //        Chunked is slower than fixed length, I suppose this makes sense. In practice I don't think browsers
+        //        and such use chunked for small requests.
 
         System.arraycopy(buffer, bufferIndex, destination, offset, lengthToCopy);
         bufferIndex += lengthToCopy;

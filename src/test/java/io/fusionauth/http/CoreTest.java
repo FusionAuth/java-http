@@ -118,12 +118,14 @@ public class CoreTest extends BaseTest {
       // - This should cause the socket to be reset
       // TODO : If we return a 400 since this is a client error and not a server error we are not currently resetting the request.
       //        Do we need to?
+      //        Discuss with Brian?
       sendBadRequest("""
           GET / HTTP/1.1\r
           X-Bad-Header: Bad-Header\r\r
           """);
 
       // TODO : Daniel : Review : What is this test doing? If I comment out reset() in HTTPWorker.close() the test still passes.
+      //        Discuss with Brian?
       URI uri = makeURI("http", "");
       HttpRequest request = HttpRequest.newBuilder()
                                        .uri(uri)
@@ -337,6 +339,39 @@ public class CoreTest extends BaseTest {
         println(response.exception);
       }
       assertEquals(response.status, 200);
+    }
+  }
+
+  @Test
+  public void keepAlive_maxRequests() throws Exception {
+    // While using a persistent connection, exceed the configured maximum requests per connection.
+    // - Expect the request is closed as if we had reached a keep-alive timeout.
+
+    // Allow up to 10 requests per connection
+    int maxRequests = 10;
+
+    HTTPHandler handler = (req, res) -> res.setStatus(200);
+    try (var ignore = makeServer("http", handler)
+        .withMaxRequestsPerConnection(maxRequests)
+        .withKeepAliveTimeoutDuration(Duration.ofSeconds(60))
+        .start();
+         var client = makeClient("http", null)) {
+
+      URI uri = makeURI("http", "");
+      HttpRequest request = HttpRequest.newBuilder()
+                                       .uri(uri)
+                                       .GET()
+                                       .build();
+
+      // All but the last request will keep the 'keep-alive' response header.
+      // - The last request will be 'close'
+      for (int i = 1; i <= maxRequests; i++) {
+        var response = client.send(request, r -> BodySubscribers.ofString(StandardCharsets.UTF_8));
+        assertEquals(response.statusCode(), 200);
+        assertEquals(response.headers().firstValue(Headers.Connection).get(), maxRequests == i ? Connections.Close : Connections.KeepAlive);
+      }
+
+      // Note that this test is not actually proving we closed the socket. To do that I'd have to use a socket directly.
     }
   }
 

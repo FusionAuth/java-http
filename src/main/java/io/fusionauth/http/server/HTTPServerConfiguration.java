@@ -52,9 +52,11 @@ public class HTTPServerConfiguration implements Configurable<HTTPServerConfigura
 
   private LoggerFactory loggerFactory = SystemOutLoggerFactory.FACTORY;
 
-  private int maxBytesToDrain = 128 * 1024; // 128k bytes
+  private int maxBytesToDrain = 256 * 1024; // 256k bytes
 
-  private int maxPendingSocketConnections = 200;
+  private int maxPendingSocketConnections = 250;
+
+  private int maxRequestsPerConnection = 100_000; // 100,000
 
   private int maxResponseChunkSize = 16 * 1024; // 16k bytes
 
@@ -68,9 +70,9 @@ public class HTTPServerConfiguration implements Configurable<HTTPServerConfigura
 
   private Duration readThroughputCalculationDelayDuration = Duration.ofSeconds(5);
 
-  private int requestBufferSize = 16 * 1024;
+  private int requestBufferSize = 16 * 1024; // 16k bytes
 
-  private int responseBufferSize = 64 * 1024;
+  private int responseBufferSize = 64 * 1024; // 16k bytes
 
   private Duration shutdownDuration = Duration.ofSeconds(10);
 
@@ -159,7 +161,7 @@ public class HTTPServerConfiguration implements Configurable<HTTPServerConfigura
   /**
    * @return The maximum number of bytes to drain from the InputStream when the request handler did not read all available bytes and the
    *     connection is using a keep-alive which means the server must drain the InputStream in preparation for the next request. Defaults to
-   *     128k.
+   *     256k.
    */
   public int getMaxBytesToDrain() {
     return maxBytesToDrain;
@@ -172,10 +174,20 @@ public class HTTPServerConfiguration implements Configurable<HTTPServerConfigura
    * accepted by the server socket, a client socket is created and handed to an HTTP Worker. This queue length only needs to be large enough
    * to buffer the incoming requests as fast as we can accept them and hand them to a worker.
    *
-   * @return The maximum number of pending socket connections per HTTP listener. Defaults to 200.
+   * @return The maximum number of pending socket connections per HTTP listener. Defaults to 250.
    */
   public int getMaxPendingSocketConnections() {
     return maxPendingSocketConnections;
+  }
+
+  /**
+   * This limit only applies when using a persistent connection. If this number is reached without hitting a Keep-Alive timeout the
+   * connection will be closed just as it would be if the Keep-Alive timeout was reached.
+   *
+   * @return The maximum number of requests that can be handled by a single persistent connection. Defaults to 100,000.
+   */
+  public int getMaxRequestsPerConnection() {
+    return maxRequestsPerConnection;
   }
 
   /**
@@ -390,7 +402,24 @@ public class HTTPServerConfiguration implements Configurable<HTTPServerConfigura
    */
   @Override
   public HTTPServerConfiguration withMaxPendingSocketConnections(int maxPendingSocketConnections) {
+    if (maxPendingSocketConnections < 25) {
+      throw new IllegalArgumentException("The minimum pending socket connections must be greater than or equal to 25");
+    }
+
     this.maxPendingSocketConnections = maxPendingSocketConnections;
+    return this;
+  }
+
+  /**
+   * {@inheritDoc}
+   */
+  @Override
+  public HTTPServerConfiguration withMaxRequestsPerConnection(int maxRequestsPerConnection) {
+    if (maxRequestsPerConnection < 10) {
+      throw new IllegalArgumentException("The maximum number of requests per connection must be greater than or equal to 10");
+    }
+
+    this.maxRequestsPerConnection = maxRequestsPerConnection;
     return this;
   }
 

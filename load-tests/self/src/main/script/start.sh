@@ -36,7 +36,7 @@ for f in lib/*.jar; do
 done
 
 suspend=""
-if [[ $# -gte 1 && $1 == "--suspend" ]]; then
+if [[ $# -ge 1 && $1 == "--suspend" ]]; then
   suspend="-agentlib:jdwp=transport=dt_socket,server=y,suspend=y,address=8000"
   shift
 fi

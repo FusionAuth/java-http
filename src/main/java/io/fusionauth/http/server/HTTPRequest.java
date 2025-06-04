@@ -38,6 +38,7 @@ import java.util.SortedSet;
 import java.util.TreeSet;
 import java.util.stream.Collectors;
 
+import io.fusionauth.http.BodyException;
 import io.fusionauth.http.Buildable;
 import io.fusionauth.http.Cookie;
 import io.fusionauth.http.FileInfo;
@@ -47,7 +48,6 @@ import io.fusionauth.http.HTTPValues.ContentTypes;
 import io.fusionauth.http.HTTPValues.Headers;
 import io.fusionauth.http.HTTPValues.Protocols;
 import io.fusionauth.http.HTTPValues.TransferEncodings;
-import io.fusionauth.http.io.BodyException;
 import io.fusionauth.http.io.MultipartStream;
 import io.fusionauth.http.util.HTTPTools;
 import io.fusionauth.http.util.HTTPTools.HeaderValue;

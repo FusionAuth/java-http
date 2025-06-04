@@ -22,6 +22,8 @@ import java.net.SocketException;
 import java.net.SocketTimeoutException;
 
 import io.fusionauth.http.ConnectionClosedException;
+import io.fusionauth.http.server.HTTPRequest;
+import io.fusionauth.http.server.HTTPResponse;
 import io.fusionauth.http.HTTPValues;
 import io.fusionauth.http.HTTPValues.Connections;
 import io.fusionauth.http.HTTPValues.Headers;
@@ -32,8 +34,6 @@ import io.fusionauth.http.io.PushbackInputStream;
 import io.fusionauth.http.log.Logger;
 import io.fusionauth.http.server.HTTPHandler;
 import io.fusionauth.http.server.HTTPListenerConfiguration;
-import io.fusionauth.http.server.HTTPRequest;
-import io.fusionauth.http.server.HTTPResponse;
 import io.fusionauth.http.server.HTTPServerConfiguration;
 import io.fusionauth.http.server.Instrumenter;
 import io.fusionauth.http.server.io.HTTPInputStream;
@@ -184,11 +184,14 @@ public class HTTPWorker implements Runnable {
         logger.trace("[{}] Set state [{}]. Call the request handler.", Thread.currentThread().threadId(), state);
         configuration.getHandler().handle(request, response);
         logger.trace("[{}] Handler completed successfully", Thread.currentThread().threadId());
-        response.close();
 
-        // TODO : Daniel : Test
-        //                 Send a request body -> Handler ignores - does not read InputStream
-        //                 Handler, writes a large response. This should flush the OutputStream implicitly even w/out calling HTTPOutputStream.close()
+        // Do this before we write the response preamble. The normal Keep-Alive check below will handle closing the socket.
+        if (handledRequests >= configuration.getMaxRequestsPerConnection()) {
+          logger.trace("[{}] Maximum requests per connection has been reached. Turn off Keep-Alive.", Thread.currentThread().threadId());
+          response.setHeader(Headers.Connection, Connections.Close);
+        }
+
+        response.close();
 
         boolean keepSocketAlive = keepSocketAlive(request, response);
         // Close the socket.
