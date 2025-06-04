@@ -39,23 +39,12 @@ public class LoadServlet extends HttpServlet {
     // Note that this should be mostly the same between all load tests.
     // - See load-tests/self
     switch (req.getPathInfo()) {
-      case "/" -> handleNoOp();
+      case "/" -> handleNoOp(req, res);
+      case "/no-read" -> handleNoRead(req, res);
       case "/hello" -> handleHello(req, res);
       case "/file" -> handleFile(req, res);
       case "/load" -> handleLoad(req, res);
       default -> handleFailure(req, res);
-    }
-
-
-    try (InputStream is = req.getInputStream()) {
-      byte[] body = is.readAllBytes();
-      byte[] result = Base64.getEncoder().encode(body);
-      res.setStatus(200);
-      res.setContentType("text/plain");
-      res.setContentLength(result.length);
-      res.getOutputStream().write(result);
-    } catch (Exception e) {
-      res.setStatus(500);
     }
   }
 
@@ -73,51 +62,60 @@ public class LoadServlet extends HttpServlet {
   }
 
   private void handleFile(HttpServletRequest req, HttpServletResponse res) {
-    int size = 1024 * 1024;
-    var requestedSize = req.getParameter("size");
-    if (requestedSize != null) {
-      size = Integer.parseInt(requestedSize);
-    }
+    // Note that it is intentionally that we are not reading the InputStream. This will cause the server to have to drain it.
+    try (InputStream is = req.getInputStream()) {
+      // Empty the InputStream
+      is.readAllBytes();
 
-    // Ensure we only build one file
-    byte[] blob = Blobs.get(size);
-    if (blob == null) {
-      synchronized (Blobs) {
-        blob = Blobs.get(size);
-        if (blob == null) {
-          System.out.println("Build file with size : " + size);
-          String s = "Lorem ipsum dolor sit amet";
-          String body = s.repeat(size / s.length() + (size % s.length()));
-          assert body.length() == size;
-          Blobs.put(size, body.getBytes(StandardCharsets.UTF_8));
+      int size = 1024 * 1024;
+      var requestedSize = req.getParameter("size");
+      if (requestedSize != null) {
+        size = Integer.parseInt(requestedSize);
+      }
+
+      // Ensure we only build one file
+      byte[] blob = Blobs.get(size);
+      if (blob == null) {
+        synchronized (Blobs) {
           blob = Blobs.get(size);
-          assert blob != null;
+          if (blob == null) {
+            System.out.println("Build file with size : " + size);
+            String s = "Lorem ipsum dolor sit amet";
+            String body = s.repeat(size / s.length() + (size % s.length()));
+            assert body.length() == size;
+            Blobs.put(size, body.getBytes(StandardCharsets.UTF_8));
+            blob = Blobs.get(size);
+            assert blob != null;
+          }
         }
       }
-    }
 
-    res.setStatus(200);
-    res.setContentType("application/octet-stream");
-    res.setContentLength(blob.length);
+      res.setStatus(200);
+      res.setContentType("application/octet-stream");
+      res.setContentLength(blob.length);
 
-    try (OutputStream os = res.getOutputStream()) {
-      os.write(blob);
-      os.flush();
+      try (OutputStream os = res.getOutputStream()) {
+        os.write(blob);
+      }
     } catch (Exception e) {
       res.setStatus(500);
     }
   }
 
   private void handleHello(HttpServletRequest req, HttpServletResponse res) {
-    // Hello world
-    res.setStatus(200);
-    res.setContentType("text/plain");
-    byte[] response = "Hello world".getBytes(StandardCharsets.UTF_8);
-    res.setContentLength(response.length);
+    try (InputStream is = req.getInputStream()) {
+      // Empty the InputStream
+      is.readAllBytes();
 
-    try (OutputStream os = res.getOutputStream()) {
-      os.write(response);
-      os.flush();
+      // Hello world
+      res.setStatus(200);
+      res.setContentType("text/plain");
+      byte[] response = "Hello world".getBytes(StandardCharsets.UTF_8);
+      res.setContentLength(response.length);
+
+      try (OutputStream os = res.getOutputStream()) {
+        os.write(response);
+      }
     } catch (Exception e) {
       res.setStatus(500);
     }
@@ -138,6 +136,20 @@ public class LoadServlet extends HttpServlet {
     }
   }
 
-  private void handleNoOp() {
+  private void handleNoOp(HttpServletRequest req, HttpServletResponse res) {
+    // Note that it is intentionally that we are not reading the InputStream. This will cause the server to have to drain it.
+    try (InputStream is = req.getInputStream()) {
+      // Just read the bytes from the InputStream and return. Do no other worker.
+      is.readAllBytes();
+      res.setStatus(200);
+    } catch (Exception e) {
+      res.setStatus(500);
+    }
+  }
+
+  @SuppressWarnings("unused")
+  private void handleNoRead(HttpServletRequest req, HttpServletResponse res) {
+    // Note that it is intentionally that we are not reading the InputStream. This will cause the server to have to drain it.
+    res.setStatus(200);
   }
 }
