@@ -291,7 +291,6 @@ public class HTTPWorker implements Runnable {
       logger.debug(String.format("[%s] Could not close the HTTP response.", Thread.currentThread().threadId()), e);
     } finally {
       // It is plausible that calling response.close() could throw an exception. We must ensure we close the socket.
-      // TODO : Daniel : Review : Can I write a test to force this condition?
       closeSocketOnly(CloseSocketReason.Unexpected);
     }
   }

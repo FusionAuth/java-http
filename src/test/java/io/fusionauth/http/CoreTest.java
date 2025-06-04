@@ -116,7 +116,7 @@ public class CoreTest extends BaseTest {
     try (var client = HttpClient.newHttpClient(); var ignore = makeServer("http", handler, instrumenter).start()) {
       // Invalid request, missing Host header
       // - This should cause the socket to be reset
-      // TODO : If we return a 400 since this is a client error and not a server error we are not currently resetting the request.
+      // TODO : Daniel : Review : If we return a 400 since this is a client error and not a server error we are not currently resetting the request.
       //        Do we need to?
       //        Discuss with Brian?
       sendBadRequest("""
@@ -749,7 +749,7 @@ public class CoreTest extends BaseTest {
       println("Closed");
     };
 
-    // TODO : Daniel Review : what are we trying to test here, this test isn't doing what we think.
+    // TODO : Daniel : Review : what are we trying to test here, this test isn't doing what we think.
     //        It seems we are writing to the server as a client, and the server is slow to write back.
     //        But this would be a client timeout and not a server timeout?
     //       Seems like we should use withProcessingTimeoutDuration instead of withInitialReadTimeout?
