@@ -107,6 +107,12 @@ public class HTTPServerThread extends Thread {
           logger.trace("[{}] Accepted inbound connection. [{}] existing connections.", listenerAddress, clients.size());
         }
 
+        // TODO : Daniel : Review : Why is this number so much higher than the worker count when using persistent connections?
+        //        When using RESTIFY - we kill a lot of connections because read returns -1 while waiting for preamble.
+        //        This causes us to close a lot of workers. When using the JDK REST client this doesn't happen.
+        //        I don't know if this is just working as designed for HTTPURLConnection, or if it is related to
+        //        the read ahead we are doing.
+        //        Show Brian to see if he has any ideas.
         if (instrumenter != null) {
           instrumenter.acceptedConnection();
         }
@@ -187,8 +193,18 @@ public class HTTPServerThread extends Thread {
           ClientInfo client = iterator.next();
           Thread thread = client.thread();
           long threadId = thread.threadId();
-          if (!thread.isAlive()) {
-            logger.trace("[{}] Remove dead client worker. Born [{}]. Died at age [{}] ms. Requests handled [{}].", threadId, client.getStartInstant(), client.getAge(), client.getHandledRequests());
+          boolean threadIsAlive = thread.isAlive();
+          var threadState = thread.getState();
+          if (threadState == Thread.State.TERMINATED) {
+            if (threadIsAlive) {
+              System.out.println("[" + threadId + "] is alive in state [" + threadState + "]");
+            }
+          } else if (!threadIsAlive) {
+            System.out.println("[" + threadId + "] is dead in state [" + threadState + "]");
+          }
+
+          if (!threadIsAlive) {
+            logger.debug("[{}] Remove dead client worker. Thread state [{}] Born [{}]. Died at age [{}] ms. Requests handled [{}].", threadId, threadState, client.getStartInstant(), client.getAge(), client.getHandledRequests());
             iterator.remove();
             removedClientCount++;
             continue;

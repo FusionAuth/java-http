@@ -22,8 +22,6 @@ import java.net.SocketException;
 import java.net.SocketTimeoutException;
 
 import io.fusionauth.http.ConnectionClosedException;
-import io.fusionauth.http.server.HTTPRequest;
-import io.fusionauth.http.server.HTTPResponse;
 import io.fusionauth.http.HTTPValues;
 import io.fusionauth.http.HTTPValues.Connections;
 import io.fusionauth.http.HTTPValues.Headers;
@@ -34,6 +32,8 @@ import io.fusionauth.http.io.PushbackInputStream;
 import io.fusionauth.http.log.Logger;
 import io.fusionauth.http.server.HTTPHandler;
 import io.fusionauth.http.server.HTTPListenerConfiguration;
+import io.fusionauth.http.server.HTTPRequest;
+import io.fusionauth.http.server.HTTPResponse;
 import io.fusionauth.http.server.HTTPServerConfiguration;
 import io.fusionauth.http.server.Instrumenter;
 import io.fusionauth.http.server.io.HTTPInputStream;
@@ -69,8 +69,6 @@ public class HTTPWorker implements Runnable {
 
   private final Throughput throughput;
 
-  // TODO : Daniel : Review : Services such as Apache Tomcat have a maximum number of requests per keep-alive to protect against DOS attacks.
-  //        Needs more investigation, but we could cap the duration of worker by time or number of requests.
   private long handledRequests;
 
   private volatile State state;
@@ -130,6 +128,7 @@ public class HTTPWorker implements Runnable {
         //        Daniel : Is there a risk of the preamble not needing the entire set of left over bytes and it trying to push
         //                  back bytes from it's own buffer? This would fail because we check that buffer is null when calling push.
         //                 But it would cause this request to fail.
+
         inputStream.setDelegate(new ThroughputInputStream(socket.getInputStream(), throughput));
 
         // Not this line of code will block
@@ -198,6 +197,7 @@ public class HTTPWorker implements Runnable {
         if (!keepSocketAlive) {
           logger.trace("[{}] Closing socket. No Keep-Alive.", Thread.currentThread().threadId());
           closeSocketOnly(CloseSocketReason.Expected);
+          return;
         }
 
         // Transition to Keep-Alive state and reset the SO timeout
@@ -235,8 +235,8 @@ public class HTTPWorker implements Runnable {
         logger.debug("[{}] Closing socket [{}]. {}.", Thread.currentThread().threadId(), state, message);
       }
       closeSocketOnly(reason);
-    } catch (ParseException pe) {
-      logger.info("[{}] Closing socket with status [{}]. Bad request, failed to parse request. Reason [{}] Parser state [{}]", Thread.currentThread().threadId(), Status.BadRequest, pe.getMessage(), pe.getState());
+    } catch (ParseException e) {
+      logger.debug("[{}] Closing socket with status [{}]. Bad request, failed to parse request. Reason [{}] Parser state [{}]", Thread.currentThread().threadId(), Status.BadRequest, e.getMessage(), e.getState());
       closeSocketOnError(response, Status.BadRequest);
     } catch (SocketException e) {
       // This should only happen when the server is shutdown and this thread is waiting to read or write. In that case, this will throw a
@@ -246,13 +246,13 @@ public class HTTPWorker implements Runnable {
         logger.debug("[{}] Closing socket. Server is shutting down.", Thread.currentThread().threadId());
         closeSocketOnly(CloseSocketReason.Expected);
       }
-    } catch (IOException io) {
-      logger.debug(String.format("[%s] Closing socket with status [%d]. An IO exception was thrown during processing. These are pretty common.", Thread.currentThread().threadId(), Status.InternalServerError), io);
+    } catch (IOException e) {
+      logger.debug(String.format("[%s] Closing socket with status [%d]. An IO exception was thrown during processing. These are pretty common.", Thread.currentThread().threadId(), Status.InternalServerError), e);
       closeSocketOnError(response, Status.InternalServerError);
-    } catch (Throwable t) {
+    } catch (Throwable e) {
       // Log the error and signal a failure
       var status = Status.InternalServerError;
-      logger.error(String.format("[%s] Closing socket with status [%d]. An HTTP worker threw an exception while processing a request.", Thread.currentThread().threadId(), status), t);
+      logger.error(String.format("[%s] Closing socket with status [%d]. An HTTP worker threw an exception while processing a request.", Thread.currentThread().threadId(), status), e);
       closeSocketOnError(response, status);
     } finally {
       if (instrumenter != null) {

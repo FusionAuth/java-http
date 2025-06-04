@@ -41,6 +41,7 @@ public class Main {
 
     try (HTTPServer ignore = new HTTPServer().withHandler(new LoadHandler())
                                              .withCompressByDefault(false)
+                                             .withMaxRequestsPerConnection(100_000_000)
                                              .withInitialReadTimeout(Duration.ofSeconds(10))
                                              .withMinimumReadThroughput(4 * 1024)
                                              .withMinimumWriteThroughput(4 * 1024)

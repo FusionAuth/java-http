@@ -41,4 +41,5 @@ if [[ $# -ge 1 && $1 == "--suspend" ]]; then
   shift
 fi
 
+ulimit -S -n 32768
 ~/dev/java/current21/bin/java ${suspend} -cp "${CLASSPATH}" -Dio.fusionauth.http.server.stats="${SCRIPT_DIR}" io.fusionauth.http.load.Main

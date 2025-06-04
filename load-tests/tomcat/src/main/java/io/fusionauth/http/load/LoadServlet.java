@@ -137,7 +137,6 @@ public class LoadServlet extends HttpServlet {
   }
 
   private void handleNoOp(HttpServletRequest req, HttpServletResponse res) {
-    // Note that it is intentionally that we are not reading the InputStream. This will cause the server to have to drain it.
     try (InputStream is = req.getInputStream()) {
       // Just read the bytes from the InputStream and return. Do no other worker.
       is.readAllBytes();
