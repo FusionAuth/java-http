@@ -450,8 +450,8 @@ public class HTTPServerConfiguration implements Configurable<HTTPServerConfigura
    */
   @Override
   public HTTPServerConfiguration withMinimumReadThroughput(long bytesPerSecond) {
-    if (bytesPerSecond != -1 && bytesPerSecond < 1024) {
-      throw new IllegalArgumentException("The minimum bytes per second must be greater than 1024. This should probably be faster than a 28.8 baud modem!");
+    if (bytesPerSecond != -1 && bytesPerSecond < 512) {
+      throw new IllegalArgumentException("The minimum bytes per second must be greater than 512. Note that the theoretical maximum transmission speed of a 28.8k is 28,800 bits /second, or 3,600 bytes /second. Maybe consider requiring the read throughput to be faster than a 28.8k modem.");
     }
 
     this.minimumReadThroughput = bytesPerSecond;
@@ -462,8 +462,8 @@ public class HTTPServerConfiguration implements Configurable<HTTPServerConfigura
    * {@inheritDoc}
    */
   public HTTPServerConfiguration withMinimumWriteThroughput(long bytesPerSecond) {
-    if (bytesPerSecond != -1 && bytesPerSecond < 1024) {
-      throw new IllegalArgumentException("The minimum bytes per second must be greater than 1024. This should probably be faster than a 28.8 baud modem!");
+    if (bytesPerSecond != -1 && bytesPerSecond < 512) {
+      throw new IllegalArgumentException("The minimum bytes per second must be greater than 512. Note that the theoretical maximum transmission speed of a 28.8k is 28,800 bits /second, or 3,600 bytes /second. Maybe consider requiring the write throughput to be faster than a 28.8k modem.");
     }
 
     this.minimumWriteThroughput = bytesPerSecond;

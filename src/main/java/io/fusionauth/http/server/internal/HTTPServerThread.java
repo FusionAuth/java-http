@@ -193,18 +193,8 @@ public class HTTPServerThread extends Thread {
           ClientInfo client = iterator.next();
           Thread thread = client.thread();
           long threadId = thread.threadId();
-          boolean threadIsAlive = thread.isAlive();
-          var threadState = thread.getState();
-          if (threadState == Thread.State.TERMINATED) {
-            if (threadIsAlive) {
-              System.out.println("[" + threadId + "] is alive in state [" + threadState + "]");
-            }
-          } else if (!threadIsAlive) {
-            System.out.println("[" + threadId + "] is dead in state [" + threadState + "]");
-          }
-
-          if (!threadIsAlive) {
-            logger.debug("[{}] Remove dead client worker. Thread state [{}] Born [{}]. Died at age [{}] ms. Requests handled [{}].", threadId, threadState, client.getStartInstant(), client.getAge(), client.getHandledRequests());
+          if (!thread.isAlive()) {
+            logger.trace("[{}] Remove dead client worker. Born [{}]. Died at age [{}] ms. Requests handled [{}].", threadId, client.getStartInstant(), client.getAge(), client.getHandledRequests());
             iterator.remove();
             removedClientCount++;
             continue;

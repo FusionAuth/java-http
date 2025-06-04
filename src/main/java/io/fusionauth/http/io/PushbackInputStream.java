@@ -91,11 +91,6 @@ public class PushbackInputStream extends InputStream {
     return b1[0] & 0xFF;
   }
 
-  @Override
-  public byte[] readAllBytes() throws IOException {
-    return super.readAllBytes();
-  }
-
   public void setDelegate(InputStream delegate) {
     this.delegate = delegate;
   }
