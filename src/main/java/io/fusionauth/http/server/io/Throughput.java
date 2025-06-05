@@ -23,6 +23,10 @@ import io.fusionauth.http.server.internal.HTTPWorker;
  * @author Brian Pontarelli
  */
 public class Throughput {
+  private final long readThroughputDelay;
+
+  private final long writeThroughputDelay;
+
   private long firstReadInstant;
 
   private long firstWroteInstant;
@@ -34,10 +38,6 @@ public class Throughput {
   private long numberOfBytesRead;
 
   private long numberOfBytesWritten;
-
-  private final long readThroughputDelay;
-
-  private final long writeThroughputDelay;
 
   public Throughput(long readThroughputDelay, long writeThroughputDelay) {
     this.readThroughputDelay = readThroughputDelay;

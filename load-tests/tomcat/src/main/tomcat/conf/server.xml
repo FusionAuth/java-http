@@ -31,7 +31,7 @@
       <Host name="localhost" autoDeploy="false" unpackWARs="false">
         <Context path="" docBase="${catalina.base}/../web">
           <Manager pathname=""/>
-          <Resources allowLinking="true" />
+          <Resources allowLinking="true"/>
         </Context>
       </Host>
     </Engine>

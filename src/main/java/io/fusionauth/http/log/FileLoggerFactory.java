@@ -25,12 +25,12 @@ public class FileLoggerFactory implements LoggerFactory {
 
   private static FileLogger logger;
 
+  public static void setLogger(FileLogger logger) {
+    FileLoggerFactory.logger = logger;
+  }
+
   @Override
   public Logger getLogger(Class<?> klass) {
     return logger;
-  }
-
-  public static void setLogger(FileLogger logger) {
-    FileLoggerFactory.logger = logger;
   }
 }

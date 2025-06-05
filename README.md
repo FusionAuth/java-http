@@ -11,7 +11,7 @@ For more information about Project Loom and virtual threads, here is a good arti
 - Very fast
 - Easy to make a simple web server like you can in Node.js
 - No dependencies
-- To not boil the ocean. This is a purpose built HTTP server that probably won't do everything. 
+- To not boil the ocean. This is a purpose built HTTP server that probably won't do everything.
 
 ## Installation
 
@@ -187,7 +187,7 @@ Load test last performed May 30, 2025. Using the [fusionauth-load-test](https://
 
 ### Running load tests
 
-Start the HTTP server to test. 
+Start the HTTP server to test.
 
 #### java-http
 
@@ -201,6 +201,7 @@ sb clean start
 #### Apache Tomcat
 
 Start the HTTP server. Run the following commands from the `java-http` repo.
+
 ```bash
 cd load-tests/tomcat
 sb clean start

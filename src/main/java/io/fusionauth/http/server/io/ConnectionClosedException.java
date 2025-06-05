@@ -13,7 +13,7 @@
  * either express or implied. See the License for the specific
  * language governing permissions and limitations under the License.
  */
-package io.fusionauth.http;
+package io.fusionauth.http.server.io;
 
 /**
  * An exception thrown when the client closes the socket and the server should handle it gracefully.

@@ -1,5 +1,5 @@
 /*
- * Copyright (c) 2021-2022, FusionAuth, All Rights Reserved
+ * Copyright (c) 2021-2025, FusionAuth, All Rights Reserved
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -281,13 +281,13 @@ public class Cookie implements Buildable<Cookie> {
       return false;
     }
     return httpOnly == cookie.httpOnly &&
-        secure == cookie.secure &&
-        Objects.equals(domain, cookie.domain) &&
-        Objects.equals(expires, cookie.expires) &&
-        Objects.equals(maxAge, cookie.maxAge) &&
-        Objects.equals(name, cookie.name) &&
-        Objects.equals(path, cookie.path) &&
-        Objects.equals(value, cookie.value);
+           secure == cookie.secure &&
+           Objects.equals(domain, cookie.domain) &&
+           Objects.equals(expires, cookie.expires) &&
+           Objects.equals(maxAge, cookie.maxAge) &&
+           Objects.equals(name, cookie.name) &&
+           Objects.equals(path, cookie.path) &&
+           Objects.equals(value, cookie.value);
   }
 
   public String getDomain() {

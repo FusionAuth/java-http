@@ -18,7 +18,6 @@ package io.fusionauth.http.io;
 import java.io.IOException;
 import java.io.InputStream;
 
-import io.fusionauth.http.ChunkException;
 import io.fusionauth.http.ParseException;
 import io.fusionauth.http.util.HTTPTools;
 import static io.fusionauth.http.util.HTTPTools.makeParseException;
@@ -33,7 +32,7 @@ public class ChunkedInputStream extends InputStream {
 
   private final byte[] buffer;
 
-  private final InputStream delegate;
+  private final PushbackInputStream delegate;
 
   private final StringBuilder headerSizeHex = new StringBuilder();
 
@@ -47,7 +46,7 @@ public class ChunkedInputStream extends InputStream {
 
   private ChunkedBodyState state = ChunkedBodyState.ChunkSize;
 
-  public ChunkedInputStream(InputStream delegate, int bufferSize) {
+  public ChunkedInputStream(PushbackInputStream delegate, int bufferSize) {
     this.delegate = delegate;
     this.buffer = new byte[bufferSize];
   }
@@ -75,17 +74,7 @@ public class ChunkedInputStream extends InputStream {
         // We need to push back any remaining bytes to the InputStream since we may have read more bytes than we needed.
         int leftOver = bufferLength - bufferIndex;
         if (leftOver > 0) {
-          // TODO : Daniel : Review : This doesn't seem like a good idea. It will fail silently, but this is required.
-          //        Discuss with Brian.
-          //        .
-          //        Options:
-          //         - Leave as is
-          //         - Throw a OverReadException that is caught by the HTTPInputStream which has a typed ref to PushbackInputStream and handled.
-          //         - Keep a typed ref for PushbackInputStream, but this messes up the 'commit' path in HTTPInputStream that swaps the pointer.
-          //                So we could re-work how we handle a chunked request body - instead of swapping out pointers we do something else?
-          if (delegate instanceof PushbackInputStream pis) {
-            pis.push(buffer, bufferIndex, leftOver);
-          }
+          delegate.push(buffer, bufferIndex, leftOver);
         }
 
         return -1;
@@ -114,16 +103,7 @@ public class ChunkedInputStream extends InputStream {
         if (nextState == ChunkedBodyState.Complete) {
           state = nextState;
           bufferIndex++;
-          // We need to push back any remaining bytes to the InputStream since we may have read more bytes than we needed.
-          int leftOver = bufferLength - bufferIndex;
-          if (leftOver > 0) {
-            // TODO : Daniel : Review : This doesn't seem like a good idea. It will fail silently, but this is required.
-            //        Discuss with Brian.
-            if (delegate instanceof PushbackInputStream pis) {
-              pis.push(buffer, bufferIndex, leftOver);
-            }
-          }
-          return -1;
+          continue;
         }
 
         // Record the size hex digit

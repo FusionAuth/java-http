@@ -18,7 +18,6 @@ package io.fusionauth.http.server.io;
 import java.io.IOException;
 import java.io.InputStream;
 
-import io.fusionauth.http.TooManyBytesToDrainException;
 import io.fusionauth.http.io.ChunkedInputStream;
 import io.fusionauth.http.io.PushbackInputStream;
 import io.fusionauth.http.log.Logger;
@@ -34,6 +33,8 @@ import io.fusionauth.http.server.Instrumenter;
  * @author Brian Pontarelli
  */
 public class HTTPInputStream extends InputStream {
+  private final byte[] b1 = new byte[1];
+
   private final int chunkedBufferSize;
 
   private final Instrumenter instrumenter;
@@ -41,6 +42,8 @@ public class HTTPInputStream extends InputStream {
   private final Logger logger;
 
   private final int maximumBytesToDrain;
+
+  private final PushbackInputStream pushbackInputStream;
 
   private final HTTPRequest request;
 
@@ -54,11 +57,12 @@ public class HTTPInputStream extends InputStream {
 
   private boolean drained;
 
-  public HTTPInputStream(HTTPServerConfiguration configuration, HTTPRequest request, InputStream delegate) {
+  public HTTPInputStream(HTTPServerConfiguration configuration, HTTPRequest request, PushbackInputStream pushbackInputStream) {
     this.logger = configuration.getLoggerFactory().getLogger(HTTPInputStream.class);
     this.instrumenter = configuration.getInstrumenter();
     this.request = request;
-    this.delegate = delegate;
+    this.delegate = pushbackInputStream;
+    this.pushbackInputStream = pushbackInputStream;
     this.chunkedBufferSize = configuration.getChunkedBufferSize();
     this.maximumBytesToDrain = configuration.getMaxBytesToDrain();
 
@@ -106,7 +110,7 @@ public class HTTPInputStream extends InputStream {
 
     return total;
   }
-  private final byte[] b1 = new byte[1];
+
   @Override
   public int read() throws IOException {
     var read = read(b1);
@@ -136,20 +140,11 @@ public class HTTPInputStream extends InputStream {
     // When we have a fixed length request, read beyond the remainingBytes if possible.
     // - Under heavy load we may be able to start reading the next request. Just push those bytes
     //   back onto the InputStream and we will read them later.
-    // TODO : Daniel : Use a push back, and read the full 2k for performance, but push back (length - bodyBytesRemaining).
-    // TODO : Daniel : If I push back here, that means I need to keep the reference to the PushBackInputStream between requests correct?
-    //                 I wonder if there is any risk in having pre-read the entire pre-amble, and then the preamble code trying to
-    //                 push back extra bytes.
-    //                 Or we could just use push back for the preamble stuff, and then just always try to not over-read to avoid
-    //                 trying to manage these buffers across requests.
     int read = delegate.read(buffer, offset, length);
     if (!request.isChunked()) {
       int extraBytes = (int) (read - bytesRemaining);
       if (extraBytes > 0) {
-        // TODO : Daniel : Review : This doesn't seem like a good idea. It will fail silently, but this is required.
-        if (delegate instanceof PushbackInputStream pis) {
-          pis.push(buffer, (int) bytesRemaining, extraBytes);
-        }
+        pushbackInputStream.push(buffer, (int) bytesRemaining, extraBytes);
       }
     }
 
@@ -172,7 +167,7 @@ public class HTTPInputStream extends InputStream {
       delegate = InputStream.nullInputStream();
     } else if (request.isChunked()) {
       logger.trace("Client indicated it was sending an entity-body in the request. Handling body using chunked encoding.");
-      delegate = new ChunkedInputStream(delegate, chunkedBufferSize);
+      delegate = new ChunkedInputStream(pushbackInputStream, chunkedBufferSize);
       if (instrumenter != null) {
         instrumenter.chunkedRequest();
       }

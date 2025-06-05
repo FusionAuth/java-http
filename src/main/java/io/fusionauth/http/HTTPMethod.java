@@ -1,5 +1,5 @@
 /*
- * Copyright (c) 2021-2022, FusionAuth, All Rights Reserved
+ * Copyright (c) 2021-2025, FusionAuth, All Rights Reserved
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -48,6 +48,18 @@ public class HTTPMethod {
 
   private final String name;
 
+  static {
+    StandardMethods.put(CONNECT.name(), CONNECT);
+    StandardMethods.put(DELETE.name(), DELETE);
+    StandardMethods.put(GET.name(), GET);
+    StandardMethods.put(HEAD.name(), HEAD);
+    StandardMethods.put(OPTIONS.name(), OPTIONS);
+    StandardMethods.put(PATCH.name(), PATCH);
+    StandardMethods.put(POST.name(), POST);
+    StandardMethods.put(PUT.name(), PUT);
+    StandardMethods.put(TRACE.name(), TRACE);
+  }
+
   private HTTPMethod(String name) {
     Objects.requireNonNull(name);
     this.name = name.toUpperCase(Locale.ROOT);
@@ -94,17 +106,5 @@ public class HTTPMethod {
 
   public String toString() {
     return name;
-  }
-
-  static {
-    StandardMethods.put(CONNECT.name(), CONNECT);
-    StandardMethods.put(DELETE.name(), DELETE);
-    StandardMethods.put(GET.name(), GET);
-    StandardMethods.put(HEAD.name(), HEAD);
-    StandardMethods.put(OPTIONS.name(), OPTIONS);
-    StandardMethods.put(PATCH.name(), PATCH);
-    StandardMethods.put(POST.name(), POST);
-    StandardMethods.put(PUT.name(), PUT);
-    StandardMethods.put(TRACE.name(), TRACE);
   }
 }

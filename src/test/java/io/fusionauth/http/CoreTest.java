@@ -113,19 +113,15 @@ public class CoreTest extends BaseTest {
     };
 
     var instrumenter = new CountingInstrumenter();
+    // Use case: Send a malformed request, socket gets closed, maybe. Ensure server recovers and accepts another request.
     try (var client = HttpClient.newHttpClient(); var ignore = makeServer("http", handler, instrumenter).start()) {
       // Invalid request, missing Host header
       // - This should cause the socket to be reset
-      // TODO : Daniel : Review : If we return a 400 since this is a client error and not a server error we are not currently resetting the request.
-      //        Do we need to?
-      //        Discuss with Brian?
       sendBadRequest("""
           GET / HTTP/1.1\r
           X-Bad-Header: Bad-Header\r\r
           """);
 
-      // TODO : Daniel : Review : What is this test doing? If I comment out reset() in HTTPWorker.close() the test still passes.
-      //        Discuss with Brian?
       URI uri = makeURI("http", "");
       HttpRequest request = HttpRequest.newBuilder()
                                        .uri(uri)

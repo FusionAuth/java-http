@@ -13,7 +13,7 @@
  * either express or implied. See the License for the specific
  * language governing permissions and limitations under the License.
  */
-package io.fusionauth.http;
+package io.fusionauth.http.io;
 
 /**
  * Exception that is thrown if a Chunked request or response is invalid.

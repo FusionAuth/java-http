@@ -29,7 +29,7 @@ import java.util.List;
 import java.util.Map;
 import java.util.Objects;
 
-import io.fusionauth.http.ConnectionClosedException;
+import io.fusionauth.http.server.io.ConnectionClosedException;
 import io.fusionauth.http.HTTPMethod;
 import io.fusionauth.http.HTTPValues.ControlBytes;
 import io.fusionauth.http.HTTPValues.HeaderBytes;
@@ -104,15 +104,6 @@ public final class HTTPTools {
    * @return True if the character is a URI character.
    */
   public static boolean isURICharacter(byte ch) {
-    // TODO : Fully implement RFC 3986 to accurate parsing
-    //        https://www.rfc-editor.org/rfc/rfc3986#section-1.3
-    //        .
-    //        Decimal  Hex   Symbol
-    //        32       20    SP
-    //        33       21    !
-    //        ...
-    //        126      7E    ~
-    //        127      7F    DEL
     return ch >= '!' && ch <= '~';
   }
 

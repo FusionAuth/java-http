@@ -26,13 +26,17 @@ import java.io.InputStream;
 public class PushbackInputStream extends InputStream {
   private final byte[] b1 = new byte[1];
 
+  private final InputStream delegate;
+
   private byte[] buffer;
 
   private int bufferEndPosition;
 
   private int bufferPosition;
 
-  private InputStream delegate;
+  public PushbackInputStream(InputStream delegate) {
+    this.delegate = delegate;
+  }
 
   public int getAvailableBufferedBytesRemaining() {
     return buffer != null ? (bufferEndPosition - bufferPosition) : 0;
@@ -75,6 +79,8 @@ public class PushbackInputStream extends InputStream {
       // - So I think we have to return, and allow the caller to decide if they want to read more bytes based upon
       //   the contents of the bytes we return.
       // TODO : Daniel : Review the above statement.
+      // ...
+      // TODO : Put back the code...  we want to continue reading past the buffer here.
       return read;
     }
 
@@ -89,9 +95,5 @@ public class PushbackInputStream extends InputStream {
     }
 
     return b1[0] & 0xFF;
-  }
-
-  public void setDelegate(InputStream delegate) {
-    this.delegate = delegate;
   }
 }

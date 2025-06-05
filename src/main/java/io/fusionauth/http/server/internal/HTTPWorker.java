@@ -21,13 +21,13 @@ import java.net.Socket;
 import java.net.SocketException;
 import java.net.SocketTimeoutException;
 
-import io.fusionauth.http.ConnectionClosedException;
+import io.fusionauth.http.server.io.ConnectionClosedException;
 import io.fusionauth.http.HTTPValues;
 import io.fusionauth.http.HTTPValues.Connections;
 import io.fusionauth.http.HTTPValues.Headers;
 import io.fusionauth.http.HTTPValues.Protocols;
 import io.fusionauth.http.ParseException;
-import io.fusionauth.http.TooManyBytesToDrainException;
+import io.fusionauth.http.server.io.TooManyBytesToDrainException;
 import io.fusionauth.http.io.PushbackInputStream;
 import io.fusionauth.http.log.Logger;
 import io.fusionauth.http.server.HTTPHandler;
@@ -42,11 +42,9 @@ import io.fusionauth.http.server.io.Throughput;
 import io.fusionauth.http.server.io.ThroughputInputStream;
 import io.fusionauth.http.server.io.ThroughputOutputStream;
 import io.fusionauth.http.util.HTTPTools;
-import io.fusionauth.http.util.ThreadPool;
 
 /**
- * An HTTP worker that is a delegate Runnable to an {@link HTTPHandler}. This provides the interface and handling for use with the
- * {@link ThreadPool}.
+ * An HTTP worker that is a delegate Runnable to an {@link HTTPHandler}.
  *
  * @author Brian Pontarelli
  */
@@ -74,7 +72,7 @@ public class HTTPWorker implements Runnable {
   private volatile State state;
 
   public HTTPWorker(Socket socket, HTTPServerConfiguration configuration, Instrumenter instrumenter, HTTPListenerConfiguration listener,
-                    Throughput throughput) {
+                    Throughput throughput) throws IOException {
     this.socket = socket;
     this.configuration = configuration;
     this.instrumenter = instrumenter;
@@ -82,7 +80,7 @@ public class HTTPWorker implements Runnable {
     this.throughput = throughput;
     this.buffers = new HTTPBuffers(configuration);
     this.logger = configuration.getLoggerFactory().getLogger(HTTPWorker.class);
-    this.inputStream = new PushbackInputStream();
+    this.inputStream = new PushbackInputStream(new ThroughputInputStream(socket.getInputStream(), throughput));
     this.state = State.Read;
     this.startInstant = System.currentTimeMillis();
     logger.trace("[{}] Starting HTTP worker.", Thread.currentThread().threadId());
@@ -121,15 +119,6 @@ public class HTTPWorker implements Runnable {
 
         HTTPOutputStream outputStream = new HTTPOutputStream(configuration, request.getAcceptEncodings(), response, throughputOutputStream, buffers, () -> state = State.Write);
         response.setOutputStream(outputStream);
-
-        // Update the delegate and preserve the left-over bytes in the PushBackInputStream
-        // TODO : Daniel : Review : I think we have to hold this reference in the worker and just update the delegate to preserve the buffer
-        //        for the next preamble read.
-        //        Daniel : Is there a risk of the preamble not needing the entire set of left over bytes and it trying to push
-        //                  back bytes from it's own buffer? This would fail because we check that buffer is null when calling push.
-        //                 But it would cause this request to fail.
-
-        inputStream.setDelegate(new ThroughputInputStream(socket.getInputStream(), throughput));
 
         // Not this line of code will block
         // - When a client is using Keep-Alive - we will loop and block here while we wait for the client to send us bytes.

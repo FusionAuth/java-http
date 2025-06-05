@@ -168,8 +168,8 @@ public class ChunkedInputStreamTest {
     return new Builder().withBody(body);
   }
 
-  private InputStream withParts(String... parts) {
-    return new PieceMealInputStream(parts);
+  private PushbackInputStream withParts(String... parts) {
+    return new PushbackInputStream(new PieceMealInputStream(parts));
   }
 
   private static class Builder {
@@ -184,7 +184,7 @@ public class ChunkedInputStreamTest {
     }
 
     public Builder assertResult(String expected) throws IOException {
-      var bis = new ByteArrayInputStream(body.getBytes(StandardCharsets.UTF_8));
+      var bis = new PushbackInputStream(new ByteArrayInputStream(body.getBytes(StandardCharsets.UTF_8)));
       chunkedInputStream = new ChunkedInputStream(bis, 2048);
 
       String actual = new String(chunkedInputStream.readAllBytes(), StandardCharsets.UTF_8);
@@ -203,6 +203,8 @@ public class ChunkedInputStreamTest {
 
     private int partsIndex;
 
+    private int subPartIndex = 0;
+
     public PieceMealInputStream(String... parts) {
       this.parts = new byte[parts.length][];
       for (int i = 0; i < parts.length; i++) {
@@ -212,25 +214,31 @@ public class ChunkedInputStreamTest {
     }
 
     @Override
-    public int read(byte[] b) {
+    public int read() {
+      throw new IllegalStateException("Unexpected call to read()");
+    }
+
+    @Override
+    public int read(byte[] b, int off, int len) {
       if (partsIndex >= parts.length) {
         return -1;
       }
 
-      int read = parts[partsIndex].length;
+      // We may only read part way through one of the parts. If we didn't read all the way through, use the subPartIndex
+      int read = Math.min(parts[partsIndex].length - subPartIndex, b.length);
       System.arraycopy(parts[partsIndex], 0, b, 0, read);
-      partsIndex++;
+      if (read < parts[partsIndex].length - subPartIndex) {
+        subPartIndex = read;
+      } else {
+        partsIndex++;
+      }
+
       return read;
     }
 
     @Override
-    public int read(byte[] b, int off, int len) throws IOException {
-      throw new IOException("Should not be called");
-    }
-
-    @Override
-    public int read() throws IOException {
-      throw new IOException("Should not be called");
+    public int read(byte[] b) {
+      throw new IllegalStateException("Unexpected call to read(byte[] b)");
     }
   }
 }

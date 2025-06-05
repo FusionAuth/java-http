@@ -26,7 +26,7 @@ import org.testng.annotations.Test;
  */
 public class HTTP10SocketTest extends BaseSocketTest {
   @Test
-  public void keep_alive_defaults() throws Exception{
+  public void keep_alive_defaults() throws Exception {
     // Ensure that the HTTP/1.0 defaults are observed for keep-alive
 
     // No Connection header, default should be close on the response
@@ -79,6 +79,7 @@ public class HTTP10SocketTest extends BaseSocketTest {
         \r
         """);
   }
+
   @Test
   public void test_HTTP_10_OK() throws Exception {
     // Minor version less than the highest supported: HTTP/1.0
