@@ -281,20 +281,6 @@ public class HTTPResponse {
     writer = null;
   }
 
-  /**
-   * Reset the OutputStream.
-   */
-  // TODO : Daniel : Review : This is used by prime-mvc. Is there any other way to handle this?
-  //        Discuss with Brian. I think all prime-mvc needs is for the socket to be reset?
-  public void resetOutputStream() {
-    if (outputStream.isCommitted()) {
-      throw new IllegalStateException("The HTTPResponse can't be reset after it has been committed, meaning at least one byte was written back to the client.");
-    }
-
-    outputStream.reset();
-    writer = null;
-  }
-
   public void sendRedirect(String uri) {
     setHeader(Headers.Location, uri);
     status = Status.MovedTemporarily;

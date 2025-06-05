@@ -73,14 +73,11 @@ public class PushbackInputStream extends InputStream {
         this.bufferEndPosition = -1;
       }
 
-      // Ideally we would just continue to read from the delegate if we have not yet filled the buffer.
-      // - However, in non-fixed length request such as a chunked transfer encoding, if the end of the request
-      //   is in the bytes we read from the buffer, and we call read() we will block because no bytes are available.
-      // - So I think we have to return, and allow the caller to decide if they want to read more bytes based upon
-      //   the contents of the bytes we return.
-      // TODO : Daniel : Review the above statement.
-      // ...
-      // TODO : Put back the code...  we want to continue reading past the buffer here.
+      // Note that we must return after reading from the buffer.
+      // - We don't know if we are at the end of the InputStream. Calling read again will block causing us not to be able to
+      //   complete processing of the bytes we just read from the buffer in order to send the HTTP response.
+      //   The end result is the client will block while waiting for us to send a response until we take an exception waiting
+      //   for the read timeout.
       return read;
     }
 

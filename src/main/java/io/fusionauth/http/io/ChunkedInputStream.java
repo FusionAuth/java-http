@@ -103,7 +103,12 @@ public class ChunkedInputStream extends InputStream {
         if (nextState == ChunkedBodyState.Complete) {
           state = nextState;
           bufferIndex++;
-          continue;
+          int leftOver = bufferLength - bufferIndex;
+          if (leftOver > 0) {
+            delegate.push(buffer, bufferIndex, leftOver);
+          }
+
+          return -1;
         }
 
         // Record the size hex digit

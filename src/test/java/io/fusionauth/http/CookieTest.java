@@ -1,5 +1,5 @@
 /*
- * Copyright (c) 2021-2024, FusionAuth, All Rights Reserved
+ * Copyright (c) 2021-2025, FusionAuth, All Rights Reserved
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -36,6 +36,9 @@ import static org.testng.Assert.assertFalse;
 import static org.testng.Assert.assertNull;
 import static org.testng.Assert.assertTrue;
 
+/**
+ * @author Brian Pontarelli
+ */
 public class CookieTest extends BaseTest {
   @Test
   public void cookieInjection() throws Exception {
@@ -305,6 +308,41 @@ public class CookieTest extends BaseTest {
     // Borked cookie
     cookie = Cookie.fromResponseHeader("=a");
     assertNull(cookie);
+
+    // additional attributes
+    // - name and value
+    cookie = Cookie.fromResponseHeader("foo=;utm=123");
+    assertEquals(cookie.name, "foo");
+    assertEquals(cookie.getAttribute("utm"), "123");
+
+    // additional attributes
+    // - name, sep but no value
+    cookie = Cookie.fromResponseHeader("foo=;utm=");
+    assertEquals(cookie.name, "foo");
+    assertEquals(cookie.getAttribute("utm"), "");
+
+    // additional attributes
+    // - name only
+    cookie = Cookie.fromResponseHeader("foo=;utm");
+    assertEquals(cookie.name, "foo");
+    assertEquals(cookie.getAttribute("utm"), "");
+
+    // additional attributes
+    // - multiple
+    cookie = Cookie.fromResponseHeader("foo=;foo=bar;bar=baz;bing=boom");
+    assertEquals(cookie.name, "foo");
+    assertEquals(cookie.getAttribute("foo"), "bar");
+    assertEquals(cookie.getAttribute("bar"), "baz");
+    assertEquals(cookie.getAttribute("bing"), "boom");
+
+    // has attribute
+    cookie = Cookie.fromResponseHeader("foo=;foo=bar;bar=baz;bing=boom");
+    assertTrue(cookie.hasAttribute("foo"));
+    assertTrue(cookie.hasAttribute("bar"));
+    assertTrue(cookie.hasAttribute("bing"));
+    assertFalse(cookie.hasAttribute("booya"));
+    assertFalse(cookie.hasAttribute("baz"));
+    assertFalse(cookie.hasAttribute("boom"));
   }
 
   @Test(dataProvider = "schemes")
