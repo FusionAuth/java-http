@@ -120,22 +120,10 @@ public class ChunkedInputStreamTest {
             0\r
             \r
             """), 1024);
-    assertEquals(inputStream.read(buf), 8);
-    var result = new String(buf, 0, 8);
-    assertEquals(result, "12345678");
-
-    assertEquals(inputStream.read(buf), 2);
-    result = new String(buf, 0, 2);
-    assertEquals(result, "90");
-
-    assertEquals(inputStream.read(buf), 20);
-    result = new String(buf, 0, 20);
-    assertEquals(result, "12345678901234567890");
-
-    assertEquals(inputStream.read(buf), 30);
-    result = new String(buf, 0, 30);
-    assertEquals(result, "123456789012345678901234567890");
-    assertEquals(inputStream.read(), 0);
+    // All chunks will be read on the first attempt because the buffer is large enough
+    assertEquals(inputStream.read(buf), 60);
+    var result = new String(buf, 0, 60);
+    assertEquals(result, "123456789012345678901234567890123456789012345678901234567890");
     assertEquals(inputStream.read(), -1);
   }
 
@@ -153,15 +141,12 @@ public class ChunkedInputStreamTest {
             0\r
             \r
             """), 1024);
-    assertEquals(inputStream.read(buf), 10);
-    var result = new String(buf, 0, 10);
-    assertEquals(result, "1234567890");
 
-    assertEquals(inputStream.read(buf), 20);
-    result = new String(buf, 0, 20);
-    assertEquals(result, "12345678901234567890");
-    assertEquals(inputStream.read(), 0);
-    assertEquals(inputStream.read(), -1);
+    // All chunks will be read on the first attempt because the buffer is large enough
+    assertEquals(inputStream.read(buf), 30);
+    var result = new String(buf, 0, 30);
+    assertEquals(result, "123456789012345678901234567890");
+    assertEquals(inputStream.read(buf), -1);
   }
 
   private Builder withBody(String body) {
@@ -224,7 +209,8 @@ public class ChunkedInputStreamTest {
         return -1;
       }
 
-      // We may only read part way through one of the parts. If we didn't read all the way through, use the subPartIndex
+      // We may only read part way through one of the parts.
+      // If we didn't read all the way through, use the subPartIndex
       int read = Math.min(parts[partsIndex].length - subPartIndex, b.length);
       System.arraycopy(parts[partsIndex], 0, b, 0, read);
       if (read < parts[partsIndex].length - subPartIndex) {

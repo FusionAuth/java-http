@@ -34,7 +34,7 @@ public class HTTPServerConfiguration implements Configurable<HTTPServerConfigura
 
   private Path baseDir = Path.of("");
 
-  private int chunkedBufferSize = 2 * 1024; // 2k bytes
+  private int chunkedBufferSize = 4 * 1024; // 4k bytes
 
   private boolean compressByDefault = true;
 

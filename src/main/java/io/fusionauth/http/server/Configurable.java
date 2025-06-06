@@ -47,7 +47,7 @@ public interface Configurable<T extends Configurable<T>> {
   }
 
   /**
-   * Sets the buffer size for the chunked input stream. Defaults to 2k.
+   * Sets the buffer size for the chunked input stream. Defaults to 4k.
    *
    * @param chunkedBufferSize the buffer size used to read a request body that was encoded using 'chunked' transfer-encoding.
    * @return This.

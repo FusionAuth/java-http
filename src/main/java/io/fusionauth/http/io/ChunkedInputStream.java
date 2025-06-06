@@ -40,6 +40,8 @@ public class ChunkedInputStream extends InputStream {
 
   private int bufferLength;
 
+  private int chunkBytesRead;
+
   private int chunkBytesRemaining;
 
   private int chunkSize;
@@ -52,8 +54,104 @@ public class ChunkedInputStream extends InputStream {
   }
 
   @Override
-  public int read(byte[] b, int off, int len) throws IOException {
-    return processChunk(b, off, len);
+  public int read(byte[] destination, int dOff, int dLen) throws IOException {
+    int dIndex = dOff;
+    while (dIndex < dLen) {
+      if (state == ChunkedInputStream.ChunkedBodyState.Complete) {
+        pushBackOverReadBytes();
+        break;
+      }
+
+      // Read some more if we are out of bytes
+      if (bufferIndex >= bufferLength) {
+        bufferIndex = 0;
+        bufferLength = delegate.read(buffer);
+      }
+
+      // Process the buffer
+      while (bufferIndex < bufferLength) {
+        ChunkedBodyState nextState;
+        try {
+          nextState = state.next(buffer[bufferIndex], chunkSize, chunkBytesRead);
+        } catch (ParseException e) {
+          // This allows us to add the index to the exception. Useful for debugging.
+          e.setIndex(bufferIndex);
+          throw e;
+        }
+
+        // We have reached the end of the encoded payload. Push back any additional bytes read.
+        if (state == ChunkedBodyState.Complete) {
+          state = nextState;
+          pushBackOverReadBytes();
+          break;
+        }
+
+        // Capture the character to calculate the next chunk size
+        if (nextState == ChunkedBodyState.ChunkSize) {
+          headerSizeHex.appendCodePoint(buffer[bufferIndex]);
+          state = nextState;
+          bufferIndex++;
+          continue;
+        }
+
+        // We have found the chunk, this means we can now convert the captured chunk size bytes and then try and read the chunk.
+        if (state != ChunkedBodyState.Chunk && nextState == ChunkedBodyState.Chunk) {
+          if (headerSizeHex.isEmpty()) {
+            throw new ChunkException("Chunk size is missing");
+          }
+
+          // This is the start of a chunk, so set the size and counter and reset the size hex string
+          chunkSize = (int) Long.parseLong(headerSizeHex, 0, headerSizeHex.length(), 16);
+
+          chunkBytesRead = 0;
+          chunkBytesRemaining = chunkSize;
+          headerSizeHex.delete(0, headerSizeHex.length());
+
+          // A chunk size of 0 indicates this is the terminating chunk. Continue and we will expect the state machine
+          // to process the final CRLF and hit the Complete state.
+          if (chunkSize == 0) {
+            state = nextState;
+            bufferIndex++;
+            continue;
+          }
+        }
+
+        int lengthToCopy;
+        if (chunkBytesRemaining > 0) {
+          int remainingInBuffer = bufferLength - bufferIndex;
+          lengthToCopy = Math.min(Math.min(chunkBytesRemaining, remainingInBuffer), dLen - dIndex); // That's an ugly baby!
+
+          // This means we don't have room in the destination buffer
+          if (lengthToCopy == 0) {
+            state = nextState;
+            bufferIndex++;
+            return dIndex - dOff;
+          }
+        } else {
+          // Nothing to do, continue to the next state.
+          state = nextState;
+          bufferIndex++;
+          continue;
+        }
+
+        // Copy 'lengthToCopy' to the destination buffer
+        System.arraycopy(buffer, bufferIndex, destination, dIndex, lengthToCopy);
+        bufferIndex += lengthToCopy;
+        chunkBytesRead += lengthToCopy;
+        chunkBytesRemaining -= lengthToCopy;
+        dIndex += lengthToCopy;
+        state = nextState;
+
+        // If we have bytes to copy, we are at the correct location in the state machine, If we don't have room, break.
+        // - This will break the while loop, and return at the end of this method the total bytes we have written to the destination buffer.
+        if (dIndex == dLen) {
+          break;
+        }
+      }
+    }
+
+    int total = dIndex - dOff;
+    return total == 0 ? -1 : total;
   }
 
   @Override
@@ -66,104 +164,16 @@ public class ChunkedInputStream extends InputStream {
     return b1[0] & 0xFF;
   }
 
-  private int processChunk(byte[] destination, int offset, int length) throws IOException {
-    int totalRead = 0;
-    while (totalRead < length) {
-      // Bail early if the state machine is done
-      if (state == ChunkedBodyState.Complete) {
-        // We need to push back any remaining bytes to the InputStream since we may have read more bytes than we needed.
-        int leftOver = bufferLength - bufferIndex;
-        if (leftOver > 0) {
-          delegate.push(buffer, bufferIndex, leftOver);
-        }
+  private void pushBackOverReadBytes() {
+    int leftOver = bufferLength - bufferIndex;
+    if (leftOver > 0) {
+      delegate.push(buffer, bufferIndex, leftOver);
 
-        return -1;
-      }
-
-      // Read some more if we are out of bytes
-      if (bufferIndex >= bufferLength) {
-        bufferIndex = 0;
-        bufferLength = delegate.read(buffer);
-        if (bufferLength > 0) {
-          totalRead += bufferLength;
-        }
-      }
-
-      for (; bufferIndex < bufferLength; bufferIndex++) {
-        ChunkedBodyState nextState;
-        try {
-          nextState = state.next(buffer[bufferIndex], chunkSize, chunkSize - chunkBytesRemaining);
-        } catch (ParseException e) {
-          // This allows us to add the index to the exception. Useful for debugging.
-          e.setIndex(bufferIndex);
-          throw e;
-        }
-
-        // We are DONE!
-        if (nextState == ChunkedBodyState.Complete) {
-          state = nextState;
-          bufferIndex++;
-          int leftOver = bufferLength - bufferIndex;
-          if (leftOver > 0) {
-            delegate.push(buffer, bufferIndex, leftOver);
-          }
-
-          return -1;
-        }
-
-        // Record the size hex digit
-        if (nextState == ChunkedBodyState.ChunkSize) {
-          headerSizeHex.appendCodePoint(buffer[bufferIndex]);
-          state = nextState;
-          continue;
-        }
-
-        // Capture the chunk size
-        if (state != ChunkedBodyState.Chunk && nextState == ChunkedBodyState.Chunk) {
-          // This means we finished reading the size and are ready to start processing
-          if (headerSizeHex.isEmpty()) {
-            throw new ChunkException("Chunk size is missing");
-          }
-
-          // This is the start of a chunk, so set the size and counter and reset the size hex string
-          chunkSize = (int) Long.parseLong(headerSizeHex, 0, headerSizeHex.length(), 16);
-
-          chunkBytesRemaining = chunkSize;
-          headerSizeHex.delete(0, headerSizeHex.length());
-
-          // AF\r1234 i=3 length=42 read=7 chunkSize=175(AF)
-          if (chunkSize == 0) {
-            state = nextState;
-            return 0;
-          }
-        }
-
-        int remainingInBuffer = bufferLength - bufferIndex;
-        int lengthToCopy = Math.min(Math.min(chunkBytesRemaining, remainingInBuffer), length); // That's an ugly baby!
-
-        // If we don't have anything to copy, continue.
-        if (lengthToCopy == 0) {
-          state = nextState;
-          continue;
-        }
-
-        // TODO : Daniel : If we wanted to handle more than one chunk at a time, I think we would potentially continue here
-        //        and see if we can get more than one chunk completed before copying back to the destination.
-        //        Discuss with Brian.
-        //        Should we try this right now, or is this ok? Load testing with a small body,
-        //        Chunked is slower than fixed length, I suppose this makes sense. In practice I don't think browsers
-        //        and such use chunked for small requests.
-
-        System.arraycopy(buffer, bufferIndex, destination, offset, lengthToCopy);
-        bufferIndex += lengthToCopy;
-        chunkBytesRemaining -= lengthToCopy;
-        state = nextState;
-        return lengthToCopy;
-      }
+      // Move the pointer to the end of the buffer, We have used up the bytes by pushing them back.
+      bufferIndex = bufferLength;
     }
-
-    return 0;
   }
+
 
   public enum ChunkedBodyState {
     ChunkExtensionStart {
@@ -266,17 +276,18 @@ public class ChunkedInputStream extends InputStream {
         return Chunk;
       }
     },
-
     Chunk {
       @Override
       public ChunkedBodyState next(byte ch, long length, long bytesRead) {
-        if (bytesRead < length) {
-          return Chunk;
+        if (length == 0) {
+          return Complete;
         } else if (bytesRead == length && ch == '\r') {
           return ChunkCR;
+        } else if (bytesRead < length) {
+          return Chunk;
+        } else {
+          throw makeParseException(ch, this);
         }
-
-        throw makeParseException(ch, this);
       }
     },
 
@@ -311,6 +322,6 @@ public class ChunkedInputStream extends InputStream {
       }
     };
 
-    public abstract ChunkedBodyState next(byte ch, long length, long bytesRead);
+    public abstract ChunkedInputStream.ChunkedBodyState next(byte ch, long length, long bytesRead);
   }
 }

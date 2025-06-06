@@ -122,14 +122,19 @@ public class HTTPInputStream extends InputStream {
   }
 
   @Override
-  public int read(byte[] buffer) throws IOException {
-    return read(buffer, 0, buffer.length);
+  public int read(byte[] b) throws IOException {
+    return read(b, 0, b.length);
   }
 
   @Override
-  public int read(byte[] buffer, int offset, int length) throws IOException {
+  public int read(byte[] b, int off, int len) throws IOException {
+    if (len == 0) {
+      return 0;
+    }
+
     // If this is a fixed length request, and we have less than or equal to 0 bytes remaining, return -1
-    if (!request.isChunked() && bytesRemaining <= 0) {
+    boolean fixedLength = !request.isChunked();
+    if (fixedLength && bytesRemaining <= 0) {
       return -1;
     }
 
@@ -140,19 +145,24 @@ public class HTTPInputStream extends InputStream {
     // When we have a fixed length request, read beyond the remainingBytes if possible.
     // - Under heavy load we may be able to start reading the next request. Just push those bytes
     //   back onto the InputStream and we will read them later.
-    int read = delegate.read(buffer, offset, length);
-    if (!request.isChunked()) {
+    int read = delegate.read(b, off, len);
+    if (fixedLength && read > 0) {
       int extraBytes = (int) (read - bytesRemaining);
       if (extraBytes > 0) {
-        pushbackInputStream.push(buffer, (int) bytesRemaining, extraBytes);
+        pushbackInputStream.push(b, (int) bytesRemaining, extraBytes);
       }
     }
 
-    if (instrumenter != null) {
-      instrumenter.readFromClient(read);
+    if (read > 0) {
+      if (instrumenter != null) {
+        instrumenter.readFromClient(read);
+      }
+
+      if (fixedLength) {
+        bytesRemaining -= read;
+      }
     }
 
-    bytesRemaining -= read;
     return read;
   }
 

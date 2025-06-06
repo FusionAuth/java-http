@@ -36,9 +36,7 @@ public abstract class BaseSocketTest extends BaseTest {
   private void assertResponse(String request, String chunkedExtension, String response) throws Exception {
     HTTPHandler handler = (req, res) -> {
       // Read the request body
-      byte[] bodyBytes = req.getInputStream().readAllBytes();
-      System.out.println(bodyBytes.length);
-
+      req.getInputStream().readAllBytes();
       res.setStatus(200);
     };
 
