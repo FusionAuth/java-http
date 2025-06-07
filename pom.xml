@@ -51,6 +51,7 @@
   <properties>
     <maven.compiler.source>21</maven.compiler.source>
     <maven.compiler.target>21</maven.compiler.target>
+    <project.build.sourceEncoding>UTF8</project.build.sourceEncoding>
   </properties>
 
   <!--  Testing Dependencies  -->
@@ -98,6 +99,10 @@
         <version>3.14.0</version>
         <configuration>
           <useModulePath>false</useModulePath>
+          <!--
+           Ideally these would be in testCompilerArgument since this only applies to 'testCompile' goal.
+           I have not been able to get it to work. I hate poms.
+           -->
           <compilerArgs>
             <arg>--add-exports</arg>
             <arg>java.base/sun.security.x509=ALL-UNNAMED</arg>
@@ -140,6 +145,9 @@
         <groupId>org.apache.maven.plugins</groupId>
         <artifactId>maven-javadoc-plugin</artifactId>
         <version>3.11.2</version>
+        <configuration>
+          <doclint>none</doclint>
+        </configuration>
         <executions>
           <execution>
             <id>attach-javadocs</id>
