@@ -1,10 +1,15 @@
 ## FusionAuth HTTP client and server ![semver 2.0.0 compliant](http://img.shields.io/badge/semver-2.0.0-brightgreen.svg?style=flat-square) [![test](https://github.com/FusionAuth/java-http/actions/workflows/test.yml/badge.svg)](https://github.com/FusionAuth/java-http/actions/workflows/test.yml)
 
-**NOTE:** This project is in progress. Version `0.3.0` is production ready, version `0.4.0` which will likely become `1.0.0` is still in development.
+### Latest versions
+
+* Latest stable version: `0.3.0`
+* Latest release candidate: `1.0.0-RC.1`
+  * Using Java Virtual Threads
 
 The goal of this project is to build a full-featured HTTP server and client in plain Java without the use of any libraries. The client and server will use Project Loom virtual threads and blocking I/O so that the Java VM will handle all the context switching between virtual threads as they block on I/O.
 
-For more information about Project Loom and virtual threads, here is a good article to read: https://blogs.oracle.com/javamagazine/post/java-virtual-threads
+For more information about Project Loom and virtual threads, please review the following link.
+* https://blogs.oracle.com/javamagazine/post/java-virtual-threads
 
 ## Project Goals
 
@@ -21,20 +26,20 @@ To add this library to your project, you can include this dependency in your Mav
 <dependency>
   <groupId>io.fusionauth</groupId>
   <artifactId>java-http</artifactId>
-  <version>0.4.0-RC.7</version>
+  <version>1.0.0-RC.1</version>
 </dependency>
 ```
 
 If you are using Gradle, you can add this to your build file:
 
 ```groovy
-implementation 'io.fusionauth:java-http:0.4.0-RC.7'
+implementation 'io.fusionauth:java-http:1.0.0-RC.1'
 ```
 
 If you are using Savant, you can add this to your build file:
 
 ```groovy
-dependency(id: "io.fusionauth:java-http:0.4.0-RC.7")
+dependency(id: "io.fusionauth:java-http:1.0.0-RC.1")
 ```
 
 ## Examples Usages:
@@ -110,9 +115,9 @@ public class Example {
 
 ### TLS
 
-The HTTP server implements TLS 1.0-1.3 using the Java SSLEngine. To enable TLS for your server, you need to create an `HTTPListenerConfiguration` that includes a certificate and private key. Most production use-cases will use a proxy such as Apache, Nginx, ALBs, etc. In development, it is recommended that you set up self-signed certificates and load those into the HTTP server.
+The HTTP server implements TLS `1.0-1.3` using the Java SSLEngine. To enable TLS for your server, you need to create an `HTTPListenerConfiguration` that includes a certificate and private key. Most production use-cases will use a proxy such as Apache, Nginx, ALBs, etc. In development, it is recommended that you set up self-signed certificates and load those into the HTTP server.
 
-To set up self-signed certificates on macOS, you can use the program `mkcert`. Here is an example:
+To set up self-signed certificates on macOS, you can use the program `mkcert` with the following example. 
 
 ```shell
 brew install mkcert
@@ -120,6 +125,8 @@ mkcert -install
 mkdir -p ~/dev/certificates
 mkcert -cert-file ~/dev/certificates/example.org.pem -key-file ~/dev/certificates/example.org.key example.org
 ```
+
+Note, if you are using Linux, once you install `mkcert` the instructions should be the same.
 
 In production environments, your certificate will likely be signed by one or more intermediate Certificate Authorities. In addition to the server certificate, ensure that all intermediate CA certificates in the chain are included in your pem file.
 
@@ -171,7 +178,7 @@ The load test configuration is set to `100` clients with `100,000` requests each
 
 All the servers were HTTP so that TLS would not introduce any additional latency.
 
-Here are the current test results:
+Here are the current test results: (in progress...)
 
 | Server         | Avg requests per second   | Failures per second   | Avg latency in ms       | Normalized Performance (%) |
 |----------------|---------------------------|-----------------------|-------------------------|----------------------------|
@@ -257,7 +264,7 @@ Let's face it, NIO is insanely complex to write and maintain. The first 3 versio
 
 ## Helping out
 
-We are looking for Java developers that are interested in helping us build the client and server. If you know a ton about networks and protocols and love writing clean, high-performance Java, contact us at dev@fusionauth.io.
+We are looking for Java developers that are interested in helping us build the client and server. If you know a ton about networks and protocols and love writing clean, high-performance Java, contact us at `dev@fusionauth.io`.
 
 ## Building with Savant
 
