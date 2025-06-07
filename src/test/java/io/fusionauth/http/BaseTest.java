@@ -293,11 +293,10 @@ public abstract class BaseTest {
     }
 
     LoggerFactory factory = FileLoggerFactory.FACTORY;
-//    LoggerFactory factory = SystemOutLoggerFactory.FACTORY;
     return new HTTPServer().withHandler(handler)
-                           .withKeepAliveTimeoutDuration(Duration.ofSeconds(10))
-                           .withInitialReadTimeout(Duration.ofSeconds(30))
-                           .withProcessingTimeoutDuration(Duration.ofSeconds(30))
+                           .withKeepAliveTimeoutDuration(ServerTimeout)
+                           .withInitialReadTimeout(ServerTimeout)
+                           .withProcessingTimeoutDuration(ServerTimeout)
                            .withExpectValidator(expectValidator)
                            .withInstrumenter(instrumenter)
                            .withLoggerFactory(factory)
