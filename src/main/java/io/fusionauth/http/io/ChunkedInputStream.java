@@ -82,6 +82,7 @@ public class ChunkedInputStream extends InputStream {
         // We have reached the end of the encoded payload. Push back any additional bytes read.
         if (state == ChunkedBodyState.Complete) {
           state = nextState;
+          bufferIndex++;
           pushBackOverReadBytes();
           break;
         }
@@ -111,7 +112,6 @@ public class ChunkedInputStream extends InputStream {
           // to process the final CRLF and hit the Complete state.
           if (chunkSize == 0) {
             state = nextState;
-            bufferIndex++;
             continue;
           }
         }
@@ -280,14 +280,20 @@ public class ChunkedInputStream extends InputStream {
       @Override
       public ChunkedBodyState next(byte ch, long length, long bytesRead) {
         if (length == 0) {
-          return Complete;
+          // Following the final 0 length chunk, trailers are optional.
+          if (HTTPTools.isURICharacter(ch)) {
+            return Trailer;
+          } else {
+            return Complete;
+          }
+
         } else if (bytesRead == length && ch == '\r') {
           return ChunkCR;
         } else if (bytesRead < length) {
           return Chunk;
-        } else {
-          throw makeParseException(ch, this);
         }
+
+        throw makeParseException(ch, this);
       }
     },
 
@@ -319,6 +325,36 @@ public class ChunkedInputStream extends InputStream {
       @Override
       public ChunkedBodyState next(byte ch, long length, long bytesRead) {
         return Complete;
+      }
+    },
+    Trailer {
+      @Override
+      public ChunkedBodyState next(byte ch, long length, long bytesRead) {
+        if (ch == '\r') {
+          return TrailerCR;
+        } else {
+          return Trailer;
+        }
+      }
+    },
+    TrailerCR {
+      @Override
+      public ChunkedBodyState next(byte ch, long length, long bytesRead) {
+        if (ch == '\n') {
+          return TrailerLF;
+        }
+
+        throw makeParseException(ch, this);
+      }
+    },
+    TrailerLF {
+      @Override
+      public ChunkedBodyState next(byte ch, long length, long bytesRead) {
+        if (HTTPTools.isURICharacter(ch)) {
+          return Trailer;
+        } else {
+          return Complete;
+        }
       }
     };
 

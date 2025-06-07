@@ -44,6 +44,7 @@ public class ChunkedInputStreamTest {
     // ;foo=;bar=baz     Two extensions, one value, one equals
     // ;foo=bar;bar=baz  Two extensions, two values
     // ;                 No extension, only a separator. Not sure if this is valid, but we should be able to ignore it.
+    // 0;foo=bar;bar     Extensions on the final 0 chunk
     withBody(
         """
             3;foo=bar\r
@@ -68,10 +69,11 @@ public class ChunkedInputStreamTest {
             sion\r
             2;\r
             s!\r
-            0\r
+            0;foo=bar;bar\r
             \r
             """)
-        .assertResult("Hi mom! Look no extensions!");
+        .assertResult("Hi mom! Look no extensions!")
+        .assertLeftOverBytes(0);
   }
 
   @Test
@@ -87,6 +89,7 @@ public class ChunkedInputStreamTest {
         \r
         """
     ).assertResult("123456789012345678901234567890123456789012345678901234567890")
+     .assertLeftOverBytes(0)
      .assertNextRead(ChunkedInputStream::read, -1);
   }
 
@@ -101,7 +104,8 @@ public class ChunkedInputStreamTest {
             0\r
             \r
             """
-    ).assertResult("Hi mom!");
+    ).assertResult("Hi mom!")
+     .assertLeftOverBytes(0);
   }
 
   @Test
@@ -149,6 +153,30 @@ public class ChunkedInputStreamTest {
     assertEquals(inputStream.read(buf), -1);
   }
 
+  @Test
+  public void trailers() throws Exception {
+    // It isn't clear if any HTTP server actually users or supports trailers. But, the spec indicates we should at least ignore them.
+    // - https://www.rfc-editor.org/rfc/rfc2616.html#section-3.6.1
+    withBody(
+        """
+            30\r
+            There is no fate but what we make for ourselves.\r
+            12\r
+            
+              - Sarah Connor
+            \r
+            0\r
+            Judgement-Day: August 29, 1997 2:14 AM EDT\r
+            \r
+            """)
+        .assertResult("""
+            There is no fate but what we make for ourselves.
+              - Sarah Connor
+            """)
+        // If we correctly read to the end of the InputStream we should not have any bytes left over in the PushbackInputStream
+        .assertLeftOverBytes(0);
+  }
+
   private Builder withBody(String body) {
     return new Builder().withBody(body);
   }
@@ -157,10 +185,34 @@ public class ChunkedInputStreamTest {
     return new PushbackInputStream(new PieceMealInputStream(parts));
   }
 
+  @SuppressWarnings("UnusedReturnValue")
   private static class Builder {
     public String body;
 
     public ChunkedInputStream chunkedInputStream;
+
+    public PushbackInputStream pushbackInputStream;
+
+    /**
+     * Used to ensure the parser worked correctly and was able to read to the end of the encoded body.
+     *
+     * @param expected the number of expected bytes that were over-read.
+     * @return this.
+     */
+    public Builder assertLeftOverBytes(int expected) throws IOException {
+      int actual = pushbackInputStream.getAvailableBufferedBytesRemaining();
+      if (actual != expected) {
+        if (actual > 0) {
+          byte[] leftOverBytes = new byte[actual];
+          int leftOverRead = pushbackInputStream.read(leftOverBytes);
+          // No reason to think these would not be equal... but they better be.
+          assertEquals(leftOverBytes.length, leftOverRead);
+          assertEquals(actual, expected, "\nHere is what was left over in the buffer\n[" + new String(leftOverBytes) + "]");
+        }
+      }
+
+      return this;
+    }
 
     public Builder assertNextRead(ThrowingFunction<ChunkedInputStream, Integer> function, int expected) throws Exception {
       var result = function.apply(chunkedInputStream);
@@ -169,8 +221,8 @@ public class ChunkedInputStreamTest {
     }
 
     public Builder assertResult(String expected) throws IOException {
-      var bis = new PushbackInputStream(new ByteArrayInputStream(body.getBytes(StandardCharsets.UTF_8)));
-      chunkedInputStream = new ChunkedInputStream(bis, 2048);
+      pushbackInputStream = new PushbackInputStream(new ByteArrayInputStream(body.getBytes(StandardCharsets.UTF_8)));
+      chunkedInputStream = new ChunkedInputStream(pushbackInputStream, 2048);
 
       String actual = new String(chunkedInputStream.readAllBytes(), StandardCharsets.UTF_8);
       assertEquals(actual, expected);
