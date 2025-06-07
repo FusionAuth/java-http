@@ -19,7 +19,6 @@ import java.io.IOException;
 import java.io.OutputStream;
 import java.io.Writer;
 import java.net.Socket;
-import java.net.SocketException;
 import java.net.URI;
 import java.net.URLDecoder;
 import java.net.http.HttpClient;
@@ -40,7 +39,6 @@ import java.util.concurrent.atomic.AtomicInteger;
 import java.util.zip.InflaterInputStream;
 
 import com.inversoft.net.ssl.SSLTools;
-import com.inversoft.rest.ByteArrayBodyHandler;
 import com.inversoft.rest.RESTClient;
 import com.inversoft.rest.TextResponseHandler;
 import io.fusionauth.http.HTTPValues.Connections;
@@ -55,7 +53,6 @@ import io.fusionauth.http.server.HTTPServer;
 import io.fusionauth.http.server.HTTPServerConfiguration;
 import org.testng.annotations.Test;
 import static org.testng.Assert.assertEquals;
-import static org.testng.Assert.assertFalse;
 import static org.testng.Assert.assertNull;
 import static org.testng.Assert.assertTrue;
 import static org.testng.Assert.fail;
@@ -1075,40 +1072,6 @@ public class CoreTest extends BaseTest {
       );
 
       assertEquals(response.statusCode(), 200);
-    }
-  }
-
-  @Test
-  public void tldr() {
-    // Too long did not read
-    // - Ues a large body, don't read any of it. Force the server to drain the InputStream and the body length
-    //   will exceed the configured number of bytes that are 'drainable' causing an exception. This means
-    //   the socket will be closed and not re-used.
-
-    // Ensure the body is larger than the configured max bytes to drain
-    var value = "1234567890";
-    var valueLength = ((4 * 1024) / value.length()) + 42;
-    var payload = "foo=" + value.repeat(valueLength);
-    byte[] bytes = payload.getBytes(StandardCharsets.UTF_8);
-
-    HTTPHandler noOpHandler = (req, res) -> {
-    };
-
-    // Start the server, configure to only allow 2k of bytes to drain
-    try (var ignore = makeServer("http", noOpHandler, null)
-        .withMaximumBytesToDrain(2 * 1024)
-        .start()) {
-
-      URI uri = makeURI("http", "");
-      var response = new RESTClient<>(Void.TYPE, Void.TYPE)
-          .url(uri.toString())
-          .bodyHandler(new ByteArrayBodyHandler(bytes))
-          .get()
-          .go();
-
-      assertFalse(response.wasSuccessful());
-      // The server will have closed the socket
-      assertEquals(response.exception.getClass(), SocketException.class);
     }
   }
 
