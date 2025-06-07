@@ -25,7 +25,7 @@ jobs:
           mkdir -p ~/dev/savant
           mkdir -p ~/.savant/plugins
           cd ~/dev/savant
-          curl -fSL https://github.com/savant-build/savant-core/releases/download/2.0.0/savant-2.0.7.tar.gz > savant.tar.gz
+          curl -fSL https://github.com/savant-build/savant-core/releases/download/2.0.0/savant-2.0.0.tar.gz > savant.tar.gz
           tar -xzf savant.tar.gz
           ln -s savant-2.0.0 current
           rm savant.tar.gz
