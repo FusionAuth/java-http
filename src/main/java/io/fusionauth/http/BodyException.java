@@ -1,5 +1,5 @@
 /*
- * Copyright (c) 2023, FusionAuth, All Rights Reserved
+ * Copyright (c) 2022-2025, FusionAuth, All Rights Reserved
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -16,9 +16,12 @@
 package io.fusionauth.http;
 
 /**
- * An exception thrown when the client closes the socket and the server should handle it gracefully.
+ * Exception that is thrown if any HTTP body fails to be read and/or processed.
  *
- * @author Daniel DeGroff
+ * @author Brian Pontarelli
  */
-public class ConnectionClosedException extends RuntimeException {
+public class BodyException extends RuntimeException {
+  public BodyException(String message, Throwable cause) {
+    super(message, cause);
+  }
 }

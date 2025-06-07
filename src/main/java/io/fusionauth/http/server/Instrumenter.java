@@ -1,5 +1,5 @@
 /*
- * Copyright (c) 2022, FusionAuth, All Rights Reserved
+ * Copyright (c) 2022-2025, FusionAuth, All Rights Reserved
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -22,12 +22,17 @@ package io.fusionauth.http.server;
  */
 public interface Instrumenter {
   /**
-   * Called when a new client connection is accepted.
+   * Called when a new client connection is accepted by the HTTP server.
    */
   void acceptedConnection();
 
   /**
-   * Called when a client sends in a bad HTTP request.
+   * Called when a new request is accepted by an HTTP worker.
+   */
+  void acceptedRequest();
+
+  /**
+   * Called when a client sends in a bad HTTP request. A bad request is one that cannot be handled by the HTTP server.
    */
   void badRequest();
 
@@ -42,7 +47,8 @@ public interface Instrumenter {
   void chunkedResponse();
 
   /**
-   * Called when a connection is closed due to an issue or a timeout.
+   * Called when a connection is closed due to an issue or a timeout. This should not count connections closed in expected conditions such
+   * as a keep-alive timeout.
    */
   void connectionClosed();
 
@@ -54,19 +60,20 @@ public interface Instrumenter {
   void readFromClient(long bytes);
 
   /**
-   * Called when the server is started.
+   * Called when the server listener is started. If you have a single listener, you will have one server started. If you have two listeners,
+   * one for HTTP and one for HTTPS, you will have two servers started.
    */
   void serverStarted();
 
   /**
-   * Signals that a virtual thread has exited.
+   * Signals that an HTTP worker has been started.
    */
-  void threadExited();
+  void workerStarted();
 
   /**
-   * Signals that a virtual thread has started.
+   * Signals that an HTTP worker has been stopped.
    */
-  void threadStarted();
+  void workerStopped();
 
   /**
    * Called when bytes are written to a client.

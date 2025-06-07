@@ -17,6 +17,9 @@ package io.fusionauth.http;
 
 import java.net.Socket;
 
+/**
+ * @author Brian Pontarelli
+ */
 public class DirectTest {
   public static void main(String[] args) throws Exception {
     try (Socket socket = new Socket("127.0.0.1", 8080)) {

@@ -101,57 +101,6 @@ public final class SecurityTools {
   }
 
   /**
-   * Returns an array of Certificates ordered starting from the end-entity through each supplied issuer in the List.
-   *
-   * @param certs The certificates to re-order.
-   * @return An array of {@link Certificate}s ordered from the end-entity through each supplied issuer.
-   * @throws IllegalArgumentException if certs is empty or missing an intermediate issuer cert.
-   */
-  private static Certificate[] reorderCertificates(Collection<X509Certificate> certs) {
-    if (certs.isEmpty()) {
-      throw new IllegalArgumentException("Empty certificate list");
-    }
-
-    var orderedCerts = new X509Certificate[certs.size()];
-
-    // Short circuit if only one cert is in collection
-    if (certs.size() == 1) {
-      orderedCerts[0] = certs.stream().findFirst().get();
-      return orderedCerts;
-    }
-
-    // Index certificates by Issuer and Subject
-    var certsByIssuer = new HashMap<X500Principal, X509Certificate>(certs.size());
-    var certsBySubject = new HashMap<X500Principal, X509Certificate>(certs.size());
-
-    // Load all certificates into maps
-    for (X509Certificate cert : certs) {
-      certsByIssuer.put(cert.getIssuerX500Principal(), cert);
-      certsBySubject.put(cert.getSubjectX500Principal(), cert);
-    }
-
-    // Find the server certificate. It's the one that no other certificate refers to as its issuer. Store it in the first array element.
-    for (var cert : certs) {
-      if (!certsByIssuer.containsKey(cert.getSubjectX500Principal())) {
-        orderedCerts[0] = cert;
-        break;
-      }
-    }
-
-    // Start at the server cert and add each issuer certificate in order.
-    for (int i = 0; i < orderedCerts.length - 1; i++) {
-      var issuer = certsBySubject.get(orderedCerts[i].getIssuerX500Principal());
-      if (issuer == null) {
-        throw new IllegalArgumentException("Missing issuer cert for " + orderedCerts[i].getIssuerX500Principal());
-      }
-      orderedCerts[i + 1] = issuer;
-    }
-
-    return orderedCerts;
-  }
-
-
-  /**
    * Parses a single object in a PEM-formatted string into a byte[].
    */
   public static byte[] parseDERFromPEM(String pem, String beginDelimiter, String endDelimiter) {
@@ -219,5 +168,55 @@ public final class SecurityTools {
     SSLContext context = SSLContext.getInstance("TLS");
     context.init(kmf.getKeyManagers(), null, null);
     return context;
+  }
+
+  /**
+   * Returns an array of Certificates ordered starting from the end-entity through each supplied issuer in the List.
+   *
+   * @param certs The certificates to re-order.
+   * @return An array of {@link Certificate}s ordered from the end-entity through each supplied issuer.
+   * @throws IllegalArgumentException if certs is empty or missing an intermediate issuer cert.
+   */
+  private static Certificate[] reorderCertificates(Collection<X509Certificate> certs) {
+    if (certs.isEmpty()) {
+      throw new IllegalArgumentException("Empty certificate list");
+    }
+
+    var orderedCerts = new X509Certificate[certs.size()];
+
+    // Short circuit if only one cert is in collection
+    if (certs.size() == 1) {
+      orderedCerts[0] = certs.stream().findFirst().get();
+      return orderedCerts;
+    }
+
+    // Index certificates by Issuer and Subject
+    var certsByIssuer = new HashMap<X500Principal, X509Certificate>(certs.size());
+    var certsBySubject = new HashMap<X500Principal, X509Certificate>(certs.size());
+
+    // Load all certificates into maps
+    for (X509Certificate cert : certs) {
+      certsByIssuer.put(cert.getIssuerX500Principal(), cert);
+      certsBySubject.put(cert.getSubjectX500Principal(), cert);
+    }
+
+    // Find the server certificate. It's the one that no other certificate refers to as its issuer. Store it in the first array element.
+    for (var cert : certs) {
+      if (!certsByIssuer.containsKey(cert.getSubjectX500Principal())) {
+        orderedCerts[0] = cert;
+        break;
+      }
+    }
+
+    // Start at the server cert and add each issuer certificate in order.
+    for (int i = 0; i < orderedCerts.length - 1; i++) {
+      var issuer = certsBySubject.get(orderedCerts[i].getIssuerX500Principal());
+      if (issuer == null) {
+        throw new IllegalArgumentException("Missing issuer cert for " + orderedCerts[i].getIssuerX500Principal());
+      }
+      orderedCerts[i + 1] = issuer;
+    }
+
+    return orderedCerts;
   }
 }

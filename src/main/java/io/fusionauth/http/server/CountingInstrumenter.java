@@ -1,5 +1,5 @@
 /*
- * Copyright (c) 2022, FusionAuth, All Rights Reserved
+ * Copyright (c) 2022-2025, FusionAuth, All Rights Reserved
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -23,6 +23,8 @@ package io.fusionauth.http.server;
  */
 @SuppressWarnings("unused")
 public class CountingInstrumenter implements Instrumenter {
+  private long acceptedRequests;
+
   private long badRequests;
 
   private long bytesRead;
@@ -37,13 +39,18 @@ public class CountingInstrumenter implements Instrumenter {
 
   private long connections;
 
-  private long startedCount;
+  private long servers;
 
-  private long threadCount;
+  private long workers;
 
   @Override
   public void acceptedConnection() {
     connections++;
+  }
+
+  @Override
+  public void acceptedRequest() {
+    acceptedRequests++;
   }
 
   @Override
@@ -64,6 +71,10 @@ public class CountingInstrumenter implements Instrumenter {
   @Override
   public void connectionClosed() {
     closedConnections++;
+  }
+
+  public long getAcceptedRequests() {
+    return acceptedRequests;
   }
 
   public long getBadRequests() {
@@ -94,12 +105,12 @@ public class CountingInstrumenter implements Instrumenter {
     return connections;
   }
 
-  public long getStartedCount() {
-    return startedCount;
+  public long getServers() {
+    return servers;
   }
 
-  public long getThreadCount() {
-    return threadCount;
+  public long getWorkers() {
+    return workers;
   }
 
   @Override
@@ -109,17 +120,17 @@ public class CountingInstrumenter implements Instrumenter {
 
   @Override
   public void serverStarted() {
-    startedCount++;
+    servers++;
   }
 
   @Override
-  public void threadExited() {
-    threadCount--;
+  public void workerStarted() {
+    workers++;
   }
 
   @Override
-  public void threadStarted() {
-    threadCount++;
+  public void workerStopped() {
+    workers--;
   }
 
   @Override

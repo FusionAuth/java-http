@@ -1,5 +1,5 @@
 /*
- * Copyright (c) 2015-2022, FusionAuth, All Rights Reserved
+ * Copyright (c) 2015-2025, FusionAuth, All Rights Reserved
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -39,21 +39,6 @@ import static java.time.temporal.ChronoField.YEAR;
  */
 public final class DateTools {
   public static final DateTimeFormatter RFC_5322_DATE_TIME;
-
-  private DateTools() {
-  }
-
-  public static String format(ZonedDateTime value) {
-    return value.format(DateTools.RFC_5322_DATE_TIME);
-  }
-
-  public static ZonedDateTime parse(String value) {
-    try {
-      return ZonedDateTime.parse(value, DateTools.RFC_5322_DATE_TIME);
-    } catch (Exception e) {
-      return null;
-    }
-  }
 
   static {
     Map<Long, String> dow = new HashMap<>();
@@ -101,5 +86,20 @@ public final class DateTools {
         .appendLiteral(' ')
         .appendOffset("+HHMM", "GMT")  // should handle UT/Z/EST/EDT/CST/CDT/MST/MDT/PST/MDT
         .toFormatter();
+  }
+
+  private DateTools() {
+  }
+
+  public static String format(ZonedDateTime value) {
+    return value.format(DateTools.RFC_5322_DATE_TIME);
+  }
+
+  public static ZonedDateTime parse(String value) {
+    try {
+      return ZonedDateTime.parse(value, DateTools.RFC_5322_DATE_TIME);
+    } catch (Exception e) {
+      return null;
+    }
   }
 }

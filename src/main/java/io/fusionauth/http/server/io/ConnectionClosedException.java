@@ -1,5 +1,5 @@
 /*
- * Copyright (c) 2022, FusionAuth, All Rights Reserved
+ * Copyright (c) 2023-2025, FusionAuth, All Rights Reserved
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -13,24 +13,15 @@
  * either express or implied. See the License for the specific
  * language governing permissions and limitations under the License.
  */
-package io.fusionauth.http.log;
+package io.fusionauth.http.server.io;
 
 /**
- * Simple implementation of the LoggerFactory that returns various FileLoggers
+ * An exception thrown when the client closes the socket and the server should handle it gracefully.
  *
- * @author Brian Pontarelli
+ * @author Daniel DeGroff
  */
-public class FileLoggerFactory implements LoggerFactory {
-  public static final FileLoggerFactory FACTORY = new FileLoggerFactory();
-
-  private static FileLogger logger;
-
-  public static void setLogger(FileLogger logger) {
-    FileLoggerFactory.logger = logger;
-  }
-
-  @Override
-  public Logger getLogger(Class<?> klass) {
-    return logger;
+public class ConnectionClosedException extends RuntimeException {
+  public ConnectionClosedException(String message) {
+    super(message);
   }
 }

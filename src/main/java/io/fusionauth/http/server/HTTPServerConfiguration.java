@@ -1,5 +1,5 @@
 /*
- * Copyright (c) 2022-2023, FusionAuth, All Rights Reserved
+ * Copyright (c) 2022-2025, FusionAuth, All Rights Reserved
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -34,11 +34,13 @@ public class HTTPServerConfiguration implements Configurable<HTTPServerConfigura
 
   private Path baseDir = Path.of("");
 
+  private int chunkedBufferSize = 4 * 1024; // 4k bytes
+
   private boolean compressByDefault = true;
 
   private String contextPath = "";
 
-  private ExpectValidator expectValidator;
+  private ExpectValidator expectValidator = new AlwaysContinueExpectValidator();
 
   private HTTPHandler handler;
 
@@ -49,6 +51,12 @@ public class HTTPServerConfiguration implements Configurable<HTTPServerConfigura
   private Duration keepAliveTimeoutDuration = Duration.ofSeconds(20);
 
   private LoggerFactory loggerFactory = SystemOutLoggerFactory.FACTORY;
+
+  private int maxBytesToDrain = 256 * 1024; // 256k bytes
+
+  private int maxPendingSocketConnections = 250;
+
+  private int maxRequestsPerConnection = 100_000; // 100,000
 
   private int maxResponseChunkSize = 16 * 1024; // 16k bytes
 
@@ -62,9 +70,9 @@ public class HTTPServerConfiguration implements Configurable<HTTPServerConfigura
 
   private Duration readThroughputCalculationDelayDuration = Duration.ofSeconds(5);
 
-  private int requestBufferSize = 16 * 1024;
+  private int requestBufferSize = 16 * 1024; // 16k bytes
 
-  private int responseBufferSize = 64 * 1024;
+  private int responseBufferSize = 64 * 1024; // 16k bytes
 
   private Duration shutdownDuration = Duration.ofSeconds(10);
 
@@ -86,6 +94,13 @@ public class HTTPServerConfiguration implements Configurable<HTTPServerConfigura
   }
 
   /**
+   * @return the length of the buffer used to parse a chunked request.
+   */
+  public int getChunkedBufferSize() {
+    return chunkedBufferSize;
+  }
+
+  /**
    * @return The context page that the entire server serves requests under or null.
    */
   public String getContextPath() {
@@ -93,7 +108,7 @@ public class HTTPServerConfiguration implements Configurable<HTTPServerConfigura
   }
 
   /**
-   * @return The expect validator or null.
+   * @return The expect validator. Cannot be null and is required.
    */
   public ExpectValidator getExpectValidator() {
     return expectValidator;
@@ -141,6 +156,38 @@ public class HTTPServerConfiguration implements Configurable<HTTPServerConfigura
    */
   public LoggerFactory getLoggerFactory() {
     return loggerFactory;
+  }
+
+  /**
+   * @return The maximum number of bytes to drain from the InputStream when the request handler did not read all available bytes and the
+   *     connection is using a keep-alive which means the server must drain the InputStream in preparation for the next request. Defaults to
+   *     256k.
+   */
+  public int getMaxBytesToDrain() {
+    return maxBytesToDrain;
+  }
+
+  /**
+   * The maximum number of pending socket connections per HTTP listener.
+   * <p>
+   * This number represents how many pending socket connections are allowed to queue before they are rejected. Once the connection is
+   * accepted by the server socket, a client socket is created and handed to an HTTP Worker. This queue length only needs to be large enough
+   * to buffer the incoming requests as fast as we can accept them and hand them to a worker.
+   *
+   * @return The maximum number of pending socket connections per HTTP listener. Defaults to 250.
+   */
+  public int getMaxPendingSocketConnections() {
+    return maxPendingSocketConnections;
+  }
+
+  /**
+   * This limit only applies when using a persistent connection. If this number is reached without hitting a Keep-Alive timeout the
+   * connection will be closed just as it would be if the Keep-Alive timeout was reached.
+   *
+   * @return The maximum number of requests that can be handled by a single persistent connection. Defaults to 100,000.
+   */
+  public int getMaxRequestsPerConnection() {
+    return maxRequestsPerConnection;
   }
 
   /**
@@ -244,6 +291,19 @@ public class HTTPServerConfiguration implements Configurable<HTTPServerConfigura
    * {@inheritDoc}
    */
   @Override
+  public HTTPServerConfiguration withChunkedBufferSize(int chunkedBufferSize) {
+    if (chunkedBufferSize <= 1024) {
+      throw new IllegalArgumentException("The chunked buffer size must be greater than or equal to 1024 bytes");
+    }
+
+    this.chunkedBufferSize = chunkedBufferSize;
+    return this;
+  }
+
+  /**
+   * {@inheritDoc}
+   */
+  @Override
   public HTTPServerConfiguration withCompressByDefault(boolean compressByDefault) {
     this.compressByDefault = compressByDefault;
     return this;
@@ -263,6 +323,7 @@ public class HTTPServerConfiguration implements Configurable<HTTPServerConfigura
    */
   @Override
   public HTTPServerConfiguration withExpectValidator(ExpectValidator validator) {
+    Objects.requireNonNull(handler, "You cannot set ExpectValidator to null");
     this.expectValidator = validator;
     return this;
   }
@@ -340,6 +401,32 @@ public class HTTPServerConfiguration implements Configurable<HTTPServerConfigura
    * {@inheritDoc}
    */
   @Override
+  public HTTPServerConfiguration withMaxPendingSocketConnections(int maxPendingSocketConnections) {
+    if (maxPendingSocketConnections < 25) {
+      throw new IllegalArgumentException("The minimum pending socket connections must be greater than or equal to 25");
+    }
+
+    this.maxPendingSocketConnections = maxPendingSocketConnections;
+    return this;
+  }
+
+  /**
+   * {@inheritDoc}
+   */
+  @Override
+  public HTTPServerConfiguration withMaxRequestsPerConnection(int maxRequestsPerConnection) {
+    if (maxRequestsPerConnection < 10) {
+      throw new IllegalArgumentException("The maximum number of requests per connection must be greater than or equal to 10");
+    }
+
+    this.maxRequestsPerConnection = maxRequestsPerConnection;
+    return this;
+  }
+
+  /**
+   * {@inheritDoc}
+   */
+  @Override
   public HTTPServerConfiguration withMaxResponseChunkSize(int size) {
     this.maxResponseChunkSize = size;
     return this;
@@ -349,9 +436,22 @@ public class HTTPServerConfiguration implements Configurable<HTTPServerConfigura
    * {@inheritDoc}
    */
   @Override
+  public HTTPServerConfiguration withMaximumBytesToDrain(int maxBytesToDrain) {
+    if (maxBytesToDrain <= 1024 || maxBytesToDrain >= 256 * 1024 * 1024) {
+      throw new IllegalArgumentException("The maximum bytes to drain must be greater than or equal to 1024 and less than or equal to 268,435,456 (256 megabytes)");
+    }
+
+    this.maxBytesToDrain = maxBytesToDrain;
+    return this;
+  }
+
+  /**
+   * {@inheritDoc}
+   */
+  @Override
   public HTTPServerConfiguration withMinimumReadThroughput(long bytesPerSecond) {
-    if (bytesPerSecond != -1 && bytesPerSecond < 1024) {
-      throw new IllegalArgumentException("The minimum bytes per second must be greater than 1024. This should probably be faster than a 28.8 baud modem!");
+    if (bytesPerSecond != -1 && bytesPerSecond < 512) {
+      throw new IllegalArgumentException("The minimum bytes per second must be greater than 512. Note that the theoretical maximum transmission speed of a 28.8k is 28,800 bits /second, or 3,600 bytes /second. Maybe consider requiring the read throughput to be faster than a 28.8k modem.");
     }
 
     this.minimumReadThroughput = bytesPerSecond;
@@ -362,8 +462,8 @@ public class HTTPServerConfiguration implements Configurable<HTTPServerConfigura
    * {@inheritDoc}
    */
   public HTTPServerConfiguration withMinimumWriteThroughput(long bytesPerSecond) {
-    if (bytesPerSecond != -1 && bytesPerSecond < 1024) {
-      throw new IllegalArgumentException("The minimum bytes per second must be greater than 1024. This should probably be faster than a 28.8 baud modem!");
+    if (bytesPerSecond != -1 && bytesPerSecond < 512) {
+      throw new IllegalArgumentException("The minimum bytes per second must be greater than 512. Note that the theoretical maximum transmission speed of a 28.8k is 28,800 bits /second, or 3,600 bytes /second. Maybe consider requiring the write throughput to be faster than a 28.8k modem.");
     }
 
     this.minimumWriteThroughput = bytesPerSecond;

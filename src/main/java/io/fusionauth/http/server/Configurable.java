@@ -1,5 +1,5 @@
 /*
- * Copyright (c) 2022-2023, FusionAuth, All Rights Reserved
+ * Copyright (c) 2022-2025, FusionAuth, All Rights Reserved
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -47,6 +47,17 @@ public interface Configurable<T extends Configurable<T>> {
   }
 
   /**
+   * Sets the buffer size for the chunked input stream. Defaults to 4k.
+   *
+   * @param chunkedBufferSize the buffer size used to read a request body that was encoded using 'chunked' transfer-encoding.
+   * @return This.
+   */
+  default T withChunkedBufferSize(int chunkedBufferSize) {
+    configuration().withChunkedBufferSize(chunkedBufferSize);
+    return (T) this;
+  }
+
+  /**
    * Sets the default compression behavior for the HTTP response. This behavior can be optionally set per response. See
    * {@link HTTPResponse#setCompress(boolean)}. Defaults to true.
    *
@@ -73,6 +84,8 @@ public interface Configurable<T extends Configurable<T>> {
 
   /**
    * Sets an ExpectValidator that is used if a client sends the server a {@code Expect: 100-continue} header.
+   * <p>
+   * Must not be null.
    *
    * @param validator The validator.
    * @return This.
@@ -84,6 +97,8 @@ public interface Configurable<T extends Configurable<T>> {
 
   /**
    * Sets the handler that will process the requests.
+   * <p>
+   * Must not be null.
    *
    * @param handler The handler that processes the requests.
    * @return This.
@@ -153,6 +168,34 @@ public interface Configurable<T extends Configurable<T>> {
   }
 
   /**
+   * Sets the maximum number of pending socket connections per HTTP listener.
+   * <p>
+   * This number represents how many pending socket connections are allowed to queue before they are rejected. Once the connection is
+   * accepted by the server socket, a client socket is created and handed to an HTTP Worker. This queue length only needs to be large enough
+   * to buffer the incoming requests as fast as we can accept them and hand them to a worker.
+   * <p>
+   * Defaults to 200.
+   *
+   * @return This.
+   */
+  default T withMaxPendingSocketConnections(int maxPendingSocketConnections) {
+    configuration().withMaxPendingSocketConnections(maxPendingSocketConnections);
+    return (T) this;
+  }
+
+  /**
+   * Sets the base directory for this server. This is passed to the HTTPContext, which is available from this class. This defaults to the
+   * current working directory of the process. Defaults to 100,000.
+   *
+   * @param maxRequestsPerConnection The maximum number of requests that can be handled by a single persistent connection.
+   * @return This.
+   */
+  default T withMaxRequestsPerConnection(int maxRequestsPerConnection) {
+    configuration().withMaxRequestsPerConnection(maxRequestsPerConnection);
+    return (T) this;
+  }
+
+  /**
    * This configures the maximum size of a chunk in the response when the server is using chunked response encoding. Defaults to 16k.
    *
    * @param size The size in bytes.
@@ -160,6 +203,19 @@ public interface Configurable<T extends Configurable<T>> {
    */
   default T withMaxResponseChunkSize(int size) {
     configuration().withMaxResponseChunkSize(size);
+    return (T) this;
+  }
+
+  /**
+   * Sets the maximum number of bytes the server will allow worker threads to drain after calling the request handler. If the request
+   * handler does not read all the bytes, and this limit is exceeded the connection will be closed. Defaults to 128k bytes.
+   *
+   * @param maxBytesToDrain The maximum number of bytes to drain from the InputStream if the request handler did not read all the available
+   *                        bytes.
+   * @return This.
+   */
+  default T withMaximumBytesToDrain(int maxBytesToDrain) {
+    configuration().withMaximumBytesToDrain(maxBytesToDrain);
     return (T) this;
   }
 

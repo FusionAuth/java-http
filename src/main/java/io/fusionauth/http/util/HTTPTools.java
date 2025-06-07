@@ -1,5 +1,5 @@
 /*
- * Copyright (c) 2022-2023, FusionAuth, All Rights Reserved
+ * Copyright (c) 2022-2025, FusionAuth, All Rights Reserved
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -17,29 +17,30 @@ package io.fusionauth.http.util;
 
 import java.io.ByteArrayOutputStream;
 import java.io.IOException;
-import java.io.InputStream;
 import java.io.OutputStream;
 import java.net.URLDecoder;
 import java.nio.charset.Charset;
 import java.nio.charset.IllegalCharsetNameException;
 import java.nio.charset.StandardCharsets;
-import java.util.Arrays;
 import java.util.HashMap;
+import java.util.HexFormat;
 import java.util.LinkedList;
 import java.util.List;
 import java.util.Map;
 import java.util.Objects;
 
-import io.fusionauth.http.ConnectionClosedException;
 import io.fusionauth.http.HTTPMethod;
 import io.fusionauth.http.HTTPValues.ControlBytes;
 import io.fusionauth.http.HTTPValues.HeaderBytes;
 import io.fusionauth.http.HTTPValues.ProtocolBytes;
+import io.fusionauth.http.ParseException;
+import io.fusionauth.http.io.PushbackInputStream;
 import io.fusionauth.http.log.Logger;
 import io.fusionauth.http.log.LoggerFactory;
 import io.fusionauth.http.server.HTTPRequest;
 import io.fusionauth.http.server.HTTPResponse;
 import io.fusionauth.http.server.Instrumenter;
+import io.fusionauth.http.server.io.ConnectionClosedException;
 
 public final class HTTPTools {
   private static Logger logger;
@@ -51,6 +52,14 @@ public final class HTTPTools {
    */
   public static void initialize(LoggerFactory loggerFactory) {
     HTTPTools.logger = loggerFactory.getLogger(HTTPTools.class);
+  }
+
+  /**
+   * @param ch The character as a since HTTP is ASCII
+   * @return True if the character is an ASCII control character.
+   */
+  public static boolean isControlCharacter(byte ch) {
+    return ch >= 0 && ch <= 31;
   }
 
   /**
@@ -84,8 +93,8 @@ public final class HTTPTools {
    */
   public static boolean isTokenCharacter(byte ch) {
     return ch == '!' || ch == '#' || ch == '$' || ch == '%' || ch == '&' || ch == '\'' || ch == '*' || ch == '+' || ch == '-' || ch == '.' ||
-        ch == '^' || ch == '_' || ch == '`' || ch == '|' || ch == '~' || (ch >= 'A' && ch <= 'Z') || (ch >= 'a' && ch <= 'z') ||
-        (ch >= '0' && ch <= '9');
+           ch == '^' || ch == '_' || ch == '`' || ch == '|' || ch == '~' || (ch >= 'A' && ch <= 'Z') || (ch >= 'a' && ch <= 'z') ||
+           (ch >= '0' && ch <= '9');
   }
 
   /**
@@ -95,7 +104,6 @@ public final class HTTPTools {
    * @return True if the character is a URI character.
    */
   public static boolean isURICharacter(byte ch) {
-    // TODO : Fully implement RFC 3986 to accurate parsing
     return ch >= '!' && ch <= '~';
   }
 
@@ -103,6 +111,22 @@ public final class HTTPTools {
   public static boolean isValueCharacter(byte ch) {
     int intVal = ch & 0xFF;  // Convert the value into an integer without extending the sign bit.
     return isURICharacter(ch) || intVal == ' ' || intVal == '\t' || intVal == '\n' || intVal >= 0x80;
+  }
+
+  /**
+   * Build a {@link ParseException} that can be thrown.
+   *
+   * @param b     the byte that caused the exception
+   * @param state the current parser state
+   * @return a throwable exception
+   */
+  public static ParseException makeParseException(byte b, Enum<? extends Enum<?>> state) {
+    // Trying to print a control characters can mess up the logging format.
+    var hex = HexFormat.of().withUpperCase().formatHex(new byte[]{b});
+    String message = HTTPTools.isControlCharacter(b)
+        ? "Unexpected character. Dec [" + b + "] Hex [" + hex + "]"
+        : "Unexpected character. Dec [" + b + "] Hex [" + hex + "] Symbol [" + ((char) b) + "]";
+    return new ParseException(message + " Parse state [" + state + "]", state.name());
   }
 
   /**
@@ -240,11 +264,11 @@ public final class HTTPTools {
    * @param requestBuffer A buffer used for reading to help reduce memory thrashing.
    * @param instrumenter  The Instrumenter that is informed of bytes read.
    * @param readObserver  An observer that is called once one byte has been read.
-   * @return Any leftover body bytes from the last read from the InputStream.
    * @throws IOException If the read fails.
    */
-  public static byte[] parseRequestPreamble(InputStream inputStream, HTTPRequest request, byte[] requestBuffer, Instrumenter instrumenter,
-                                            Runnable readObserver)
+  public static void parseRequestPreamble(PushbackInputStream inputStream, HTTPRequest request, byte[] requestBuffer,
+                                          Instrumenter instrumenter,
+                                          Runnable readObserver)
       throws IOException {
     RequestPreambleState state = RequestPreambleState.RequestMethod;
     var valueBuffer = new ByteArrayOutputStream(512);
@@ -253,10 +277,13 @@ public final class HTTPTools {
     int read = 0;
     int index = 0;
     while (state != RequestPreambleState.Complete) {
+      long start = System.currentTimeMillis();
       read = inputStream.read(requestBuffer);
+
+      // We have not yet reached the end of the preamble. If there are no more bytes to read, the connection must have been closed by the client.
       if (read < 0) {
-        logger.trace("Read [{}] signal from client. Closing the socket.", read);
-        throw new ConnectionClosedException();
+        long waited = System.currentTimeMillis() - start;
+        throw new ConnectionClosedException(String.format("Read returned [%d] after waiting [%d] ms", read, waited));
       }
 
       logger.trace("Read [{}] from client for preamble.", read);
@@ -295,13 +322,10 @@ public final class HTTPTools {
       }
     }
 
-    byte[] leftover = null;
+    // Push back the leftover bytes
     if (index < read) {
-      logger.trace("Had [{}] body bytes from the preamble read.", (read - index));
-      leftover = Arrays.copyOfRange(requestBuffer, index, read);
+      inputStream.push(requestBuffer, index, read - index);
     }
-
-    return leftover;
   }
 
   /**

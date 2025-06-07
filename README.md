@@ -1,10 +1,17 @@
 ## FusionAuth HTTP client and server ![semver 2.0.0 compliant](http://img.shields.io/badge/semver-2.0.0-brightgreen.svg?style=flat-square) [![test](https://github.com/FusionAuth/java-http/actions/workflows/test.yml/badge.svg)](https://github.com/FusionAuth/java-http/actions/workflows/test.yml)
 
-**NOTE:** This project is in progress.
+**NOTE:** This project is in progress. Version `0.3.0` is production ready, version `0.4.0` which will likely become `1.0.0` is still in development.
 
 The goal of this project is to build a full-featured HTTP server and client in plain Java without the use of any libraries. The client and server will use Project Loom virtual threads and blocking I/O so that the Java VM will handle all the context switching between virtual threads as they block on I/O.
 
 For more information about Project Loom and virtual threads, here is a good article to read: https://blogs.oracle.com/javamagazine/post/java-virtual-threads
+
+## Project Goals
+
+- Very fast
+- Easy to make a simple web server like you can in Node.js
+- No dependencies
+- To not boil the ocean. This is a purpose built HTTP server that probably won't do everything.
 
 ## Installation
 
@@ -14,20 +21,20 @@ To add this library to your project, you can include this dependency in your Mav
 <dependency>
   <groupId>io.fusionauth</groupId>
   <artifactId>java-http</artifactId>
-  <version>0.4.0-RC.4</version>
+  <version>0.4.0-RC.7</version>
 </dependency>
 ```
 
 If you are using Gradle, you can add this to your build file:
 
 ```groovy
-implementation 'io.fusionauth:java-http:0.4.0-RC.4'
+implementation 'io.fusionauth:java-http:0.4.0-RC.7'
 ```
 
 If you are using Savant, you can add this to your build file:
 
 ```groovy
-dependency(id: "io.fusionauth:java-http:0.4.0-RC.4")
+dependency(id: "io.fusionauth:java-http:0.4.0-RC.7")
 ```
 
 ## Examples Usages:
@@ -158,17 +165,54 @@ Then you can open `https://example.org` in a browser or call it using an HTTP cl
 
 ## Performance
 
-A key component for this project is to have awesome performance. Here are some basic metrics using the FusionAuth load test suite against a simple application using the Prime Framework MVC. The controller does nothing except return a simple 200. Here are some simple comparisons between `Tomcat`, `Netty`, and `java-http`.
+A key purpose for this project is obtain screaming performance. Here are some basic metrics using the FusionAuth load test suite against a boilerplate request handler. The request handler simply returns a `200`. Here are some simple comparisons between `apache-tomcat`, `Netty`, and `java-http`.
 
-The load test configuration is set to 10 clients with 500,000 requests each. The client is Restify which is a FusionAuth library that uses `HttpURLConnection` under the hoods. All the servers were HTTP so that TLS would not introduce any additional latency.
+The load test configuration is set to `100` clients with `100,000` requests each per worker. This means the entire test will execute `10,000,000` requests. The HTTP client is [Restify](https://github.com/inversoft/restify) which is a FusionAuth library that uses `HttpURLConnection` under the hoods. This REST client is used because it is considerably faster than the native Java REST client. In a real life example, depending upon your application, this performance may not matter. For the purposes of a load test, we have attempted to remove as many limitations to pushing the server as hard as we can. 
+
+All the servers were HTTP so that TLS would not introduce any additional latency.
 
 Here are the current test results:
 
-| Server      | RPS    | Failures per second |
-|-------------|--------|---------------------|
-| `java-http` | 63,216 | 0                   |
-| `Tomcat`    | 51,351 | 0.103               |
-| `Netty`     | 540    | 1.818               |
+| Server         | Avg requests per second   | Failures per second   | Avg latency in ms       | Normalized Performance (%) |
+|----------------|---------------------------|-----------------------|-------------------------|----------------------------|
+| java-http      | 101,317                   | 0                     | 0.350                   | 100%                       |
+| Apache Tomcat  | 83,463                    | 0                     | 0.702                   | 82.3%                      | 
+| Netty          | ?                         | ?                     | ?                       |                            |
+| OkHttp         | ?                         | ?                     | ?                       |                            |
+| JDK HttpServer | ?                         | ?                     | ?                       |                            |
+
+Note the JDK HTTP Server is `com.sun.net.httpserver.HttpServer`. I don't know that anyone would use this in production, the JDK has not yet made a version of this using a public API. It is included here for reference only. 
+
+Load test last performed May 30, 2025. Using the [fusionauth-load-test](https://github.com/fusionauth/fusionauth-load-tests) library.
+
+### Running load tests
+
+Start the HTTP server to test.
+
+#### java-http
+
+Start the HTTP server. Run the following commands from the `java-http` repo.
+
+```bash
+cd load-tests/self
+sb clean start
+```
+
+#### Apache Tomcat
+
+Start the HTTP server. Run the following commands from the `java-http` repo.
+
+```bash
+cd load-tests/tomcat
+sb clean start
+```
+
+Once you have the server started you wish to test, start the load test. Run the following commands from the `fusionauth-load-tests` repo.
+
+```bash
+sb clean int
+./load-test.sh HTTP.json
+```
 
 Netty and Tomcat both seem to suffer from buffering and connection issues at very high scale. Regardless of the configuration, both servers always begins to fail with connection timeout problems at scale. `java-http` does not have these issues because of the way it handles connections via the selector. Connections don't back up and client connection pools can always be re-used with Keep-Alive.
 
@@ -222,8 +266,8 @@ We are looking for Java developers that are interested in helping us build the c
 ```bash
 $ mkdir ~/savant
 $ cd ~/savant
-$ wget http://savant.inversoft.org/org/savantbuild/savant-core/2.0.0-RC.6/savant-2.0.0-RC.7.tar.gz
-$ tar xvfz savant-2.0.0-RC.7.tar.gz
-$ ln -s ./savant-2.0.0-RC.7 current
+$ wget http://savant.inversoft.org/org/savantbuild/savant-core/2.0.0/savant-2.0.0.tar.gz
+$ tar xvfz savant-2.0.0.tar.gz
+$ ln -s ./savant-2.0.0 current
 $ export PATH=$PATH:~/savant/current/bin/
 ```

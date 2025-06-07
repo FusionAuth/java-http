@@ -38,6 +38,7 @@ import java.util.SortedSet;
 import java.util.TreeSet;
 import java.util.stream.Collectors;
 
+import io.fusionauth.http.BodyException;
 import io.fusionauth.http.Buildable;
 import io.fusionauth.http.Cookie;
 import io.fusionauth.http.FileInfo;
@@ -45,8 +46,8 @@ import io.fusionauth.http.HTTPMethod;
 import io.fusionauth.http.HTTPValues.Connections;
 import io.fusionauth.http.HTTPValues.ContentTypes;
 import io.fusionauth.http.HTTPValues.Headers;
+import io.fusionauth.http.HTTPValues.Protocols;
 import io.fusionauth.http.HTTPValues.TransferEncodings;
-import io.fusionauth.http.io.BodyException;
 import io.fusionauth.http.io.MultipartStream;
 import io.fusionauth.http.util.HTTPTools;
 import io.fusionauth.http.util.HTTPTools.HeaderValue;
@@ -264,14 +265,16 @@ public class HTTPRequest implements Buildable<HTTPRequest> {
   }
 
   public byte[] getBodyBytes() throws BodyException {
-    if (bodyBytes == null && inputStream != null) {
-      try {
-        bodyBytes = inputStream.readAllBytes();
-      } catch (IOException e) {
-        throw new BodyException("Unable to read the HTTP request body bytes", e);
+    if (bodyBytes == null) {
+      if (inputStream != null) {
+        try {
+          bodyBytes = inputStream.readAllBytes();
+        } catch (IOException e) {
+          throw new BodyException("Unable to read the HTTP request body bytes", e);
+        }
+      } else {
+        bodyBytes = new byte[0];
       }
-    } else {
-      bodyBytes = new byte[0];
     }
 
     return bodyBytes;
@@ -602,11 +605,22 @@ public class HTTPRequest implements Buildable<HTTPRequest> {
 
   /**
    * Determines if the request is asking for the server to keep the connection alive. This is based on the Connection header.
+   * <p>
+   * This method will account for HTTP 1.0 and 1.1 protocol versions. In HTTP 1.0, you must explicitly ask for a persistent connection, and
+   * in HTTP 1.1 it is on by default, and you must request for it to be disabled by providing the <code>Connection: close</code> request
+   * header.
    *
    * @return True if the Connection header is missing or not `Close`.
    */
   public boolean isKeepAlive() {
     var connection = getHeader(Headers.Connection);
+    // Attempt backwards compatibility with HTTP 1.0. In practice, I doubt we'll see many HTTP 1.0 clients in the wild. However, some
+    // load testing frameworks still use HTTP 1.0. To ensure performance doesn't suck when using those tools, we need to close sockets correctly.
+    // - HTTP 1.0 requires the client to ask explicitly for keep-alive.
+    if (Protocols.HTTTP1_0.equals(protocol)) {
+      return connection != null && connection.equalsIgnoreCase(Connections.KeepAlive);
+    }
+
     return connection == null || !connection.equalsIgnoreCase(Connections.Close);
   }
 

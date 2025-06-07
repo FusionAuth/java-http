@@ -72,33 +72,22 @@
     <orderEntry type="module-library" scope="TEST">
       <library>
         <CLASSES>
-          <root url="jar://$MODULE_DIR$/.savant/cache/org/testng/testng/7.10.2/testng-7.10.2.jar!/" />
+          <root url="jar://$MODULE_DIR$/.savant/cache/org/testng/testng/7.11.0/testng-7.11.0.jar!/" />
         </CLASSES>
         <JAVADOC />
         <SOURCES>
-          <root url="jar://$MODULE_DIR$/.savant/cache/org/testng/testng/7.10.2/testng-7.10.2-src.jar!/" />
+          <root url="jar://$MODULE_DIR$/.savant/cache/org/testng/testng/7.11.0/testng-7.11.0-src.jar!/" />
         </SOURCES>
       </library>
     </orderEntry>
     <orderEntry type="module-library" scope="TEST">
       <library>
         <CLASSES>
-          <root url="jar://$MODULE_DIR$/.savant/cache/org/slf4j/slf4j-api/1.7.36/slf4j-api-1.7.36.jar!/" />
+          <root url="jar://$MODULE_DIR$/.savant/cache/org/jcommander/jcommander/1.83/jcommander-1.83.jar!/" />
         </CLASSES>
         <JAVADOC />
         <SOURCES>
-          <root url="jar://$MODULE_DIR$/.savant/cache/org/slf4j/slf4j-api/1.7.36/slf4j-api-1.7.36-src.jar!/" />
-        </SOURCES>
-      </library>
-    </orderEntry>
-    <orderEntry type="module-library" scope="TEST">
-      <library>
-        <CLASSES>
-          <root url="jar://$MODULE_DIR$/.savant/cache/com/beust/jcommander/1.82.0/jcommander-1.82.0.jar!/" />
-        </CLASSES>
-        <JAVADOC />
-        <SOURCES>
-          <root url="jar://$MODULE_DIR$/.savant/cache/com/beust/jcommander/1.82.0/jcommander-1.82.0-src.jar!/" />
+          <root url="jar://$MODULE_DIR$/.savant/cache/org/jcommander/jcommander/1.83.0/jcommander-1.83.0-src.jar!/" />
         </SOURCES>
       </library>
     </orderEntry>
@@ -110,6 +99,28 @@
         <JAVADOC />
         <SOURCES>
           <root url="jar://$MODULE_DIR$/.savant/cache/org/webjars/jquery/3.7.1/jquery-3.7.1-src.jar!/" />
+        </SOURCES>
+      </library>
+    </orderEntry>
+    <orderEntry type="module-library" scope="TEST">
+      <library>
+        <CLASSES>
+          <root url="jar://$MODULE_DIR$/.savant/cache/org/slf4j/slf4j-api/2.0.17/slf4j-api-2.0.17.jar!/" />
+        </CLASSES>
+        <JAVADOC />
+        <SOURCES>
+          <root url="jar://$MODULE_DIR$/.savant/cache/org/slf4j/slf4j-api/2.0.17/slf4j-api-2.0.17-src.jar!/" />
+        </SOURCES>
+      </library>
+    </orderEntry>
+    <orderEntry type="module-library" scope="TEST">
+      <library>
+        <CLASSES>
+          <root url="jar://$MODULE_DIR$/.savant/cache/org/slf4j/slf4j-nop/2.0.17/slf4j-nop-2.0.17.jar!/" />
+        </CLASSES>
+        <JAVADOC />
+        <SOURCES>
+          <root url="jar://$MODULE_DIR$/.savant/cache/org/slf4j/slf4j-nop/2.0.17/slf4j-nop-2.0.17-src.jar!/" />
         </SOURCES>
       </library>
     </orderEntry>

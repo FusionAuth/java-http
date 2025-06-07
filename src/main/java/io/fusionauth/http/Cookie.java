@@ -1,5 +1,5 @@
 /*
- * Copyright (c) 2021-2022, FusionAuth, All Rights Reserved
+ * Copyright (c) 2021-2025, FusionAuth, All Rights Reserved
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -17,7 +17,9 @@ package io.fusionauth.http;
 
 import java.time.ZonedDateTime;
 import java.util.ArrayList;
+import java.util.HashMap;
 import java.util.List;
+import java.util.Map;
 import java.util.Objects;
 
 import io.fusionauth.http.HTTPValues.CookieAttributes;
@@ -38,6 +40,8 @@ public class Cookie implements Buildable<Cookie> {
   public static final String SameSitePrefix = "; " + CookieAttributes.SameSite + "=";
 
   public static final String SecurePrefix = "; " + CookieAttributes.Secure;
+
+  public Map<String, String> attributes = new HashMap<>(0);
 
   public String domain;
 
@@ -269,6 +273,9 @@ public class Cookie implements Buildable<Cookie> {
         break;
       case HTTPValues.CookieAttributes.SecureLower:
         secure = true;
+      default:
+        // Attributes should be not be required to have a value
+        attributes.put(name, value == null ? "" : value);
     }
   }
 
@@ -281,13 +288,17 @@ public class Cookie implements Buildable<Cookie> {
       return false;
     }
     return httpOnly == cookie.httpOnly &&
-        secure == cookie.secure &&
-        Objects.equals(domain, cookie.domain) &&
-        Objects.equals(expires, cookie.expires) &&
-        Objects.equals(maxAge, cookie.maxAge) &&
-        Objects.equals(name, cookie.name) &&
-        Objects.equals(path, cookie.path) &&
-        Objects.equals(value, cookie.value);
+           secure == cookie.secure &&
+           Objects.equals(domain, cookie.domain) &&
+           Objects.equals(expires, cookie.expires) &&
+           Objects.equals(maxAge, cookie.maxAge) &&
+           Objects.equals(name, cookie.name) &&
+           Objects.equals(path, cookie.path) &&
+           Objects.equals(value, cookie.value);
+  }
+
+  public String getAttribute(String name) {
+    return attributes.get(name);
   }
 
   public String getDomain() {
@@ -344,6 +355,10 @@ public class Cookie implements Buildable<Cookie> {
 
   public void setValue(String value) {
     this.value = value;
+  }
+
+  public boolean hasAttribute(String name) {
+    return attributes.containsKey(name);
   }
 
   @Override

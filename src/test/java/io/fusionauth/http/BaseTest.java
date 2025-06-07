@@ -1,5 +1,5 @@
 /*
- * Copyright (c) 2022-2024, FusionAuth, All Rights Reserved
+ * Copyright (c) 2022-2025, FusionAuth, All Rights Reserved
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -21,8 +21,10 @@ import java.io.OutputStream;
 import java.math.BigInteger;
 import java.net.CookieHandler;
 import java.net.Socket;
+import java.net.SocketException;
 import java.net.URI;
 import java.net.http.HttpClient;
+import java.nio.charset.StandardCharsets;
 import java.nio.file.Paths;
 import java.security.GeneralSecurityException;
 import java.security.InvalidAlgorithmParameterException;
@@ -50,9 +52,11 @@ import java.util.Map;
 import java.util.UUID;
 import java.util.stream.Collectors;
 
+import io.fusionauth.http.HTTPValues.Connections;
 import io.fusionauth.http.log.FileLogger;
 import io.fusionauth.http.log.FileLoggerFactory;
 import io.fusionauth.http.log.Level;
+import io.fusionauth.http.log.LoggerFactory;
 import io.fusionauth.http.security.SecurityTools;
 import io.fusionauth.http.server.ExpectValidator;
 import io.fusionauth.http.server.HTTPHandler;
@@ -63,6 +67,7 @@ import org.testng.ITestListener;
 import org.testng.ITestResult;
 import org.testng.annotations.AfterMethod;
 import org.testng.annotations.AfterSuite;
+import org.testng.annotations.BeforeMethod;
 import org.testng.annotations.BeforeSuite;
 import org.testng.annotations.DataProvider;
 import sun.security.util.KnownOIDs;
@@ -91,21 +96,24 @@ import static org.testng.Assert.fail;
  * @author Brian Pontarelli
  */
 public abstract class BaseTest {
+
   /**
    * This timeout is used for the HttpClient during each test. If you are in a debugger, you will need to change this timeout to be much
    * larger, otherwise, the client might truncate the request to the server.
    */
-  public static final Duration ClientTimeout = Duration.ofSeconds(2);
+  public static final Duration ClientTimeout = Duration.ofSeconds(30);
 
   /**
    * This timeout is used for the HTTPServer during each test. If you are in a debugger, you will need to change this timeout to be much
    * larger, otherwise, the server will toss out the request.
    */
-  public static final Duration ServerTimeout = Duration.ofSeconds(2);
+  public static final Duration ServerTimeout = Duration.ofSeconds(30);
 
   private static final ZonedDateTime TestStarted = ZonedDateTime.now();
 
   private static final DateTimeFormatter hh_mm_ss_SSS = DateTimeFormatter.ofPattern("hh:mm:ss.SSS");
+
+  public static String SystemOutPrefix = "     | ";
 
   /*
    * Keypairs and certificates for a 3-level CA chain (root->intermediate->server).
@@ -121,6 +129,8 @@ public abstract class BaseTest {
   public static Certificate rootCertificate;
 
   public static KeyPair rootKeyPair;
+
+  protected boolean verbose;
 
   static {
     System.setProperty("sun.net.http.retryPost", "false");
@@ -217,6 +227,19 @@ public abstract class BaseTest {
     }
   }
 
+  @BeforeMethod
+  public void beforeMethod() {
+    verbose = false;
+  }
+
+  @DataProvider
+  public Object[][] connections() {
+    return new Object[][]{
+        {Connections.Close},
+        {Connections.KeepAlive}
+    };
+  }
+
   @AfterMethod
   public void flush() {
     FileLogger fl = (FileLogger) FileLoggerFactory.FACTORY.getLogger(BaseTest.class);
@@ -269,11 +292,12 @@ public abstract class BaseTest {
       listenerConfiguration = new HTTPListenerConfiguration(4242);
     }
 
-    FileLoggerFactory factory = FileLoggerFactory.FACTORY;
+    LoggerFactory factory = FileLoggerFactory.FACTORY;
+//    LoggerFactory factory = SystemOutLoggerFactory.FACTORY;
     return new HTTPServer().withHandler(handler)
-                           .withKeepAliveTimeoutDuration(ServerTimeout)
-                           .withInitialReadTimeout(ServerTimeout)
-                           .withProcessingTimeoutDuration(ServerTimeout)
+                           .withKeepAliveTimeoutDuration(Duration.ofSeconds(10))
+                           .withInitialReadTimeout(Duration.ofSeconds(30))
+                           .withProcessingTimeoutDuration(Duration.ofSeconds(30))
                            .withExpectValidator(expectValidator)
                            .withInstrumenter(instrumenter)
                            .withLoggerFactory(factory)
@@ -325,8 +349,14 @@ public abstract class BaseTest {
 
       // Sockets are pretty resilient, so this will be closed by the server, but we'll just see that close are zero bytes read. If we were
       // to continue writing above, then that likely would throw an exception because the pipe would be broken
+
       byte[] buffer = is.readAllBytes();
-      assertEquals(buffer.length, 0);
+      assertEquals(new String(buffer), """
+          HTTP/1.1 400 \r
+          connection: close\r
+          content-length: 0\r
+          \r
+          """);
     } catch (Exception e) {
       fail(e.getMessage());
     }
@@ -337,6 +367,63 @@ public abstract class BaseTest {
     System.out.println("\nTests began : " + hh_mm_ss_SSS.format(TestStarted));
     System.out.println("Tests ended : " + hh_mm_ss_SSS.format(ZonedDateTime.now()));
     System.out.println("Total test time in minutes : " + Duration.between(TestStarted, ZonedDateTime.now()).toMinutes());
+  }
+
+  /**
+   * This is a "faster" wait to assert on an HTTP response using only the socket w/out necessarily having to wait for the socket keep-alive
+   * timeout.
+   * <p>
+   * We start by assuming the number of bytes to read will be equal to the expected response. If that is not the case, then we try to read
+   * the remaining bytes from the socket knowing that we will block until we reach the socket timeout.
+   * <p>
+   * This way we can provide an accurate assertion on the actual response body vs the expected but as long as the test passes, we do not
+   * have to wait for the socket timeout.
+   *
+   * @param socket           the socket used to read the HTTP response
+   * @param expectedResponse the expected HTTP response
+   */
+  protected void assertHTTPResponseEquals(Socket socket, String expectedResponse) throws Exception {
+    var is = socket.getInputStream();
+    var expectedResponseLength = expectedResponse.getBytes(StandardCharsets.UTF_8).length;
+    var actualResponse = new String(is.readNBytes(expectedResponseLength), StandardCharsets.UTF_8);
+
+    // Perform an initial equality check, this is fast. If it fails, it may because there are remaining bytes left to read. This is slower.
+    if (!actualResponse.equals(expectedResponse)) {
+      // Note this is going to block until the socket keep-alive times out.
+      try {
+        assertResponseEquals(is, actualResponse, expectedResponse);
+      } catch (SocketException se) {
+        // If the server has not read the entire request, trying to read from the InputStream will cause a SocketException due to Connection reset.
+        // - Attempt to recover from this condition and read the response.
+        // - Note that "normal" HTTP clients won't do this, so this isn't to show what a client would normally see, but it is to show what the server
+        //   is returning regardless if the client is smart enough or cares enough to read the response.
+        if (se.getMessage().equals("Connection reset")) {
+          var addr = socket.getRemoteSocketAddress();
+          socket.close();
+          socket.connect(addr);
+          assertResponseEquals(socket.getInputStream(), actualResponse, expectedResponse);
+        }
+      }
+    }
+  }
+
+  protected void printf(String format, Object... args) {
+    if (verbose) {
+      System.out.printf(SystemOutPrefix + format, args);
+    }
+  }
+
+  protected void println(Object o) {
+    if (verbose) {
+      System.out.println(o);
+    }
+  }
+
+  protected void sleep(long millis) {
+    try {
+      Thread.sleep(millis);
+    } catch (InterruptedException ignore) {
+    }
   }
 
   /**
@@ -369,6 +456,13 @@ public abstract class BaseTest {
     validator.validate(certPath, pkixParameters);
   }
 
+  private void assertResponseEquals(InputStream is, String actualResponse, String expectedResponse) throws IOException {
+    var remainingBytes = is.readAllBytes();
+    String fullResponse = actualResponse + new String(remainingBytes, StandardCharsets.UTF_8);
+    // Use assertEquals so we can get Eclipse error formatting
+    assertEquals(fullResponse, expectedResponse);
+  }
+
   @SuppressWarnings("unused")
   public static class TestListener implements ITestListener {
     private int counter = 0;
@@ -392,12 +486,12 @@ public abstract class BaseTest {
       }
 
       System.out.println("""
-
+          
           Test failure
           -----------------
           Exception: {{exception}}
           Message: {{message}}
-
+          
           Stack traces (client side):
           {{threadDump}}
           -----------------
@@ -435,7 +529,8 @@ public abstract class BaseTest {
 
     private String serializeDataProviderArgs(Object[] dataProvider) {
       String result = Arrays.stream(dataProvider)
-                            .map(o -> (o == null ? "null" : o.toString()).replace("\n", " "))
+                            // Escape line return and carriage return to keep everything on the same line
+                            .map(o -> (o == null ? "null" : o.toString()).replace("\n", "\\n").replace("\r", "\\r"))
                             .collect(Collectors.joining(", "));
 
       int maxLength = 128;

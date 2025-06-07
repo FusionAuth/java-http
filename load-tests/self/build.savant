@@ -1,7 +1,5 @@
-import java.nio.file.Paths
-
 /*
- * Copyright (c) 2018-2022, FusionAuth, All Rights Reserved
+ * Copyright (c) 2022-2025, FusionAuth, All Rights Reserved
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -32,7 +30,7 @@ project(group: "io.fusionauth", name: "self", version: "0.1.0", licenses: ["Apac
 
   dependencies {
     group(name: "compile") {
-      dependency(id: "io.fusionauth:java-http:0.4.0-RC.3.{integration}")
+      dependency(id: "io.fusionauth:java-http:0.4.0-RC.7.{integration}")
     }
   }
 
@@ -42,18 +40,13 @@ project(group: "io.fusionauth", name: "self", version: "0.1.0", licenses: ["Apac
 }
 
 // Plugins
-dependency = loadPlugin(id: "org.savantbuild.plugin:dependency:2.0.0-RC.4")
-file = loadPlugin(id: "org.savantbuild.plugin:file:2.0.0-RC.4")
-java = loadPlugin(id: "org.savantbuild.plugin:java:2.0.0-RC.4")
-idea = loadPlugin(id: "org.savantbuild.plugin:idea:2.0.0-RC.4")
-tomcat = loadPlugin(id: "org.savantbuild.plugin:tomcat:2.0.0-RC.4")
-webapp = loadPlugin(id: "org.savantbuild.plugin:webapp:2.0.0-RC.5.{integration}")
+dependency = loadPlugin(id: "org.savantbuild.plugin:dependency:2.0.0")
+file = loadPlugin(id: "org.savantbuild.plugin:file:2.0.0")
+java = loadPlugin(id: "org.savantbuild.plugin:java:2.0.0")
+idea = loadPlugin(id: "org.savantbuild.plugin:idea:2.0.0")
 
 java.settings.javaVersion = "21"
-java.settings.compilerArguments = "--add-exports java.base/sun.security.x509=ALL-UNNAMED --add-exports java.base/sun.security.util=ALL-UNNAMED -XDignore.symbol.file"
-tomcat.settings.buildDirectory = Paths.get("build/dist/tomcat")
-tomcat.settings.buildWebDirectory = Paths.get("build/dist/tomcat/web")
-webapp.settings.dependencies = []
+java.settings.compilerArguments = ""
 
 target(name: "clean", description: "Cleans the build directory") {
   java.clean()
@@ -84,4 +77,16 @@ target(name: "app", description: "Builds the app", dependsOn: ["jar"]) {
 
 target(name: "idea", description: "Updates the IntelliJ IDEA module file") {
   idea.iml()
+}
+
+target(name: "start", description: "Starts the java-http server for load testing!", dependsOn: ["app"]) {
+  if (new ProcessBuilder('./start.sh').directory(new File("build/dist")).inheritIO().start().waitFor() != 0) {
+    fail("Unable to start the server!")
+  }
+}
+
+target(name: "suspend", description: "Starts the java-http server for load testing! ", dependsOn: ["app"]) {
+  if (new ProcessBuilder('./start.sh', '--suspend').directory(new File("build/dist")).inheritIO().start().waitFor() != 0) {
+    fail("Unable to start the server!")
+  }
 }

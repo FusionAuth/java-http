@@ -42,6 +42,13 @@ public class FastByteArrayOutputStream extends OutputStream {
     this.growthRate = growthRate;
   }
 
+  /**
+   * @return The byte array (directly without copying).
+   */
+  public byte[] bytes() {
+    return buffer;
+  }
+
   @Override
   public void close() {
   }
@@ -58,13 +65,6 @@ public class FastByteArrayOutputStream extends OutputStream {
    */
   public int size() {
     return count;
-  }
-
-  /**
-   * @return The byte array (directly without copying).
-   */
-  public byte[] bytes() {
-    return buffer;
   }
 
   @Override

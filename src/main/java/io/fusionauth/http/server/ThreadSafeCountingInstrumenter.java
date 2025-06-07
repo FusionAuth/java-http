@@ -1,5 +1,5 @@
 /*
- * Copyright (c) 2022, FusionAuth, All Rights Reserved
+ * Copyright (c) 2022-2025, FusionAuth, All Rights Reserved
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -24,6 +24,10 @@ import java.util.concurrent.atomic.AtomicLong;
  */
 @SuppressWarnings("unused")
 public class ThreadSafeCountingInstrumenter implements Instrumenter {
+  private final AtomicLong acceptedConnections = new AtomicLong();
+
+  private final AtomicLong acceptedRequests = new AtomicLong();
+
   private final AtomicLong badRequests = new AtomicLong();
 
   private final AtomicLong bytesRead = new AtomicLong();
@@ -36,15 +40,18 @@ public class ThreadSafeCountingInstrumenter implements Instrumenter {
 
   private final AtomicLong closedConnections = new AtomicLong();
 
-  private final AtomicLong connections = new AtomicLong();
+  private final AtomicLong servers = new AtomicLong();
 
-  private final AtomicLong startedCount = new AtomicLong();
-
-  private final AtomicLong threadCount = new AtomicLong();
+  private final AtomicLong workers = new AtomicLong();
 
   @Override
   public void acceptedConnection() {
-    connections.incrementAndGet();
+    acceptedConnections.incrementAndGet();
+  }
+
+  @Override
+  public void acceptedRequest() {
+    acceptedRequests.incrementAndGet();
   }
 
   @Override
@@ -65,6 +72,14 @@ public class ThreadSafeCountingInstrumenter implements Instrumenter {
   @Override
   public void connectionClosed() {
     closedConnections.incrementAndGet();
+  }
+
+  public long getAcceptedConnections() {
+    return acceptedConnections.get();
+  }
+
+  public long getAcceptedRequests() {
+    return acceptedRequests.get();
   }
 
   public long getBadRequests() {
@@ -91,16 +106,12 @@ public class ThreadSafeCountingInstrumenter implements Instrumenter {
     return closedConnections.get();
   }
 
-  public long getConnections() {
-    return connections.get();
+  public long getServers() {
+    return servers.get();
   }
 
-  public long getStartedCount() {
-    return startedCount.get();
-  }
-
-  public long getThreadCount() {
-    return threadCount.get();
+  public long getWorkers() {
+    return workers.get();
   }
 
   @Override
@@ -110,17 +121,17 @@ public class ThreadSafeCountingInstrumenter implements Instrumenter {
 
   @Override
   public void serverStarted() {
-    startedCount.incrementAndGet();
+    servers.incrementAndGet();
   }
 
   @Override
-  public void threadExited() {
-    threadCount.decrementAndGet();
+  public void workerStarted() {
+    workers.incrementAndGet();
   }
 
   @Override
-  public void threadStarted() {
-    threadCount.incrementAndGet();
+  public void workerStopped() {
+    workers.decrementAndGet();
   }
 
   @Override

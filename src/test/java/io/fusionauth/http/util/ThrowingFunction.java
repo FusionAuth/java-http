@@ -1,5 +1,5 @@
 /*
- * Copyright (c) 2023, FusionAuth, All Rights Reserved
+ * Copyright (c) 2025, FusionAuth, All Rights Reserved
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -13,19 +13,16 @@
  * either express or implied. See the License for the specific
  * language governing permissions and limitations under the License.
  */
-package io.fusionauth.http;
-
-import java.io.IOException;
+package io.fusionauth.http.util;
 
 /**
- * An IOException that is most likely caused by the client closing a socket.
- * <p>
- * For example:
- * <p>
- * <code>java.io.IOException: Connection reset by peer</code>
+ * A throwing function
+ *
+ * @param <T> the type of the input to the function
+ * @param <R> the type of the result of the function
+ * @author Daniel DeGroff
  */
-public class ClientAbortException extends IOException {
-  public ClientAbortException(IOException e) {
-    super(e);
-  }
+@FunctionalInterface
+public interface ThrowingFunction<T, R> {
+  R apply(T t) throws Exception;
 }
