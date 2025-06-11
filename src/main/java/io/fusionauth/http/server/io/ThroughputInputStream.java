@@ -1,5 +1,5 @@
 /*
- * Copyright (c) 2024, FusionAuth, All Rights Reserved
+ * Copyright (c) 2024-2025, FusionAuth, All Rights Reserved
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -44,7 +44,7 @@ public class ThroughputInputStream extends InputStream {
   }
 
   @Override
-  public void mark(int readlimit) {
+  public void mark(@SuppressWarnings("SpellCheckingInspection") int readlimit) {
     delegate.mark(readlimit);
   }
 

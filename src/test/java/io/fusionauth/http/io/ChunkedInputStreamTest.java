@@ -182,7 +182,7 @@ public class ChunkedInputStreamTest {
   }
 
   private PushbackInputStream withParts(String... parts) {
-    return new PushbackInputStream(new PieceMealInputStream(parts));
+    return new PushbackInputStream(new PieceMealInputStream(parts), null);
   }
 
   @SuppressWarnings("UnusedReturnValue")
@@ -221,7 +221,7 @@ public class ChunkedInputStreamTest {
     }
 
     public Builder assertResult(String expected) throws IOException {
-      pushbackInputStream = new PushbackInputStream(new ByteArrayInputStream(body.getBytes(StandardCharsets.UTF_8)));
+      pushbackInputStream = new PushbackInputStream(new ByteArrayInputStream(body.getBytes(StandardCharsets.UTF_8)), null);
       chunkedInputStream = new ChunkedInputStream(pushbackInputStream, 2048);
 
       String actual = new String(chunkedInputStream.readAllBytes(), StandardCharsets.UTF_8);

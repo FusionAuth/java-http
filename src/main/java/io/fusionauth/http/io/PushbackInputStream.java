@@ -18,6 +18,8 @@ package io.fusionauth.http.io;
 import java.io.IOException;
 import java.io.InputStream;
 
+import io.fusionauth.http.server.Instrumenter;
+
 /**
  * An input stream that allows a portion of bytes read into a buffer to be pushed back to be read again.
  *
@@ -28,14 +30,18 @@ public class PushbackInputStream extends InputStream {
 
   private final InputStream delegate;
 
+  private final Instrumenter instrumenter;
+
   private byte[] buffer;
 
   private int bufferEndPosition;
 
   private int bufferPosition;
 
-  public PushbackInputStream(InputStream delegate) {
+
+  public PushbackInputStream(InputStream delegate, Instrumenter instrumenter) {
     this.delegate = delegate;
+    this.instrumenter = instrumenter;
   }
 
   public int getAvailableBufferedBytesRemaining() {
@@ -78,10 +84,17 @@ public class PushbackInputStream extends InputStream {
       //   complete processing of the bytes we just read from the buffer in order to send the HTTP response.
       //   The end result is the client will block while waiting for us to send a response until we take an exception waiting
       //   for the read timeout.
+      // - Do not count this as a read from the client, that would double count.
+      //   We should only be counting bytes read from the delegate.
       return read;
     }
 
-    return delegate.read(b, off, len);
+    var read = delegate.read(b, off, len);
+    if (read > 0 && instrumenter != null) {
+      instrumenter.readFromClient(read);
+    }
+
+    return read;
   }
 
   @Override

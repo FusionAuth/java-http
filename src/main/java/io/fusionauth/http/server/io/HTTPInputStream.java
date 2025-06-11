@@ -143,8 +143,7 @@ public class HTTPInputStream extends InputStream {
     }
 
     // When we have a fixed length request, read beyond the remainingBytes if possible.
-    // - Under heavy load we may be able to start reading the next request. Just push those bytes
-    //   back onto the InputStream and we will read them later.
+    // - If we have read past the end of the current request, push those bytes back onto the InputStream.
     int read = delegate.read(b, off, len);
     if (fixedLength && read > 0) {
       int extraBytes = (int) (read - bytesRemaining);
@@ -154,10 +153,6 @@ public class HTTPInputStream extends InputStream {
     }
 
     if (read > 0) {
-      if (instrumenter != null) {
-        instrumenter.readFromClient(read);
-      }
-
       if (fixedLength) {
         bytesRemaining -= read;
       }

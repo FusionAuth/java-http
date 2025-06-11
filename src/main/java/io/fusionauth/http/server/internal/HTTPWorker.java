@@ -21,13 +21,11 @@ import java.net.Socket;
 import java.net.SocketException;
 import java.net.SocketTimeoutException;
 
-import io.fusionauth.http.server.io.ConnectionClosedException;
 import io.fusionauth.http.HTTPValues;
 import io.fusionauth.http.HTTPValues.Connections;
 import io.fusionauth.http.HTTPValues.Headers;
 import io.fusionauth.http.HTTPValues.Protocols;
 import io.fusionauth.http.ParseException;
-import io.fusionauth.http.server.io.TooManyBytesToDrainException;
 import io.fusionauth.http.io.PushbackInputStream;
 import io.fusionauth.http.log.Logger;
 import io.fusionauth.http.server.HTTPHandler;
@@ -36,11 +34,13 @@ import io.fusionauth.http.server.HTTPRequest;
 import io.fusionauth.http.server.HTTPResponse;
 import io.fusionauth.http.server.HTTPServerConfiguration;
 import io.fusionauth.http.server.Instrumenter;
+import io.fusionauth.http.server.io.ConnectionClosedException;
 import io.fusionauth.http.server.io.HTTPInputStream;
 import io.fusionauth.http.server.io.HTTPOutputStream;
 import io.fusionauth.http.server.io.Throughput;
 import io.fusionauth.http.server.io.ThroughputInputStream;
 import io.fusionauth.http.server.io.ThroughputOutputStream;
+import io.fusionauth.http.server.io.TooManyBytesToDrainException;
 import io.fusionauth.http.util.HTTPTools;
 
 /**
@@ -80,7 +80,7 @@ public class HTTPWorker implements Runnable {
     this.throughput = throughput;
     this.buffers = new HTTPBuffers(configuration);
     this.logger = configuration.getLoggerFactory().getLogger(HTTPWorker.class);
-    this.inputStream = new PushbackInputStream(new ThroughputInputStream(socket.getInputStream(), throughput));
+    this.inputStream = new PushbackInputStream(new ThroughputInputStream(socket.getInputStream(), throughput), instrumenter);
     this.state = State.Read;
     this.startInstant = System.currentTimeMillis();
     logger.trace("[{}] Starting HTTP worker.", Thread.currentThread().threadId());
@@ -123,7 +123,7 @@ public class HTTPWorker implements Runnable {
         // Not this line of code will block
         // - When a client is using Keep-Alive - we will loop and block here while we wait for the client to send us bytes.
         byte[] requestBuffer = buffers.requestBuffer();
-        HTTPTools.parseRequestPreamble(inputStream, request, requestBuffer, instrumenter, () -> state = State.Read);
+        HTTPTools.parseRequestPreamble(inputStream, request, requestBuffer, () -> state = State.Read);
         if (logger.isTraceEnabled()) {
           int availableBufferedBytes = inputStream.getAvailableBufferedBytesRemaining();
           if (availableBufferedBytes != 0) {

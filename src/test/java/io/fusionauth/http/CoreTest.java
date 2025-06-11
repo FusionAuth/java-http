@@ -435,6 +435,15 @@ public class CoreTest extends BaseTest {
 
       assertEquals(response.statusCode(), 200);
       assertEquals(response.body(), bytes);
+
+      // This assertion is always true unless we change what we are writing above. But it is here for reference.
+      assertEquals(bytes.length, 16_804);
+      // This should prove the PushbackInputStream isn't double counting.
+      // - We should expect the bytes read to be roughly equivalent to the payload length. We can add some bytes to account
+      //   for the HTTP preamble, and for HTTPs additional overhead is incurred due to encryption. But if we are counting incorrectly
+      //   due to bytes being pushed back and counted again, the numbers would be almost double.
+      // - So we should expect the bytes read to be within the ball bark of the payload length.
+      assertEquals(instrumenter.getBytesRead(), scheme.equals("http") ? 17_032: 16_933);
     }
   }
 

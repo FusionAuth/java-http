@@ -39,7 +39,6 @@ import io.fusionauth.http.log.Logger;
 import io.fusionauth.http.log.LoggerFactory;
 import io.fusionauth.http.server.HTTPRequest;
 import io.fusionauth.http.server.HTTPResponse;
-import io.fusionauth.http.server.Instrumenter;
 import io.fusionauth.http.server.io.ConnectionClosedException;
 
 public final class HTTPTools {
@@ -93,8 +92,8 @@ public final class HTTPTools {
    */
   public static boolean isTokenCharacter(byte ch) {
     return ch == '!' || ch == '#' || ch == '$' || ch == '%' || ch == '&' || ch == '\'' || ch == '*' || ch == '+' || ch == '-' || ch == '.' ||
-           ch == '^' || ch == '_' || ch == '`' || ch == '|' || ch == '~' || (ch >= 'A' && ch <= 'Z') || (ch >= 'a' && ch <= 'z') ||
-           (ch >= '0' && ch <= '9');
+        ch == '^' || ch == '_' || ch == '`' || ch == '|' || ch == '~' || (ch >= 'A' && ch <= 'Z') || (ch >= 'a' && ch <= 'z') ||
+        (ch >= '0' && ch <= '9');
   }
 
   /**
@@ -262,13 +261,10 @@ public final class HTTPTools {
    * @param inputStream   The input stream to read the preamble from.
    * @param request       The HTTP request to populate.
    * @param requestBuffer A buffer used for reading to help reduce memory thrashing.
-   * @param instrumenter  The Instrumenter that is informed of bytes read.
    * @param readObserver  An observer that is called once one byte has been read.
    * @throws IOException If the read fails.
    */
-  public static void parseRequestPreamble(PushbackInputStream inputStream, HTTPRequest request, byte[] requestBuffer,
-                                          Instrumenter instrumenter,
-                                          Runnable readObserver)
+  public static void parseRequestPreamble(PushbackInputStream inputStream, HTTPRequest request, byte[] requestBuffer, Runnable readObserver)
       throws IOException {
     RequestPreambleState state = RequestPreambleState.RequestMethod;
     var valueBuffer = new ByteArrayOutputStream(512);
@@ -287,10 +283,6 @@ public final class HTTPTools {
       }
 
       logger.trace("Read [{}] from client for preamble.", read);
-
-      if (instrumenter != null) {
-        instrumenter.readFromClient(read);
-      }
 
       // Tell the callback that we've read at least one byte
       readObserver.run();
