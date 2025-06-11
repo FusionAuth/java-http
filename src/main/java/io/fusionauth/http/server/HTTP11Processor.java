@@ -1,5 +1,5 @@
 /*
- * Copyright (c) 2022-2023, FusionAuth, All Rights Reserved
+ * Copyright (c) 2022-2025, FusionAuth, All Rights Reserved
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -20,8 +20,12 @@ import java.nio.ByteBuffer;
 import java.nio.channels.SelectionKey;
 import java.util.concurrent.Future;
 
+import io.fusionauth.http.HTTPProcessingException;
 import io.fusionauth.http.io.BlockingByteBufferOutputStream;
-import io.fusionauth.http.io.MultipartProcessor;
+import io.fusionauth.http.io.MultipartStreamProcessor;
+import io.fusionauth.http.io.DefaultMultipartFileManager;
+import io.fusionauth.http.io.MultipartFileManager;
+import io.fusionauth.http.io.MultipartConfiguration;
 import io.fusionauth.http.log.Logger;
 import io.fusionauth.http.util.ThreadPool;
 
@@ -34,6 +38,8 @@ public class HTTP11Processor implements HTTPProcessor {
   private final HTTPServerConfiguration configuration;
 
   private final Logger logger;
+
+  private final MultipartFileManager multipartFileManager;
 
   private final Notifier notifier;
 
@@ -74,8 +80,14 @@ public class HTTP11Processor implements HTTPProcessor {
     this.threadPool = threadPool;
     this.state = ProcessorState.Read;
 
+    // Note that it is important to deep copy the configuration. The HTTP request handler may wish to modify these defaults.
+    // - This needs to be a 'request' scoped configuration.
+    MultipartConfiguration multipartStreamConfiguration = new MultipartConfiguration(configuration.getMultipartStreamConfiguration());
+
+    this.multipartFileManager = new DefaultMultipartFileManager();
     this.request = new HTTPRequest(configuration.getContextPath(), listener.isTLS() ? "https" : "http", listener.getPort(), ipAddress);
-    this.request.setMultiPartProcessor(new MultipartProcessor(configuration.getMultipartProcessorConfiguration()));
+
+    this.request.setMultiPartStreamProcessor(new MultipartStreamProcessor(multipartFileManager, multipartStreamConfiguration));
     this.requestProcessor = new HTTPRequestProcessor(configuration, request);
 
     BlockingByteBufferOutputStream outputStream = new BlockingByteBufferOutputStream(notifier, configuration.getResponseBufferSize(), configuration.getMaxOutputBufferQueueLength());
@@ -108,7 +120,17 @@ public class HTTP11Processor implements HTTPProcessor {
     } else {
       // Maintain the `write` state but reset to Preamble to write the new headers
       state = ProcessorState.Write;
-      responseProcessor.failure();
+      responseProcessor.failure(response -> {
+        if (t instanceof HTTPProcessingException hpe) {
+          response.setStatus(hpe.getStatus());
+          String statusMessage = hpe.getStatusMessage();
+          if (statusMessage != null) {
+            response.setStatusMessage(statusMessage);
+          }
+        }
+      });
+
+      logger.debug("Processing failed. Return status [" + response.getStatus() + "] Cause [" + t.getClass().getSimpleName() + "] Message: " + t.getMessage());
     }
 
     notifier.notifyNow();
@@ -159,7 +181,7 @@ public class HTTP11Processor implements HTTPProcessor {
       // If the next state is not preamble, that means we are done processing that and ready to handle the request in a separate thread
       if (requestState != RequestState.Preamble && requestState != RequestState.Expect) {
         logger.trace("(RWo)");
-        future = threadPool.submit(new HTTPWorker(configuration.getHandler(), configuration.getLoggerFactory(), this, request, response));
+        future = threadPool.submit(new HTTPWorker(configuration, configuration.getHandler(), multipartFileManager, configuration.getLoggerFactory(), this, request, response));
       }
     } else {
       logger.trace("(RB)");
@@ -279,7 +301,7 @@ public class HTTP11Processor implements HTTPProcessor {
       // Flip back to reading and back to the preamble state, so we write the real response headers. Then start the worker thread and flip the ops
       requestProcessor.resetState(RequestState.Body);
       responseProcessor.resetState(ResponseState.Preamble);
-      future = threadPool.submit(new HTTPWorker(configuration.getHandler(), configuration.getLoggerFactory(), this, request, response));
+      future = threadPool.submit(new HTTPWorker(configuration, configuration.getHandler(), multipartFileManager, configuration.getLoggerFactory(), this, request, response));
       state = ProcessorState.Read;
     } else if (responseState == ResponseState.KeepAlive) {
       logger.trace("(WKA)");

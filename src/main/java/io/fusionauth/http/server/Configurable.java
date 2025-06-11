@@ -18,7 +18,7 @@ package io.fusionauth.http.server;
 import java.nio.file.Path;
 import java.time.Duration;
 
-import io.fusionauth.http.io.MultipartProcessorConfiguration;
+import io.fusionauth.http.io.MultipartConfiguration;
 import io.fusionauth.http.log.LoggerFactory;
 import io.fusionauth.http.log.SystemOutLoggerFactory;
 
@@ -195,7 +195,7 @@ public interface Configurable<T extends Configurable<T>> {
    *
    * @param multipartBufferSize The size of the buffer.
    * @return This.
-   * @deprecated use the configuration found in {@link MultipartProcessorConfiguration} instead.
+   * @deprecated use the configuration found in {@link MultipartConfiguration} instead.
    */
   @Deprecated
   default T withMultipartBufferSize(int multipartBufferSize) {
@@ -208,11 +208,11 @@ public interface Configurable<T extends Configurable<T>> {
    * <p>
    * This configuration is used when parsing a multipart HTTP request that includes files.
    *
-   * @param multipartProcessorConfiguration The configuration.
+   * @param multipartStreamConfiguration The configuration.
    * @return This
    */
-  default T withMultipartConfiguration(MultipartProcessorConfiguration multipartProcessorConfiguration) {
-    configuration().withMultipartConfiguration(multipartProcessorConfiguration);
+  default T withMultipartConfiguration(MultipartConfiguration multipartStreamConfiguration) {
+    configuration().withMultipartConfiguration(multipartStreamConfiguration);
     return (T) this;
   }
 

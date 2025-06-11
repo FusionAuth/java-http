@@ -16,25 +16,26 @@
 package io.fusionauth.http.io;
 
 import java.io.IOException;
-import java.io.InputStream;
+import java.nio.file.Files;
+import java.nio.file.Path;
+import java.util.ArrayList;
 import java.util.List;
-import java.util.Map;
-
-import io.fusionauth.http.FileInfo;
 
 /**
- * An HTTP request processor that can handle a <code>Content-Type: multipart/form-data</code>.
+ * Manage file creation for multipart streams.
+ *
+ * @author Daniel DeGroff
  */
-public class MultipartProcessor {
-  private final MultipartProcessorConfiguration configuration;
+public class DefaultMultipartFileManager implements MultipartFileManager {
+  private final List<Path> tempFiles = new ArrayList<>(0);
 
-  public MultipartProcessor(MultipartProcessorConfiguration configuration) {
-    this.configuration = configuration;
+  public Path createTemporaryFile(Path tempDir, String optionalPrefix, String optionalSuffix) throws IOException {
+    Path tempFile = Files.createTempFile(tempDir, optionalPrefix, optionalSuffix);
+    tempFiles.add(tempFile);
+    return tempFile;
   }
 
-  public void process(final InputStream inputStream, Map<String, List<String>> parameters, List<FileInfo> files, byte[] boundary)
-      throws IOException {
-    MultipartStream stream = new MultipartStream(inputStream, boundary, configuration);
-    stream.process(parameters, files);
+  public List<Path> getTemporaryFiles() {
+    return List.copyOf(tempFiles);
   }
 }

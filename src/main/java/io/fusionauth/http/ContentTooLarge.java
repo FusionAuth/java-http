@@ -16,9 +16,15 @@
 package io.fusionauth.http;
 
 /**
- * Thrown due an error during file upload.
+ * Thrown when a request exceeds the total configured maximum size.
  *
- * @author Daniel DeGrof
+ * @author Daniel DeGroff
  */
-public abstract class FileUploadException extends RuntimeException {
+public class ContentTooLarge extends HTTPProcessingException {
+  public long maximumRequestSize;
+
+  public ContentTooLarge(long maximumRequestSize, String detailedMessage) {
+    super(413, "Content Too Large", detailedMessage);
+    this.maximumRequestSize = maximumRequestSize;
+  }
 }

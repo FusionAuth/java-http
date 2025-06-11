@@ -16,9 +16,12 @@
 package io.fusionauth.http;
 
 /**
- * Thrown when a file upload is requested and this feature has been disabled.
+ * Thrown when a multipart request cannot be parsed because a processor was not specified.
  *
  * @author Daniel DeGroff
  */
-public class FileUploadDisabled extends FileUploadException {
+public class UnprocessableContentException extends HTTPProcessingException {
+  public UnprocessableContentException(String message) {
+    super(422, "Unprocessable Content", message);
+  }
 }
