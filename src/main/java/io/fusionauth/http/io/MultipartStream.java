@@ -1,5 +1,5 @@
 /*
- * Copyright (c) 2022-2023, FusionAuth, All Rights Reserved
+ * Copyright (c) 2022-2025, FusionAuth, All Rights Reserved
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -24,17 +24,21 @@ import java.nio.charset.Charset;
 import java.nio.charset.StandardCharsets;
 import java.nio.file.Files;
 import java.nio.file.Path;
+import java.nio.file.Paths;
 import java.util.HashMap;
 import java.util.LinkedList;
 import java.util.List;
 import java.util.Map;
+import java.util.Objects;
 
+import io.fusionauth.http.ContentTooLarge;
 import io.fusionauth.http.FileInfo;
 import io.fusionauth.http.HTTPValues.ContentTypes;
 import io.fusionauth.http.HTTPValues.ControlBytes;
 import io.fusionauth.http.HTTPValues.DispositionParameters;
 import io.fusionauth.http.HTTPValues.Headers;
 import io.fusionauth.http.ParseException;
+import io.fusionauth.http.UnprocessableContentException;
 import io.fusionauth.http.server.RequestPreambleState;
 import io.fusionauth.http.util.HTTPTools;
 import io.fusionauth.http.util.HTTPTools.HeaderValue;
@@ -51,9 +55,15 @@ public class MultipartStream {
 
   private final InputStream input;
 
+  private final MultipartConfiguration multipartConfiguration;
+
+  private final MultipartFileManager multipartFileManager;
+
   private int boundaryLength;
 
   private int boundaryStart;
+
+  private long bytesRead;
 
   private int current;
 
@@ -62,21 +72,27 @@ public class MultipartStream {
   private int partialBoundary;
 
   /**
-   * Constructs a {@code MultipartStream} with a custom size buffer.
+   * Constructs a {@code MultipartStream} with a multipart processor configuration.
    * <p>
    * Note that the buffer must be at least big enough to contain the boundary string, plus 4 characters for CR/LF and double dash, plus at
    * least one byte of data.  Too small a buffer size setting will degrade performance.
    *
-   * @param input    The {@code InputStream} to serve as a data source.
-   * @param boundary The token used for dividing the stream into {@code encapsulations}.
-   * @param bufSize  The size of the buffer to be used, in bytes.
+   * @param input                  The {@code InputStream} to serve as a data source.
+   * @param boundary               The token used for dividing the stream into {@code encapsulations}.
+   * @param multipartConfiguration The configuration used to parse the stream.
+   * @param multipartFileManager   The file manager used to parse the stream.
    * @throws IllegalArgumentException If the buffer size is too small
    */
-  public MultipartStream(final InputStream input, final byte[] boundary, final int bufSize) {
-    if (boundary == null) {
-      throw new IllegalArgumentException("Boundary cannot be null.");
-    }
+  public MultipartStream(final InputStream input, final byte[] boundary, final MultipartFileManager multipartFileManager,
+                         final MultipartConfiguration multipartConfiguration) {
+    Objects.requireNonNull(input);
+    Objects.requireNonNull(boundary);
+    Objects.requireNonNull(multipartFileManager);
+    Objects.requireNonNull(multipartConfiguration);
+    this.multipartFileManager = multipartFileManager;
+    this.multipartConfiguration = multipartConfiguration;
 
+    int bufSize = multipartConfiguration.getMultipartBufferSize();
     // We prepend CR/LF to the boundary to chop trailing CRLF from body-data tokens.
     if (bufSize < boundary.length * 2) {
       throw new IllegalArgumentException("The buffer size specified for the MultipartStream is too small. Must be double the boundary length.");
@@ -104,7 +120,8 @@ public class MultipartStream {
    * @throws IOException    If any I/O operation failed.
    * @throws ParseException If the input is not a proper multipart body and could not be processed.
    */
-  public void process(Map<String, List<String>> parameters, List<FileInfo> files) throws IOException, ParseException {
+  public void process(Map<String, List<String>> parameters, List<FileInfo> files)
+      throws IOException, ParseException {
     // Initialize the buffer with enough bytes to analyze one boundary
     if (!reload(boundaryLength + 2)) {
       throw new ParseException("Invalid multipart body. The body is empty.");
@@ -294,7 +311,13 @@ public class MultipartStream {
 
     PartProcessor processor;
     if (isFile) {
-      processor = new FilePartProcessor(contentTypeString, encoding, filename, name);
+      if (!multipartConfiguration.isFileUploadEnabled()) {
+        throw new UnprocessableContentException("The multipart stream cannot be processed. Multipart processing of files has been disabled.");
+      }
+
+      Path tempDir = Paths.get(multipartConfiguration.getTemporaryFileLocation());
+      Path tempFile = multipartFileManager.createTemporaryFile(tempDir, multipartConfiguration.getTemporaryFilenamePrefix(), multipartConfiguration.getTemporaryFilenameSuffix());
+      processor = new FilePartProcessor(contentTypeString, encoding, filename, name, multipartConfiguration.getMaxFileSize(), tempFile);
     } else {
       processor = new ParameterPartProcessor(encoding);
     }
@@ -346,7 +369,17 @@ public class MultipartStream {
 
     // Load until we have enough
     while (end - current < minimumToLoad) {
-      end += input.read(buffer, start, buffer.length - start);
+      int read = input.read(buffer, start, buffer.length - start);
+      // Keep track of all bytes read for this multipart stream. Fail if the length has been exceeded.
+      bytesRead += read;
+      if (multipartConfiguration != null) {
+        long maximumRequestSize = multipartConfiguration.getMaxRequestSize();
+        if (bytesRead > maximumRequestSize) {
+          String detailedMessage = "The maximum request size of multipart stream has been exceeded. The maximum request size is [" + maximumRequestSize + "] bytes.";
+          throw new ContentTooLarge(maximumRequestSize, detailedMessage);
+        }
+      }
+      end += read;
       if (end == -1) {
         return false;
       }
@@ -375,18 +408,24 @@ public class MultipartStream {
 
     private final String filename;
 
+    private final long maxFileSize;
+
     private final String name;
 
     private final OutputStream output;
 
     private final Path path;
 
-    private FilePartProcessor(String contentType, Charset encoding, String filename, String name) throws IOException {
+    private long bytesWritten;
+
+    private FilePartProcessor(String contentType, Charset encoding, String filename, String name, long maxFileSize, Path path)
+        throws IOException {
       this.contentType = contentType;
       this.encoding = encoding;
       this.filename = filename;
       this.name = name;
-      this.path = Files.createTempFile("java-http", "file-upload");
+      this.maxFileSize = maxFileSize;
+      this.path = path;
       this.output = Files.newOutputStream(this.path);
     }
 
@@ -397,6 +436,19 @@ public class MultipartStream {
 
     @Override
     public void process(int start, int end) throws IOException {
+      int len = end - start;
+      bytesWritten += len;
+
+      // TODO : Daniel : Review : Is there a better place to do this? We can't do it while reading from the InputStream
+      //        because we could have one to many parts. We don't want to buffer before writing to the file, so I think we have to just
+      //        wait and keep track of how many bytes we have written to the file before failing?
+      // TODO : Daniel : Review : We have not kept track of the file we opened here, so we need to either add a file listener, and have someone
+      //        else delete the file, we could delete it here, or someone could catch this exception and review all in flight files and then delete?
+      if (bytesWritten > maxFileSize) {
+        String detailedMessage = "The maximum size of a single file in a multipart stream has been exceeded. The maximum file size is [" + maxFileSize + "] bytes.";
+        throw new ContentTooLarge(maxFileSize, detailedMessage);
+      }
+
       output.write(buffer, start, end - start);
     }
 
