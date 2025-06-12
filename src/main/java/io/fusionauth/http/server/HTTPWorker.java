@@ -67,7 +67,7 @@ public class HTTPWorker implements Runnable {
       processor.failure(t);
     } finally {
       // Clean up temporary files if instructed to do so.
-      if (configuration.getMultipartStreamConfiguration().deleteTemporaryFiles()) {
+      if (configuration.getMultipartConfiguration().deleteTemporaryFiles()) {
         for (var file : multipartFileManager.getTemporaryFiles()) {
           try {
             logger.debug("Delete temporary file [{}]", file);

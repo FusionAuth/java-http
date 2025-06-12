@@ -22,10 +22,10 @@ import java.util.concurrent.Future;
 
 import io.fusionauth.http.HTTPProcessingException;
 import io.fusionauth.http.io.BlockingByteBufferOutputStream;
-import io.fusionauth.http.io.MultipartStreamProcessor;
 import io.fusionauth.http.io.DefaultMultipartFileManager;
-import io.fusionauth.http.io.MultipartFileManager;
 import io.fusionauth.http.io.MultipartConfiguration;
+import io.fusionauth.http.io.MultipartFileManager;
+import io.fusionauth.http.io.MultipartStreamProcessor;
 import io.fusionauth.http.log.Logger;
 import io.fusionauth.http.util.ThreadPool;
 
@@ -80,14 +80,11 @@ public class HTTP11Processor implements HTTPProcessor {
     this.threadPool = threadPool;
     this.state = ProcessorState.Read;
 
-    // Note that it is important to deep copy the configuration. The HTTP request handler may wish to modify these defaults.
-    // - This needs to be a 'request' scoped configuration.
-    MultipartConfiguration multipartStreamConfiguration = new MultipartConfiguration(configuration.getMultipartStreamConfiguration());
-
     this.multipartFileManager = new DefaultMultipartFileManager();
     this.request = new HTTPRequest(configuration.getContextPath(), listener.isTLS() ? "https" : "http", listener.getPort(), ipAddress);
 
-    this.request.setMultiPartStreamProcessor(new MultipartStreamProcessor(multipartFileManager, multipartStreamConfiguration));
+    // Create a deep copy of the MultipartConfiguration so that the request may optionally modify the configuration on a per-request basis.
+    this.request.setMultiPartStreamProcessor(new MultipartStreamProcessor(multipartFileManager, new MultipartConfiguration(configuration.getMultipartConfiguration())));
     this.requestProcessor = new HTTPRequestProcessor(configuration, request);
 
     BlockingByteBufferOutputStream outputStream = new BlockingByteBufferOutputStream(notifier, configuration.getResponseBufferSize(), configuration.getMaxOutputBufferQueueLength());

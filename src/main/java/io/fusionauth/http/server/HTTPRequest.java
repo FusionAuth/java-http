@@ -47,6 +47,7 @@ import io.fusionauth.http.HTTPValues.Headers;
 import io.fusionauth.http.HTTPValues.TransferEncodings;
 import io.fusionauth.http.UnprocessableContentException;
 import io.fusionauth.http.body.BodyException;
+import io.fusionauth.http.io.MultipartConfiguration;
 import io.fusionauth.http.io.MultipartStreamProcessor;
 import io.fusionauth.http.util.HTTPTools;
 import io.fusionauth.http.util.HTTPTools.HeaderValue;
@@ -462,6 +463,10 @@ public class HTTPRequest implements Buildable<HTTPRequest> {
 
   public String getMultipartBoundary() {
     return multipartBoundary;
+  }
+
+  public MultipartConfiguration getMultipartConfiguration() {
+    return multipartStreamProcess != null ? multipartStreamProcess.getMultiPartConfiguration() : null;
   }
 
   /**

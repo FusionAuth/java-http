@@ -158,9 +158,9 @@ public class HTTPServerConfiguration implements Configurable<HTTPServerConfigura
   }
 
   /**
-   * @return the multipart processor configuration.
+   * @return the multipart configuration.
    */
-  public MultipartConfiguration getMultipartStreamConfiguration() {
+  public MultipartConfiguration getMultipartConfiguration() {
     return multipartStreamConfiguration;
   }
 
@@ -236,7 +236,6 @@ public class HTTPServerConfiguration implements Configurable<HTTPServerConfigura
     if (duration.isZero() || duration.isNegative()) {
       throw new IllegalArgumentException("The client timeout duration must be greater than 0");
     }
-
 
     this.clientTimeoutDuration = duration;
     return this;

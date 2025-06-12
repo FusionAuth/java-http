@@ -42,7 +42,14 @@ public class MultipartStreamProcessor {
     this.multipartConfiguration = multipartConfiguration;
   }
 
-  public void process(final InputStream inputStream, Map<String, List<String>> parameters, List<FileInfo> files, byte[] boundary)
+  /**
+   * @return the multipart configuration that will be used for this processor.
+   */
+  public MultipartConfiguration getMultiPartConfiguration() {
+    return multipartConfiguration;
+  }
+
+  public void process(InputStream inputStream, Map<String, List<String>> parameters, List<FileInfo> files, byte[] boundary)
       throws IOException {
     new MultipartStream(inputStream, boundary, multipartFileManager, multipartConfiguration).process(parameters, files);
   }
