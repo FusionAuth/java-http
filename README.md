@@ -3,7 +3,7 @@
 ### Latest versions
 
 * Latest stable version: `0.3.0`
-* Latest release candidate: `1.0.0-RC.2`
+* Latest release candidate: `1.0.0`
   * Using Java Virtual Threads
 
 The goal of this project is to build a full-featured HTTP server and client in plain Java without the use of any libraries. The client and server will use Project Loom virtual threads and blocking I/O so that the Java VM will handle all the context switching between virtual threads as they block on I/O.
@@ -26,20 +26,20 @@ To add this library to your project, you can include this dependency in your Mav
 <dependency>
   <groupId>io.fusionauth</groupId>
   <artifactId>java-http</artifactId>
-  <version>1.0.0-RC.2</version>
+  <version>1.0.0</version>
 </dependency>
 ```
 
 If you are using Gradle, you can add this to your build file:
 
 ```groovy
-implementation 'io.fusionauth:java-http:1.0.0-RC.2'
+implementation 'io.fusionauth:java-http:1.0.0'
 ```
 
 If you are using Savant, you can add this to your build file:
 
 ```groovy
-dependency(id: "io.fusionauth:java-http:1.0.0-RC.2")
+dependency(id: "io.fusionauth:java-http:1.0.0")
 ```
 
 ## Examples Usages:
