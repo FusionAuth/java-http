@@ -443,7 +443,11 @@ public class CoreTest extends BaseTest {
       //   for the HTTP preamble, and for HTTPs additional overhead is incurred due to encryption. But if we are counting incorrectly
       //   due to bytes being pushed back and counted again, the numbers would be almost double.
       // - So we should expect the bytes read to be within the ball bark of the payload length.
-      assertEquals(instrumenter.getBytesRead(), scheme.equals("http") ? 17_032: 16_933);
+      // - Note, this number will vary by HTTP and HTTPS due to the overhead of encryption, and can also vary by system.
+      //   The lower boundary is the actual payload size, and the upper boundary is something reasonable that encompasses some of the sizes
+      //   I've seen.
+       long bytesRead = instrumenter.getBytesRead();
+      assertTrue(bytesRead >= 16_804 && bytesRead <=  17_100);
     }
   }
 
