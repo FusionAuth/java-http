@@ -115,6 +115,11 @@ public class MultipartConfiguration {
   }
 
   public MultipartConfiguration withMaxRequestSize(long maxRequestSize) {
+    if (maxRequestSize < maxFileSize) {
+      // In practice the maxRequestSize should be more than just one byte larger than maxFileSize, but I am not going to require any specific amount.
+      throw new IllegalArgumentException("The maximum request size must be greater than the maxFileSize");
+    }
+
     this.maxRequestSize = maxRequestSize;
     return this;
   }
