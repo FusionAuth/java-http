@@ -17,6 +17,7 @@ package io.fusionauth.http.io;
 
 import java.io.IOException;
 import java.io.InputStream;
+import java.nio.file.Paths;
 import java.util.List;
 import java.util.Map;
 import java.util.Objects;
@@ -31,16 +32,9 @@ import io.fusionauth.http.FileInfo;
  * @author Daniel DeGroff
  */
 public class MultipartStreamProcessor {
-  private final MultipartConfiguration multipartConfiguration;
+  private MultipartConfiguration multipartConfiguration = new MultipartConfiguration();
 
-  private final MultipartFileManager multipartFileManager;
-
-  public MultipartStreamProcessor(MultipartFileManager multipartFileManager, MultipartConfiguration multipartConfiguration) {
-    Objects.requireNonNull(multipartConfiguration);
-    Objects.requireNonNull(multipartFileManager);
-    this.multipartFileManager = multipartFileManager;
-    this.multipartConfiguration = multipartConfiguration;
-  }
+  private MultipartFileManager multipartFileManager;
 
   /**
    * @return the multipart configuration that will be used for this processor.
@@ -49,8 +43,22 @@ public class MultipartStreamProcessor {
     return multipartConfiguration;
   }
 
+  public MultipartFileManager getMultipartFileManager() {
+    if (multipartFileManager == null) {
+      multipartFileManager = new DefaultMultipartFileManager(Paths.get(multipartConfiguration.getTemporaryFileLocation()), multipartConfiguration.getTemporaryFilenamePrefix(), multipartConfiguration.getTemporaryFilenameSuffix());
+    }
+
+    return multipartFileManager;
+  }
+
   public void process(InputStream inputStream, Map<String, List<String>> parameters, List<FileInfo> files, byte[] boundary)
       throws IOException {
-    new MultipartStream(inputStream, boundary, multipartFileManager, multipartConfiguration).process(parameters, files);
+    // Lazily construct the file manager based upon the configuration;
+    new MultipartStream(inputStream, boundary, getMultipartFileManager(), multipartConfiguration).process(parameters, files);
+  }
+
+  public void setMultipartConfiguration(MultipartConfiguration multipartConfiguration) {
+    Objects.requireNonNull(multipartConfiguration);
+    this.multipartConfiguration = multipartConfiguration;
   }
 }

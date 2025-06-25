@@ -19,16 +19,18 @@ import java.io.IOException;
 import java.nio.file.Path;
 import java.util.List;
 
+/**
+ * A file manager for multipart files.
+ *
+ * @author Daniel DeGroff
+ */
 public interface MultipartFileManager {
   /**
    * Create a temporary file for use when processing files in multipart form data.
    *
-   * @param tempDir the path to the temporary directory
-   * @param optionalPrefix the optional prefix used to create the temporary file
-   * @param optionalSuffix the optional suffix used to create the temporary file
    * @return the path to the temporary file
    */
-  Path createTemporaryFile(Path tempDir, String optionalPrefix, String optionalSuffix) throws IOException;
+  Path createTemporaryFile() throws IOException;
 
   /**
    * @return a list of the temporary files created by this file manager.

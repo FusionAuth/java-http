@@ -31,7 +31,6 @@ public class MultipartConfiguration {
 
   private long maxRequestSize = 10 * 1024 * 1024; // 10 Megabyte
 
-  // TODO : Daniel : Review : This was 1k, that seemed really small?
   private int multipartBufferSize = 8 * 1024; // 8 Kilobyte
 
   private String temporaryFileLocation = System.getProperty("java.io.tmpdir");
@@ -44,6 +43,7 @@ public class MultipartConfiguration {
   }
 
   public MultipartConfiguration(MultipartConfiguration other) {
+    this.deleteTemporaryFiles = other.deleteTemporaryFiles;
     this.fileUploadEnabled = other.fileUploadEnabled;
     this.maxFileSize = other.maxFileSize;
     this.maxRequestSize = other.maxRequestSize;

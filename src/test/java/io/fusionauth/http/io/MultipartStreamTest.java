@@ -19,6 +19,8 @@ import java.io.ByteArrayInputStream;
 import java.io.IOException;
 import java.io.InputStream;
 import java.nio.file.Files;
+import java.nio.file.Path;
+import java.nio.file.Paths;
 import java.util.HashMap;
 import java.util.LinkedList;
 import java.util.List;
@@ -73,7 +75,9 @@ public class MultipartStreamTest {
 
   @BeforeTest
   public void beforeTest() {
-    fileManager = new DefaultMultipartFileManager();
+    var multipartConfiguration = new MultipartConfiguration();
+    Path tempDir = Paths.get(multipartConfiguration.getTemporaryFileLocation());
+    fileManager = new DefaultMultipartFileManager(tempDir, multipartConfiguration.getTemporaryFilenamePrefix(), multipartConfiguration.getTemporaryFilenameSuffix());
   }
 
   @Test

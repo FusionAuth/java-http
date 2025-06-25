@@ -45,9 +45,7 @@ import io.fusionauth.http.HTTPMethod;
 import io.fusionauth.http.HTTPValues.ContentTypes;
 import io.fusionauth.http.HTTPValues.Headers;
 import io.fusionauth.http.HTTPValues.TransferEncodings;
-import io.fusionauth.http.UnprocessableContentException;
 import io.fusionauth.http.body.BodyException;
-import io.fusionauth.http.io.MultipartConfiguration;
 import io.fusionauth.http.io.MultipartStreamProcessor;
 import io.fusionauth.http.util.HTTPTools;
 import io.fusionauth.http.util.HTTPTools.HeaderValue;
@@ -76,6 +74,8 @@ public class HTTPRequest implements Buildable<HTTPRequest> {
 
   private final List<Locale> locales = new LinkedList<>();
 
+  private final MultipartStreamProcessor multipartStreamProcessor = new MultipartStreamProcessor();
+
   private final Map<String, List<String>> urlParameters = new HashMap<>();
 
   private byte[] bodyBytes;
@@ -103,8 +103,6 @@ public class HTTPRequest implements Buildable<HTTPRequest> {
   private boolean multipart;
 
   private String multipartBoundary;
-
-  private MultipartStreamProcessor multipartStreamProcess;
 
   private String path = "/";
 
@@ -361,12 +359,8 @@ public class HTTPRequest implements Buildable<HTTPRequest> {
         byte[] body = getBodyBytes();
         HTTPTools.parseEncodedData(body, 0, body.length, formData);
       } else if (isMultipart()) {
-        if (multipartStreamProcess == null) {
-          throw new UnprocessableContentException("The multipart stream cannot be processed. A multipart processing has not been provided.");
-        }
-
         try {
-          multipartStreamProcess.process(inputStream, formData, files, multipartBoundary.getBytes());
+          multipartStreamProcessor.process(inputStream, formData, files, multipartBoundary.getBytes());
         } catch (IOException e) {
           throw new BodyException("Invalid multipart body.", e);
         }
@@ -461,12 +455,12 @@ public class HTTPRequest implements Buildable<HTTPRequest> {
     this.method = method;
   }
 
-  public String getMultipartBoundary() {
-    return multipartBoundary;
+  public MultipartStreamProcessor getMultiPartStreamProcessor() {
+    return multipartStreamProcessor;
   }
 
-  public MultipartConfiguration getMultipartConfiguration() {
-    return multipartStreamProcess != null ? multipartStreamProcess.getMultiPartConfiguration() : null;
+  public String getMultipartBoundary() {
+    return multipartBoundary;
   }
 
   /**
@@ -672,10 +666,6 @@ public class HTTPRequest implements Buildable<HTTPRequest> {
     for (String value : values) {
       decodeHeader(name, value);
     }
-  }
-
-  public void setMultiPartStreamProcessor(MultipartStreamProcessor multipartProcessor) {
-    this.multipartStreamProcess = multipartProcessor;
   }
 
   public void setURLParameter(String name, String value) {

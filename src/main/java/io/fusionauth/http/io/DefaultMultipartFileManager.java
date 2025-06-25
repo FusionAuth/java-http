@@ -27,9 +27,21 @@ import java.util.List;
  * @author Daniel DeGroff
  */
 public class DefaultMultipartFileManager implements MultipartFileManager {
+  private final String optionalPrefix;
+
+  private final String optionalSuffix;
+
+  private final Path tempDir;
+
   private final List<Path> tempFiles = new ArrayList<>(0);
 
-  public Path createTemporaryFile(Path tempDir, String optionalPrefix, String optionalSuffix) throws IOException {
+  public DefaultMultipartFileManager(Path tempDir, String optionalPrefix, String optionalSuffix) {
+    this.tempDir = tempDir;
+    this.optionalPrefix = optionalPrefix;
+    this.optionalSuffix = optionalSuffix;
+  }
+
+  public Path createTemporaryFile() throws IOException {
     Path tempFile = Files.createTempFile(tempDir, optionalPrefix, optionalSuffix);
     tempFiles.add(tempFile);
     return tempFile;

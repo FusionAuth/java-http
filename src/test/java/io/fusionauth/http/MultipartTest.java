@@ -265,6 +265,4 @@ public class MultipartTest extends BaseTest {
       this.scheme = scheme;
     }
   }
-
-
 }

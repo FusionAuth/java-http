@@ -24,7 +24,6 @@ import java.nio.charset.Charset;
 import java.nio.charset.StandardCharsets;
 import java.nio.file.Files;
 import java.nio.file.Path;
-import java.nio.file.Paths;
 import java.util.HashMap;
 import java.util.LinkedList;
 import java.util.List;
@@ -315,8 +314,7 @@ public class MultipartStream {
         throw new UnprocessableContentException("The multipart stream cannot be processed. Multipart processing of files has been disabled.");
       }
 
-      Path tempDir = Paths.get(multipartConfiguration.getTemporaryFileLocation());
-      Path tempFile = multipartFileManager.createTemporaryFile(tempDir, multipartConfiguration.getTemporaryFilenamePrefix(), multipartConfiguration.getTemporaryFilenameSuffix());
+      Path tempFile = multipartFileManager.createTemporaryFile();
       processor = new FilePartProcessor(contentTypeString, encoding, filename, name, multipartConfiguration.getMaxFileSize(), tempFile);
     } else {
       processor = new ParameterPartProcessor(encoding);
@@ -439,11 +437,6 @@ public class MultipartStream {
       int len = end - start;
       bytesWritten += len;
 
-      // TODO : Daniel : Review : Is there a better place to do this? We can't do it while reading from the InputStream
-      //        because we could have one to many parts. We don't want to buffer before writing to the file, so I think we have to just
-      //        wait and keep track of how many bytes we have written to the file before failing?
-      // TODO : Daniel : Review : We have not kept track of the file we opened here, so we need to either add a file listener, and have someone
-      //        else delete the file, we could delete it here, or someone could catch this exception and review all in flight files and then delete?
       if (bytesWritten > maxFileSize) {
         String detailedMessage = "The maximum size of a single file in a multipart stream has been exceeded. The maximum file size is [" + maxFileSize + "] bytes.";
         throw new ContentTooLarge(maxFileSize, detailedMessage);
