@@ -21,6 +21,7 @@ import java.util.ArrayList;
 import java.util.List;
 import java.util.Objects;
 
+import io.fusionauth.http.io.MultipartConfiguration;
 import io.fusionauth.http.log.LoggerFactory;
 import io.fusionauth.http.log.SystemOutLoggerFactory;
 
@@ -57,6 +58,8 @@ public class HTTPServerConfiguration implements Configurable<HTTPServerConfigura
   private long minimumWriteThroughput = 16 * 1024; // Per second
 
   private int multipartBufferSize = 16 * 1024;
+
+  private MultipartConfiguration multipartStreamConfiguration = new MultipartConfiguration();
 
   private int numberOfWorkerThreads = 40;
 
@@ -148,8 +151,17 @@ public class HTTPServerConfiguration implements Configurable<HTTPServerConfigura
     return minimumWriteThroughput;
   }
 
+  // Use the configuration found in the MultipartStreamConfiguration instead.
+  @Deprecated
   public int getMultipartBufferSize() {
     return multipartBufferSize;
+  }
+
+  /**
+   * @return the multipart configuration.
+   */
+  public MultipartConfiguration getMultipartConfiguration() {
+    return multipartStreamConfiguration;
   }
 
   /**
@@ -224,7 +236,6 @@ public class HTTPServerConfiguration implements Configurable<HTTPServerConfigura
     if (duration.isZero() || duration.isNegative()) {
       throw new IllegalArgumentException("The client timeout duration must be greater than 0");
     }
-
 
     this.clientTimeoutDuration = duration;
     return this;
@@ -365,6 +376,14 @@ public class HTTPServerConfiguration implements Configurable<HTTPServerConfigura
     }
 
     this.multipartBufferSize = multipartBufferSize;
+    return this;
+  }
+
+  @Override
+  public HTTPServerConfiguration withMultipartConfiguration(MultipartConfiguration multipartStreamConfiguration) {
+    Objects.requireNonNull(multipartStreamConfiguration, "You cannot set the multipart stream configuration to null");
+
+    this.multipartStreamConfiguration = multipartStreamConfiguration;
     return this;
   }
 
