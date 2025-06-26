@@ -59,11 +59,17 @@ public class MultipartConfiguration {
 
   @Override
   public boolean equals(Object o) {
-    if (o == null || getClass() != o.getClass()) {
+    if (!(o instanceof MultipartConfiguration that)) {
       return false;
     }
-    MultipartConfiguration that = (MultipartConfiguration) o;
-    return fileUploadEnabled == that.fileUploadEnabled && maxFileSize == that.maxFileSize && maxRequestSize == that.maxRequestSize && multipartBufferSize == that.multipartBufferSize && Objects.equals(temporaryFileLocation, that.temporaryFileLocation) && Objects.equals(temporaryFilenamePrefix, that.temporaryFilenamePrefix) && Objects.equals(temporaryFilenameSuffix, that.temporaryFilenameSuffix);
+    return deleteTemporaryFiles == that.deleteTemporaryFiles &&
+        fileUploadEnabled == that.fileUploadEnabled &&
+        maxFileSize == that.maxFileSize &&
+        maxRequestSize == that.maxRequestSize &&
+        multipartBufferSize == that.multipartBufferSize &&
+        Objects.equals(temporaryFileLocation, that.temporaryFileLocation) &&
+        Objects.equals(temporaryFilenamePrefix, that.temporaryFilenamePrefix) &&
+        Objects.equals(temporaryFilenameSuffix, that.temporaryFilenameSuffix);
   }
 
   public long getMaxFileSize() {
@@ -92,7 +98,15 @@ public class MultipartConfiguration {
 
   @Override
   public int hashCode() {
-    return Objects.hash(fileUploadEnabled, maxFileSize, maxRequestSize, multipartBufferSize, temporaryFileLocation, temporaryFilenamePrefix, temporaryFilenameSuffix);
+    return Objects.hash(
+        deleteTemporaryFiles,
+        fileUploadEnabled,
+        maxFileSize,
+        maxRequestSize,
+        multipartBufferSize,
+        temporaryFileLocation,
+        temporaryFilenamePrefix,
+        temporaryFilenameSuffix);
   }
 
   public boolean isFileUploadEnabled() {

@@ -145,8 +145,8 @@ public class HTTPResponseProcessor {
   }
 
   public synchronized void failure(Consumer<HTTPResponse> consumer) {
-    // Go nuclear and wipe the response and stream, even if the response has already been committed (meaning one or more bytes have been
-    // written)
+    // Go nuclear and wipe the response and stream, even if the response has already been committed.
+    //  - A response is committed when one or more bytes have been written.
     response.setStatus(500);
     response.setStatusMessage("Failure");
     response.clearHeaders();
