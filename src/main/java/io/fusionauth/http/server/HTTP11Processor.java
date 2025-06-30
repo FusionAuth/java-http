@@ -114,10 +114,7 @@ public class HTTP11Processor implements HTTPProcessor {
       responseProcessor.failure(response -> {
         if (t instanceof HTTPProcessingException hpe) {
           response.setStatus(hpe.getStatus());
-          String statusMessage = hpe.getStatusMessage();
-          if (statusMessage != null) {
-            response.setStatusMessage(statusMessage);
-          }
+          response.setStatusMessage(hpe.getStatusMessage());
         }
       });
 

@@ -118,13 +118,14 @@ public class HTTPRequest implements Buildable<HTTPRequest> {
     this.contextPath = "";
   }
 
-  public HTTPRequest(String contextPath, int multipartBufferSize, String scheme, int port, String ipAddress) {
+  public HTTPRequest(String contextPath, @Deprecated int multipartBufferSize, String scheme, int port, String ipAddress) {
     Objects.requireNonNull(contextPath);
     Objects.requireNonNull(scheme);
     this.contextPath = contextPath;
     this.scheme = scheme;
     this.port = port;
     this.ipAddress = ipAddress;
+    this.multipartStreamProcessor.getMultiPartConfiguration().withMultipartBufferSize(multipartBufferSize);
   }
 
   public HTTPRequest(String contextPath, String scheme, int port, String ipAddress) {

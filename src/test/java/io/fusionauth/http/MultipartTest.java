@@ -95,7 +95,6 @@ public class MultipartTest extends BaseTest {
         .start()) {
       URI uri = makeURI(scheme, "");
       var client = makeClient(scheme, null);
-      System.out.println("make client...");
       var response = client.send(
           HttpRequest.newBuilder()
                      .uri(uri)
@@ -103,7 +102,6 @@ public class MultipartTest extends BaseTest {
                      .POST(BodyPublishers.ofString(Body)).build(),
           r -> BodySubscribers.ofString(StandardCharsets.UTF_8)
       );
-      System.out.println("assert response from client...");
 
       assertEquals(response.statusCode(), 200);
       assertEquals(response.body(), ExpectedResponse);
