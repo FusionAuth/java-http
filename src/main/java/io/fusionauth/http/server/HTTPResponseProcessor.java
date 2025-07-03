@@ -16,6 +16,7 @@
 package io.fusionauth.http.server;
 
 import java.nio.ByteBuffer;
+import java.util.function.Consumer;
 
 import io.fusionauth.http.Cookie;
 import io.fusionauth.http.HTTPValues.Connections;
@@ -143,15 +144,19 @@ public class HTTPResponseProcessor {
     return null;
   }
 
-  public synchronized void failure() {
-    // Go nuclear and wipe the response and stream, even if the response has already been committed (meaning one or more bytes have been
-    // written)
+  public synchronized void failure(Consumer<HTTPResponse> consumer) {
+    // Go nuclear and wipe the response and stream, even if the response has already been committed.
+    //  - A response is committed when one or more bytes have been written.
     response.setStatus(500);
     response.setStatusMessage("Failure");
     response.clearHeaders();
     response.setContentLength(0L);
 
     preambleBuffers = null;
+
+    if (consumer != null) {
+      consumer.accept(response);
+    }
 
     outputStream.clear();
     outputStream.close();

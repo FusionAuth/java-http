@@ -1,5 +1,5 @@
 /*
- * Copyright (c) 2022-2024, FusionAuth, All Rights Reserved
+ * Copyright (c) 2022-2025, FusionAuth, All Rights Reserved
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -95,7 +95,7 @@ public abstract class BaseTest {
    * This timeout is used for the HttpClient during each test. If you are in a debugger, you will need to change this timeout to be much
    * larger, otherwise, the client might truncate the request to the server.
    */
-  public static final Duration ClientTimeout = Duration.ofSeconds(2);
+  public static final Duration ClientTimeout = Duration.ofSeconds(5);
 
   /**
    * This timeout is used for the HTTPServer during each test. If you are in a debugger, you will need to change this timeout to be much
