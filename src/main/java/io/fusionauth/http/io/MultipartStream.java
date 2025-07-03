@@ -71,7 +71,7 @@ public class MultipartStream {
   private int partialBoundary;
 
   /**
-   * Constructs a {@code MultipartStream} with a multipart processor configuration.
+   * Constructs a {@code MultipartStream} with a file manager, and a multipart  configuration.
    * <p>
    * Note that the buffer must be at least big enough to contain the boundary string, plus 4 characters for CR/LF and double dash, plus at
    * least one byte of data.  Too small a buffer size setting will degrade performance.
@@ -350,6 +350,7 @@ public class MultipartStream {
     }
   }
 
+  @SuppressWarnings("BooleanMethodIsAlwaysInverted")
   private boolean reload(int minimumToLoad) throws IOException {
     // Move data that needs to be retained
     int start = 0;
@@ -370,13 +371,13 @@ public class MultipartStream {
       int read = input.read(buffer, start, buffer.length - start);
       // Keep track of all bytes read for this multipart stream. Fail if the length has been exceeded.
       bytesRead += read;
-      if (multipartConfiguration != null) {
-        long maximumRequestSize = multipartConfiguration.getMaxRequestSize();
-        if (bytesRead > maximumRequestSize) {
-          String detailedMessage = "The maximum request size of multipart stream has been exceeded. The maximum request size is [" + maximumRequestSize + "] bytes.";
-          throw new ContentTooLarge(maximumRequestSize, detailedMessage);
-        }
+
+      long maximumRequestSize = multipartConfiguration.getMaxRequestSize();
+      if (bytesRead > maximumRequestSize) {
+        String detailedMessage = "The maximum request size of multipart stream has been exceeded. The maximum request size is [" + maximumRequestSize + "] bytes.";
+        throw new ContentTooLarge(maximumRequestSize, detailedMessage);
       }
+
       end += read;
       if (end == -1) {
         return false;
