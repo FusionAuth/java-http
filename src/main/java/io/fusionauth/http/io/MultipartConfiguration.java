@@ -25,7 +25,7 @@ import java.util.Objects;
 public class MultipartConfiguration {
   private boolean deleteTemporaryFiles = true;
 
-  private MultipartFileUploadPolicy fileUploadPolicy;
+  private MultipartFileUploadPolicy fileUploadPolicy = MultipartFileUploadPolicy.Reject;
 
   private long maxFileSize = 1024 * 1024; // 1 Megabyte
 
@@ -117,21 +117,49 @@ public class MultipartConfiguration {
     return deleteTemporaryFiles;
   }
 
+  /**
+   * Setting this to <code>true</code> will cause the server to delete all temporary files created while processing a multipart stream after
+   * the request handler has been invoked.
+   * <p>
+   * If you set this to <code>false</code> the request handler will need to manage cleanup of these temporary files.
+   *
+   * @param deleteTemporaryFiles controls if temporary files are deleted by the server.
+   * @return This.
+   */
   public MultipartConfiguration withDeleteTemporaryFiles(boolean deleteTemporaryFiles) {
     this.deleteTemporaryFiles = deleteTemporaryFiles;
     return this;
   }
 
+  /**
+   * This is the file upload policy for the HTTP server.
+   *
+   * @param fileUploadPolicy the file upload policy. Cannot be null.
+   * @return This.
+   */
   public MultipartConfiguration withFileUploadPolicy(MultipartFileUploadPolicy fileUploadPolicy) {
+    Objects.requireNonNull(fileUploadPolicy, "You cannot set the fileUploadPolicy to null");
     this.fileUploadPolicy = fileUploadPolicy;
     return this;
   }
 
+  /**
+   * This is the maximum size for each file found within a multipart stream which may contain one to many files.
+   *
+   * @param maxFileSize the maximum file size in bytes
+   * @return This.
+   */
   public MultipartConfiguration withMaxFileSize(long maxFileSize) {
     this.maxFileSize = maxFileSize;
     return this;
   }
 
+  /**
+   * This is the maximum size of the request payload in bytes when reading a multipart stream.
+   *
+   * @param maxRequestSize the maximum request size in bytes
+   * @return This.
+   */
   public MultipartConfiguration withMaxRequestSize(long maxRequestSize) {
     if (maxRequestSize < maxFileSize) {
       // In practice the maxRequestSize should be more than just one byte larger than maxFileSize, but I am not going to require any specific amount.
@@ -142,21 +170,56 @@ public class MultipartConfiguration {
     return this;
   }
 
+  /**
+   * @param multipartBufferSize the size of the buffer used to parse a multipart stream.
+   * @return This.
+   */
   public MultipartConfiguration withMultipartBufferSize(int multipartBufferSize) {
+    if (multipartBufferSize <= 0) {
+      throw new IllegalArgumentException("The multipart buffer size must be greater than 0");
+    }
+
     this.multipartBufferSize = multipartBufferSize;
     return this;
   }
 
+  /**
+   * A temporary file location used for creating temporary files.
+   * <p>
+   * The specific behavior of creating temporary files will be dependant upon the {@link MultipartFileManager} implementation.
+   *
+   * @param temporaryFileLocation the temporary file location. Cannot be <code>null</code>.
+   * @return This.
+   */
   public MultipartConfiguration withTemporaryFileLocation(String temporaryFileLocation) {
+    Objects.requireNonNull(temporaryFileLocation, "You cannot set the temporaryFileLocation to null");
     this.temporaryFileLocation = temporaryFileLocation;
     return this;
   }
 
+  /**
+   * An optional filename prefix used for naming temporary files.
+   * <p>
+   * This parameter may be set to <code>null</code>. When set to <code>null</code> a system default such as '.tmp' may be used when naming a
+   * temporary file depending upon the {@link MultipartFileManager} implementation.
+   *
+   * @param temporaryFilenamePrefix an optional filename prefix to be used when creating temporary files.
+   * @return This.
+   */
   public MultipartConfiguration withTemporaryFilenamePrefix(String temporaryFilenamePrefix) {
     this.temporaryFilenamePrefix = temporaryFilenamePrefix;
     return this;
   }
 
+  /**
+   * An optional filename suffix used for naming temporary files.
+   * <p>
+   * This parameter may be set to <code>null</code>. The specific file naming with or without this optional suffix may be dependant upon the
+   * {@link MultipartFileManager} implementation. file depending upon the {@link MultipartFileManager} implementation.
+   *
+   * @param temporaryFilenameSuffix an optional filename suffix to be used when creating temporary files.
+   * @return This.
+   */
   public MultipartConfiguration withTemporaryFilenameSuffix(String temporaryFilenameSuffix) {
     this.temporaryFilenameSuffix = temporaryFilenameSuffix;
     return this;
