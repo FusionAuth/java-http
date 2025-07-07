@@ -369,27 +369,20 @@ public class MultipartStream {
       end = 0;
     }
 
-    // TBD : I don't think we use it.
     current = 0;
 
     // Load until we have enough
-    // 1024 - 0
     while (end < minimumToLoad) {
-      // Example: 1024 bytes, minToLoad = 16
       int read = input.read(buffer, start, buffer.length - start);
       if (read == -1) {
         return false;
       }
 
-      // end = 1024
       end += read;
-
-      // start = 1024
       start += end;
 
       // Keep track of all bytes read for this multipart stream. Fail if the length has been exceeded.
       if (read > 0) {
-        // bytesRead = 1024
         bytesRead += read;
       }
 
