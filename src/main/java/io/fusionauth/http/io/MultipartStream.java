@@ -382,10 +382,7 @@ public class MultipartStream {
       start += end;
 
       // Keep track of all bytes read for this multipart stream. Fail if the length has been exceeded.
-      if (read > 0) {
-        bytesRead += read;
-      }
-
+      bytesRead += read;
       long maximumRequestSize = multipartConfiguration.getMaxRequestSize();
       if (bytesRead > maximumRequestSize) {
         String detailedMessage = "The maximum request size of multipart stream has been exceeded. The maximum request size is [" + maximumRequestSize + "] bytes.";

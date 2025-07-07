@@ -33,6 +33,7 @@ import org.testng.annotations.BeforeTest;
 import org.testng.annotations.DataProvider;
 import org.testng.annotations.Test;
 import static org.testng.Assert.assertEquals;
+import static org.testng.FileAssert.fail;
 
 /**
  * @author Brian Pontarelli
@@ -214,6 +215,23 @@ public class MultipartStreamTest {
     assertEquals(files.get(0).name, "file");
 
     Files.delete(files.get(0).file);
+  }
+
+  @Test
+  public void truncated() throws IOException {
+    ByteArrayInputStream is = new ByteArrayInputStream("""
+        ------WebKitFormBoundaryTWfMVJErBoLURJIe\r
+        """.getBytes());
+    Map<String, List<String>> parameters = new HashMap<>();
+    List<FileInfo> files = new LinkedList<>();
+    MultipartStream stream = new MultipartStream(is, "----WebKitFormBoundaryTWfMVJErBoLURJIe".getBytes(), fileManager, new MultipartConfiguration().withFileUploadPolicy(MultipartFileUploadPolicy.Allow));
+    try {
+      stream.process(parameters, files);
+      fail("Expected to fail with a ParseException");
+
+    } catch (ParseException e) {
+      assertEquals(e.getMessage(), "Invalid multipart body. Ran out of data while processing.");
+    }
   }
 
   public static class PartInputStream extends InputStream {
