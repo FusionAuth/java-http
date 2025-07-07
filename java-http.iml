@@ -83,7 +83,7 @@
     <orderEntry type="module-library" scope="TEST">
       <library>
         <CLASSES>
-          <root url="jar://$MODULE_DIR$/.savant/cache/org/jcommander/jcommander/1.83/jcommander-1.83.jar!/" />
+          <root url="jar://$MODULE_DIR$/.savant/cache/org/jcommander/jcommander/1.83.0/jcommander-1.83.0.jar!/" />
         </CLASSES>
         <JAVADOC />
         <SOURCES>
