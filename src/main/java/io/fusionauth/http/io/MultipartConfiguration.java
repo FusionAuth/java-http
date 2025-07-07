@@ -25,7 +25,7 @@ import java.util.Objects;
 public class MultipartConfiguration {
   private boolean deleteTemporaryFiles = true;
 
-  private boolean fileUploadEnabled;
+  private MultipartFileUploadPolicy fileUploadPolicy;
 
   private long maxFileSize = 1024 * 1024; // 1 Megabyte
 
@@ -44,7 +44,7 @@ public class MultipartConfiguration {
 
   public MultipartConfiguration(MultipartConfiguration other) {
     this.deleteTemporaryFiles = other.deleteTemporaryFiles;
-    this.fileUploadEnabled = other.fileUploadEnabled;
+    this.fileUploadPolicy = other.fileUploadPolicy;
     this.maxFileSize = other.maxFileSize;
     this.maxRequestSize = other.maxRequestSize;
     this.multipartBufferSize = other.multipartBufferSize;
@@ -63,13 +63,17 @@ public class MultipartConfiguration {
       return false;
     }
     return deleteTemporaryFiles == that.deleteTemporaryFiles &&
-        fileUploadEnabled == that.fileUploadEnabled &&
+        fileUploadPolicy == that.fileUploadPolicy &&
         maxFileSize == that.maxFileSize &&
         maxRequestSize == that.maxRequestSize &&
         multipartBufferSize == that.multipartBufferSize &&
         Objects.equals(temporaryFileLocation, that.temporaryFileLocation) &&
         Objects.equals(temporaryFilenamePrefix, that.temporaryFilenamePrefix) &&
         Objects.equals(temporaryFilenameSuffix, that.temporaryFilenameSuffix);
+  }
+
+  public MultipartFileUploadPolicy getFileUploadPolicy() {
+    return fileUploadPolicy;
   }
 
   public long getMaxFileSize() {
@@ -100,7 +104,7 @@ public class MultipartConfiguration {
   public int hashCode() {
     return Objects.hash(
         deleteTemporaryFiles,
-        fileUploadEnabled,
+        fileUploadPolicy,
         maxFileSize,
         maxRequestSize,
         multipartBufferSize,
@@ -109,8 +113,8 @@ public class MultipartConfiguration {
         temporaryFilenameSuffix);
   }
 
-  public boolean isFileUploadEnabled() {
-    return fileUploadEnabled;
+  public boolean isDeleteTemporaryFiles() {
+    return deleteTemporaryFiles;
   }
 
   public MultipartConfiguration withDeleteTemporaryFiles(boolean deleteTemporaryFiles) {
@@ -118,8 +122,8 @@ public class MultipartConfiguration {
     return this;
   }
 
-  public MultipartConfiguration withFileUploadEnabled(boolean fileUploadEnabled) {
-    this.fileUploadEnabled = fileUploadEnabled;
+  public MultipartConfiguration withFileUploadPolicy(MultipartFileUploadPolicy fileUploadPolicy) {
+    this.fileUploadPolicy = fileUploadPolicy;
     return this;
   }
 

@@ -169,7 +169,7 @@ public class HTTP11Processor implements HTTPProcessor {
       // If the next state is not preamble, that means we are done processing that and ready to handle the request in a separate thread
       if (requestState != RequestState.Preamble && requestState != RequestState.Expect) {
         logger.trace("(RWo)");
-        future = threadPool.submit(new HTTPWorker(configuration, configuration.getHandler(), configuration.getLoggerFactory(), this, request, response));
+        future = threadPool.submit(new HTTPWorker(configuration, this, request, response));
       }
     } else {
       logger.trace("(RB)");
@@ -289,7 +289,7 @@ public class HTTP11Processor implements HTTPProcessor {
       // Flip back to reading and back to the preamble state, so we write the real response headers. Then start the worker thread and flip the ops
       requestProcessor.resetState(RequestState.Body);
       responseProcessor.resetState(ResponseState.Preamble);
-      future = threadPool.submit(new HTTPWorker(configuration, configuration.getHandler(), configuration.getLoggerFactory(), this, request, response));
+      future = threadPool.submit(new HTTPWorker(configuration, this, request, response));
       state = ProcessorState.Read;
     } else if (responseState == ResponseState.KeepAlive) {
       logger.trace("(WKA)");

@@ -18,7 +18,6 @@ package io.fusionauth.http.server;
 import java.nio.file.Files;
 
 import io.fusionauth.http.log.Logger;
-import io.fusionauth.http.log.LoggerFactory;
 import io.fusionauth.http.util.ThreadPool;
 
 /**
@@ -40,11 +39,10 @@ public class HTTPWorker implements Runnable {
 
   private final HTTPResponse response;
 
-  public HTTPWorker(HTTPServerConfiguration configuration, HTTPHandler handler, LoggerFactory loggerFactory, HTTPProcessor processor,
-                    HTTPRequest request, HTTPResponse response) {
+  public HTTPWorker(HTTPServerConfiguration configuration, HTTPProcessor processor, HTTPRequest request, HTTPResponse response) {
     this.configuration = configuration;
-    this.handler = handler;
-    this.logger = loggerFactory.getLogger(HTTPWorker.class);
+    this.handler = configuration.getHandler();
+    this.logger = configuration.getLoggerFactory().getLogger(HTTPWorker.class);
     this.processor = processor;
     this.request = request;
     this.response = response;
@@ -63,7 +61,7 @@ public class HTTPWorker implements Runnable {
       processor.failure(t);
     } finally {
       // Clean up temporary files if instructed to do so.
-      if (configuration.getMultipartConfiguration().deleteTemporaryFiles()) {
+      if (configuration.getMultipartConfiguration().isDeleteTemporaryFiles()) {
         var fileManager = request.getMultiPartStreamProcessor().getMultipartFileManager();
         for (var file : fileManager.getTemporaryFiles()) {
           try {

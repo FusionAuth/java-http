@@ -20,10 +20,10 @@ package io.fusionauth.http;
  *
  * @author Daniel DeGroff
  */
-public class ContentTooLarge extends HTTPProcessingException {
+public class ContentTooLargeException extends HTTPProcessingException {
   public long maximumRequestSize;
 
-  public ContentTooLarge(long maximumRequestSize, String detailedMessage) {
+  public ContentTooLargeException(long maximumRequestSize, String detailedMessage) {
     super(413, "Content Too Large", detailedMessage);
     this.maximumRequestSize = maximumRequestSize;
   }

@@ -30,7 +30,7 @@ import java.util.List;
 import java.util.Map;
 import java.util.Objects;
 
-import io.fusionauth.http.ContentTooLarge;
+import io.fusionauth.http.ContentTooLargeException;
 import io.fusionauth.http.FileInfo;
 import io.fusionauth.http.HTTPValues.ContentTypes;
 import io.fusionauth.http.HTTPValues.ControlBytes;
@@ -310,11 +310,14 @@ public class MultipartStream {
 
     PartProcessor processor;
     if (isFile) {
-      if (!multipartConfiguration.isFileUploadEnabled()) {
+      if (multipartConfiguration.getFileUploadPolicy() == MultipartFileUploadPolicy.Reject) {
         throw new UnprocessableContentException("The multipart stream cannot be processed. Multipart processing of files has been disabled.");
       }
 
-      Path tempFile = multipartFileManager.createTemporaryFile();
+      // If allowed, create a tempFile, if ignored, do not create a file, the FilePartProcessor will just read the InputStream w/out writing to a file
+      Path tempFile = multipartConfiguration.getFileUploadPolicy() == MultipartFileUploadPolicy.Allow
+          ? multipartFileManager.createTemporaryFile()
+          : null;
       processor = new FilePartProcessor(contentTypeString, encoding, filename, name, multipartConfiguration.getMaxFileSize(), tempFile);
     } else {
       processor = new ParameterPartProcessor(encoding);
@@ -343,7 +346,9 @@ public class MultipartStream {
       } while (boundaryIndex == -1);
 
       if (isFile) {
-        files.add(processor.toFileInfo());
+        if (multipartConfiguration.getFileUploadPolicy() == MultipartFileUploadPolicy.Allow) {
+          files.add(processor.toFileInfo());
+        }
       } else {
         parameters.computeIfAbsent(name, key -> new LinkedList<>()).add(processor.toValue());
       }
@@ -364,26 +369,35 @@ public class MultipartStream {
       end = 0;
     }
 
+    // TBD : I don't think we use it.
     current = 0;
 
     // Load until we have enough
-    while (end - current < minimumToLoad) {
+    // 1024 - 0
+    while (end < minimumToLoad) {
+      // Example: 1024 bytes, minToLoad = 16
       int read = input.read(buffer, start, buffer.length - start);
+      if (read == -1) {
+        return false;
+      }
+
+      // end = 1024
+      end += read;
+
+      // start = 1024
+      start += end;
+
       // Keep track of all bytes read for this multipart stream. Fail if the length has been exceeded.
-      bytesRead += read;
+      if (read > 0) {
+        // bytesRead = 1024
+        bytesRead += read;
+      }
 
       long maximumRequestSize = multipartConfiguration.getMaxRequestSize();
       if (bytesRead > maximumRequestSize) {
         String detailedMessage = "The maximum request size of multipart stream has been exceeded. The maximum request size is [" + maximumRequestSize + "] bytes.";
-        throw new ContentTooLarge(maximumRequestSize, detailedMessage);
+        throw new ContentTooLargeException(maximumRequestSize, detailedMessage);
       }
-
-      end += read;
-      if (end == -1) {
-        return false;
-      }
-
-      start += end;
     }
 
     return true;
@@ -425,7 +439,9 @@ public class MultipartStream {
       this.name = name;
       this.maxFileSize = maxFileSize;
       this.path = path;
-      this.output = Files.newOutputStream(this.path);
+      this.output = this.path != null
+          ? Files.newOutputStream(this.path)
+          : OutputStream.nullOutputStream();
     }
 
     @Override
@@ -440,7 +456,7 @@ public class MultipartStream {
 
       if (bytesWritten > maxFileSize) {
         String detailedMessage = "The maximum size of a single file in a multipart stream has been exceeded. The maximum file size is [" + maxFileSize + "] bytes.";
-        throw new ContentTooLarge(maxFileSize, detailedMessage);
+        throw new ContentTooLargeException(maxFileSize, detailedMessage);
       }
 
       output.write(buffer, start, end - start);

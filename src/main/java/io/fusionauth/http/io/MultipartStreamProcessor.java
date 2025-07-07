@@ -32,7 +32,7 @@ import io.fusionauth.http.FileInfo;
  * @author Daniel DeGroff
  */
 public class MultipartStreamProcessor {
-  private MultipartConfiguration multipartConfiguration = new MultipartConfiguration();
+  private MultipartConfiguration multipartConfiguration;
 
   private MultipartFileManager multipartFileManager;
 
@@ -40,11 +40,16 @@ public class MultipartStreamProcessor {
    * @return the multipart configuration that will be used for this processor.
    */
   public MultipartConfiguration getMultiPartConfiguration() {
+    if (multipartConfiguration == null) {
+      multipartConfiguration = new MultipartConfiguration();
+    }
+
     return multipartConfiguration;
   }
 
   public MultipartFileManager getMultipartFileManager() {
     if (multipartFileManager == null) {
+      getMultiPartConfiguration();
       multipartFileManager = new DefaultMultipartFileManager(Paths.get(multipartConfiguration.getTemporaryFileLocation()), multipartConfiguration.getTemporaryFilenamePrefix(), multipartConfiguration.getTemporaryFilenameSuffix());
     }
 
@@ -54,7 +59,7 @@ public class MultipartStreamProcessor {
   public void process(InputStream inputStream, Map<String, List<String>> parameters, List<FileInfo> files, byte[] boundary)
       throws IOException {
     // Lazily construct the file manager based upon the configuration;
-    new MultipartStream(inputStream, boundary, getMultipartFileManager(), multipartConfiguration).process(parameters, files);
+    new MultipartStream(inputStream, boundary, getMultipartFileManager(), getMultiPartConfiguration()).process(parameters, files);
   }
 
   public void setMultipartConfiguration(MultipartConfiguration multipartConfiguration) {

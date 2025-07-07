@@ -31,6 +31,7 @@ import java.util.function.Consumer;
 
 import io.fusionauth.http.HTTPValues.Headers;
 import io.fusionauth.http.io.MultipartConfiguration;
+import io.fusionauth.http.io.MultipartFileUploadPolicy;
 import io.fusionauth.http.server.CountingInstrumenter;
 import io.fusionauth.http.server.HTTPHandler;
 import io.fusionauth.http.server.HTTPServer;
@@ -60,7 +61,6 @@ public class MultipartTest extends BaseTest {
   @Test(dataProvider = "schemes")
   public void post(String scheme) throws Exception {
     HTTPHandler handler = (req, res) -> {
-      System.out.println("Handling");
       assertEquals(req.getContentType(), "multipart/form-data");
 
       Map<String, List<String>> form = req.getFormData();
@@ -74,13 +74,11 @@ public class MultipartTest extends BaseTest {
 
       Files.delete(files.get(0).getFile());
 
-      System.out.println("Done");
       res.setHeader(Headers.ContentType, "text/plain");
       res.setHeader("Content-Length", "16");
       res.setStatus(200);
 
       try {
-        System.out.println("Writing");
         OutputStream outputStream = res.getOutputStream();
         outputStream.write(ExpectedResponse.getBytes());
         outputStream.close();
@@ -91,7 +89,7 @@ public class MultipartTest extends BaseTest {
 
     CountingInstrumenter instrumenter = new CountingInstrumenter();
     try (HTTPServer ignore = makeServer(scheme, handler, instrumenter)
-        .withMultipartConfiguration(new MultipartConfiguration().withFileUploadEnabled(true))
+        .withMultipartConfiguration(new MultipartConfiguration().withFileUploadPolicy(MultipartFileUploadPolicy.Allow))
         .start()) {
       URI uri = makeURI(scheme, "");
       var client = makeClient(scheme, null);
@@ -113,7 +111,7 @@ public class MultipartTest extends BaseTest {
     // File too big even though the overall request size is ok.
     withScheme(scheme)
         .withFileSize(513) // 513 bytes
-        .withConfiguration(new MultipartConfiguration().withFileUploadEnabled(true)
+        .withConfiguration(new MultipartConfiguration().withFileUploadPolicy(MultipartFileUploadPolicy.Allow)
                                                        // Max file size is 2Mb
                                                        .withMaxFileSize(512)
                                                        // Max request size is 10 Mb
@@ -122,10 +120,30 @@ public class MultipartTest extends BaseTest {
   }
 
   @Test(dataProvider = "schemes")
-  public void post_server_configuration_file_upload_disabled(String scheme) throws Exception {
-    // File uploads disabled
+  public void post_server_configuration_file_upload_allow(String scheme) throws Exception {
+    // File uploads allowed
     withScheme(scheme)
-        .withConfiguration(new MultipartConfiguration().withFileUploadEnabled(false))
+        .withFileCount(5)
+        .withConfiguration(new MultipartConfiguration().withFileUploadPolicy(MultipartFileUploadPolicy.Allow))
+        .expect(response -> assertEquals(response.statusCode(), 200));
+  }
+
+  @Test(dataProvider = "schemes")
+  public void post_server_configuration_file_upload_ignore(String scheme) throws Exception {
+    // File uploads ignored
+    withScheme(scheme)
+        .withFileCount(5)
+        .withConfiguration(new MultipartConfiguration().withFileUploadPolicy(MultipartFileUploadPolicy.Ignore))
+        // Ignored means that we will not see any files in the request handler
+        .expectedFileCount(0)
+        .expect(response -> assertEquals(response.statusCode(), 200));
+  }
+
+  @Test(dataProvider = "schemes")
+  public void post_server_configuration_file_upload_reject(String scheme) throws Exception {
+    // File uploads rejected
+    withScheme(scheme)
+        .withConfiguration(new MultipartConfiguration().withFileUploadPolicy(MultipartFileUploadPolicy.Reject))
         .expect(response -> assertEquals(response.statusCode(), 422));
   }
 
@@ -135,7 +153,7 @@ public class MultipartTest extends BaseTest {
     withScheme(scheme)
         .withFileSize(512)   // 512 bytes
         .withFileCount(5)    // 5 files, for a total of 2,560 bytes in the request
-        .withConfiguration(new MultipartConfiguration().withFileUploadEnabled(true)
+        .withConfiguration(new MultipartConfiguration().withFileUploadPolicy(MultipartFileUploadPolicy.Allow)
                                                        // Max file size is 1024 bytes, our files will be 512
                                                        .withMaxFileSize(1024)
                                                        // Max request size is 2048 bytes
@@ -154,6 +172,8 @@ public class MultipartTest extends BaseTest {
   private class Builder {
     private MultipartConfiguration configuration;
 
+    private int expectedFileCount = 1;
+
     private int fileCount = 1;
 
     private int fileSize = 42;
@@ -166,27 +186,26 @@ public class MultipartTest extends BaseTest {
 
     public void expect(Consumer<HttpResponse<String>> consumer) throws Exception {
       HTTPHandler handler = (req, res) -> {
-        System.out.println("Handling");
         assertEquals(req.getContentType(), "multipart/form-data");
 
         Map<String, List<String>> form = req.getFormData();
         assertEquals(form.get("foo"), List.of("bar"));
 
         List<FileInfo> files = req.getFiles();
-        assertEquals(files.get(0).getContentType(), "text/plain");
-        assertEquals(files.get(0).getEncoding(), StandardCharsets.ISO_8859_1);
-        assertEquals(files.get(0).getName(), "file");
-        assertEquals(Files.readString(files.get(0).getFile()), "filecontents");
+        assertEquals(files.size(), expectedFileCount);
+        for (FileInfo file : files) {
+          assertEquals(file.getContentType(), "text/plain");
+          assertEquals(file.getEncoding(), StandardCharsets.ISO_8859_1);
+          assertEquals(file.getName(), "file");
+          assertEquals(Files.readString(file.getFile()), "X".repeat(fileSize));
+          Files.delete(file.getFile());
+        }
 
-        Files.delete(files.get(0).getFile());
-
-        System.out.println("Done");
         res.setHeader(Headers.ContentType, "text/plain");
         res.setHeader("Content-Length", "16");
         res.setStatus(200);
 
         try {
-          System.out.println("Writing");
           OutputStream outputStream = res.getOutputStream();
           outputStream.write(ExpectedResponse.getBytes());
           outputStream.close();
@@ -228,7 +247,6 @@ public class MultipartTest extends BaseTest {
 
         body += boundary + "--";
 
-
         var uri = makeURI(scheme, "");
         var client = makeClient(scheme, null);
         // File uploads are disabled.
@@ -244,6 +262,11 @@ public class MultipartTest extends BaseTest {
       }
     }
 
+    public Builder expectedFileCount(int expectedFileCount) {
+      this.expectedFileCount = expectedFileCount;
+      return this;
+    }
+
     public Builder withConfiguration(MultipartConfiguration configuration) throws Exception {
       this.configuration = configuration;
       return this;
@@ -251,6 +274,7 @@ public class MultipartTest extends BaseTest {
 
     public Builder withFileCount(int fileCount) {
       this.fileCount = fileCount;
+      this.expectedFileCount = fileCount;
       return this;
     }
 
