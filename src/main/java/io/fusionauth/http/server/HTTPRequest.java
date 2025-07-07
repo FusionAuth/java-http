@@ -46,7 +46,7 @@ import io.fusionauth.http.HTTPValues.ContentTypes;
 import io.fusionauth.http.HTTPValues.Headers;
 import io.fusionauth.http.HTTPValues.TransferEncodings;
 import io.fusionauth.http.body.BodyException;
-import io.fusionauth.http.io.MultipartStream;
+import io.fusionauth.http.io.MultipartStreamProcessor;
 import io.fusionauth.http.util.HTTPTools;
 import io.fusionauth.http.util.HTTPTools.HeaderValue;
 import io.fusionauth.http.util.WeightedString;
@@ -74,7 +74,7 @@ public class HTTPRequest implements Buildable<HTTPRequest> {
 
   private final List<Locale> locales = new LinkedList<>();
 
-  private final int multipartBufferSize;
+  private final MultipartStreamProcessor multipartStreamProcessor = new MultipartStreamProcessor();
 
   private final Map<String, List<String>> urlParameters = new HashMap<>();
 
@@ -116,14 +116,22 @@ public class HTTPRequest implements Buildable<HTTPRequest> {
 
   public HTTPRequest() {
     this.contextPath = "";
-    this.multipartBufferSize = 1024;
   }
 
-  public HTTPRequest(String contextPath, int multipartBufferSize, String scheme, int port, String ipAddress) {
+  public HTTPRequest(String contextPath, @Deprecated int multipartBufferSize, String scheme, int port, String ipAddress) {
     Objects.requireNonNull(contextPath);
     Objects.requireNonNull(scheme);
     this.contextPath = contextPath;
-    this.multipartBufferSize = multipartBufferSize;
+    this.scheme = scheme;
+    this.port = port;
+    this.ipAddress = ipAddress;
+    this.multipartStreamProcessor.getMultiPartConfiguration().withMultipartBufferSize(multipartBufferSize);
+  }
+
+  public HTTPRequest(String contextPath, String scheme, int port, String ipAddress) {
+    Objects.requireNonNull(contextPath);
+    Objects.requireNonNull(scheme);
+    this.contextPath = contextPath;
     this.scheme = scheme;
     this.port = port;
     this.ipAddress = ipAddress;
@@ -352,9 +360,8 @@ public class HTTPRequest implements Buildable<HTTPRequest> {
         byte[] body = getBodyBytes();
         HTTPTools.parseEncodedData(body, 0, body.length, formData);
       } else if (isMultipart()) {
-        MultipartStream stream = new MultipartStream(inputStream, getMultipartBoundary().getBytes(), multipartBufferSize);
         try {
-          stream.process(formData, files);
+          multipartStreamProcessor.process(inputStream, formData, files, multipartBoundary.getBytes());
         } catch (IOException e) {
           throw new BodyException("Invalid multipart body.", e);
         }
@@ -447,6 +454,10 @@ public class HTTPRequest implements Buildable<HTTPRequest> {
 
   public void setMethod(HTTPMethod method) {
     this.method = method;
+  }
+
+  public MultipartStreamProcessor getMultiPartStreamProcessor() {
+    return multipartStreamProcessor;
   }
 
   public String getMultipartBoundary() {

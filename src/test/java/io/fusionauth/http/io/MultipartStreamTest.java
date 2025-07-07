@@ -1,5 +1,5 @@
 /*
- * Copyright (c) 2022-2023, FusionAuth, All Rights Reserved
+ * Copyright (c) 2022-2025, FusionAuth, All Rights Reserved
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -19,6 +19,8 @@ import java.io.ByteArrayInputStream;
 import java.io.IOException;
 import java.io.InputStream;
 import java.nio.file.Files;
+import java.nio.file.Path;
+import java.nio.file.Paths;
 import java.util.HashMap;
 import java.util.LinkedList;
 import java.util.List;
@@ -26,14 +28,30 @@ import java.util.Map;
 
 import io.fusionauth.http.FileInfo;
 import io.fusionauth.http.ParseException;
+import org.testng.annotations.AfterTest;
+import org.testng.annotations.BeforeTest;
 import org.testng.annotations.DataProvider;
 import org.testng.annotations.Test;
 import static org.testng.Assert.assertEquals;
+import static org.testng.FileAssert.fail;
 
 /**
  * @author Brian Pontarelli
  */
 public class MultipartStreamTest {
+  private MultipartFileManager fileManager;
+
+  @AfterTest
+  public void afterTest() {
+    for (var file : fileManager.getTemporaryFiles()) {
+      try {
+        Files.deleteIfExists(file);
+      } catch (Exception e) {
+        throw new RuntimeException(e);
+      }
+    }
+  }
+
   @DataProvider(name = "badBoundary")
   public Object[][] badBoundary() {
     return new Object[][]{
@@ -52,8 +70,15 @@ public class MultipartStreamTest {
 
   @Test(dataProvider = "badBoundary", expectedExceptions = ParseException.class, expectedExceptionsMessageRegExp = "Invalid multipart body. Ran out of data while processing.")
   public void bad_boundaryParameter(String boundary) throws IOException {
-    new MultipartStream(new ByteArrayInputStream(boundary.getBytes()), "----WebKitFormBoundaryTWfMVJErBoLURJIe".getBytes(), 1024)
+    new MultipartStream(new ByteArrayInputStream(boundary.getBytes()), "----WebKitFormBoundaryTWfMVJErBoLURJIe".getBytes(), fileManager, new MultipartConfiguration().withFileUploadPolicy(MultipartFileUploadPolicy.Allow))
         .process(new HashMap<>(), new LinkedList<>());
+  }
+
+  @BeforeTest
+  public void beforeTest() {
+    var multipartConfiguration = new MultipartConfiguration();
+    Path tempDir = Paths.get(multipartConfiguration.getTemporaryFileLocation());
+    fileManager = new DefaultMultipartFileManager(tempDir, multipartConfiguration.getTemporaryFilenamePrefix(), multipartConfiguration.getTemporaryFilenameSuffix());
   }
 
   @Test
@@ -66,7 +91,7 @@ public class MultipartStreamTest {
         ------WebKitFormBoundaryTWfMVJErBoLURJIe--""".getBytes());
     Map<String, List<String>> parameters = new HashMap<>();
     List<FileInfo> files = new LinkedList<>();
-    MultipartStream stream = new MultipartStream(is, "----WebKitFormBoundaryTWfMVJErBoLURJIe".getBytes(), 1024);
+    MultipartStream stream = new MultipartStream(is, "----WebKitFormBoundaryTWfMVJErBoLURJIe".getBytes(), fileManager, new MultipartConfiguration().withFileUploadPolicy(MultipartFileUploadPolicy.Allow));
     stream.process(parameters, files);
 
     assertEquals(parameters.get("foo"), List.of("bar------WebKitFormBoundaryTWfMVJErBoLURJIe"));
@@ -82,7 +107,7 @@ public class MultipartStreamTest {
         ------WebKitFormBoundaryTWfMVJErBoLURJIe--""".getBytes());
     Map<String, List<String>> parameters = new HashMap<>();
     List<FileInfo> files = new LinkedList<>();
-    MultipartStream stream = new MultipartStream(is, "----WebKitFormBoundaryTWfMVJErBoLURJIe".getBytes(), 1024);
+    MultipartStream stream = new MultipartStream(is, "----WebKitFormBoundaryTWfMVJErBoLURJIe".getBytes(), fileManager, new MultipartConfiguration().withFileUploadPolicy(MultipartFileUploadPolicy.Allow));
     stream.process(parameters, files);
 
     assertEquals(files.size(), 1);
@@ -108,7 +133,7 @@ public class MultipartStreamTest {
         ------WebKitFormBoundaryTWfMVJErBoLURJIe--""".getBytes());
     Map<String, List<String>> parameters = new HashMap<>();
     List<FileInfo> files = new LinkedList<>();
-    MultipartStream stream = new MultipartStream(is, "----WebKitFormBoundaryTWfMVJErBoLURJIe".getBytes(), 1024);
+    MultipartStream stream = new MultipartStream(is, "----WebKitFormBoundaryTWfMVJErBoLURJIe".getBytes(), fileManager, new MultipartConfiguration().withFileUploadPolicy(MultipartFileUploadPolicy.Allow));
     stream.process(parameters, files);
 
     assertEquals(parameters.get("foo"), List.of("bar"));
@@ -132,7 +157,7 @@ public class MultipartStreamTest {
         ------WebKitFormBoundaryTWfMVJErBoLURJIe--""".getBytes());
     Map<String, List<String>> parameters = new HashMap<>();
     List<FileInfo> files = new LinkedList<>();
-    MultipartStream stream = new MultipartStream(is, "----WebKitFormBoundaryTWfMVJErBoLURJIe".getBytes(), 1024);
+    MultipartStream stream = new MultipartStream(is, "----WebKitFormBoundaryTWfMVJErBoLURJIe".getBytes(), fileManager, new MultipartConfiguration().withFileUploadPolicy(MultipartFileUploadPolicy.Allow));
     stream.process(parameters, files);
 
     assertEquals(parameters.get("foo"), List.of("bar"));
@@ -148,7 +173,7 @@ public class MultipartStreamTest {
         ------WebKitFormBoundaryTWfMVJErBoLURJIe--""".getBytes());
     Map<String, List<String>> parameters = new HashMap<>();
     List<FileInfo> files = new LinkedList<>();
-    MultipartStream stream = new MultipartStream(is, "----WebKitFormBoundaryTWfMVJErBoLURJIe".getBytes(), 1024);
+    MultipartStream stream = new MultipartStream(is, "----WebKitFormBoundaryTWfMVJErBoLURJIe".getBytes(), fileManager, new MultipartConfiguration().withFileUploadPolicy(MultipartFileUploadPolicy.Allow));
     stream.process(parameters, files);
 
     assertEquals(parameters.get("foo"), List.of("------WebKitFormBoundaryTWfMVJErBoLURJI"));
@@ -178,7 +203,7 @@ public class MultipartStreamTest {
     PartInputStream is = new PartInputStream(parts);
     Map<String, List<String>> parameters = new HashMap<>();
     List<FileInfo> files = new LinkedList<>();
-    MultipartStream stream = new MultipartStream(is, "----WebKitFormBoundaryTWfMVJErBoLURJIe".getBytes(), 1024);
+    MultipartStream stream = new MultipartStream(is, "----WebKitFormBoundaryTWfMVJErBoLURJIe".getBytes(), fileManager, new MultipartConfiguration().withFileUploadPolicy(MultipartFileUploadPolicy.Allow));
     stream.process(parameters, files);
 
     assertEquals(parameters.get("foo"), List.of("bar"));
@@ -190,6 +215,23 @@ public class MultipartStreamTest {
     assertEquals(files.get(0).name, "file");
 
     Files.delete(files.get(0).file);
+  }
+
+  @Test
+  public void truncated() throws IOException {
+    ByteArrayInputStream is = new ByteArrayInputStream("""
+        ------WebKitFormBoundaryTWfMVJErBoLURJIe\r
+        """.getBytes());
+    Map<String, List<String>> parameters = new HashMap<>();
+    List<FileInfo> files = new LinkedList<>();
+    MultipartStream stream = new MultipartStream(is, "----WebKitFormBoundaryTWfMVJErBoLURJIe".getBytes(), fileManager, new MultipartConfiguration().withFileUploadPolicy(MultipartFileUploadPolicy.Allow));
+    try {
+      stream.process(parameters, files);
+      fail("Expected to fail with a ParseException");
+
+    } catch (ParseException e) {
+      assertEquals(e.getMessage(), "Invalid multipart body. Ran out of data while processing.");
+    }
   }
 
   public static class PartInputStream extends InputStream {

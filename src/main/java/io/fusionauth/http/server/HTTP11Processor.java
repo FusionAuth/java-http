@@ -1,5 +1,5 @@
 /*
- * Copyright (c) 2022-2023, FusionAuth, All Rights Reserved
+ * Copyright (c) 2022-2025, FusionAuth, All Rights Reserved
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -20,7 +20,9 @@ import java.nio.ByteBuffer;
 import java.nio.channels.SelectionKey;
 import java.util.concurrent.Future;
 
+import io.fusionauth.http.HTTPProcessingException;
 import io.fusionauth.http.io.BlockingByteBufferOutputStream;
+import io.fusionauth.http.io.MultipartConfiguration;
 import io.fusionauth.http.log.Logger;
 import io.fusionauth.http.util.ThreadPool;
 
@@ -73,7 +75,10 @@ public class HTTP11Processor implements HTTPProcessor {
     this.threadPool = threadPool;
     this.state = ProcessorState.Read;
 
-    this.request = new HTTPRequest(configuration.getContextPath(), configuration.getMultipartBufferSize(), listener.isTLS() ? "https" : "http", listener.getPort(), ipAddress);
+    this.request = new HTTPRequest(configuration.getContextPath(), listener.isTLS() ? "https" : "http", listener.getPort(), ipAddress);
+
+    // Create a deep copy of the MultipartConfiguration so that the request may optionally modify the configuration on a per-request basis.
+    this.request.getMultiPartStreamProcessor().setMultipartConfiguration(new MultipartConfiguration(configuration.getMultipartConfiguration()));
     this.requestProcessor = new HTTPRequestProcessor(configuration, request);
 
     BlockingByteBufferOutputStream outputStream = new BlockingByteBufferOutputStream(notifier, configuration.getResponseBufferSize(), configuration.getMaxOutputBufferQueueLength());
@@ -106,7 +111,14 @@ public class HTTP11Processor implements HTTPProcessor {
     } else {
       // Maintain the `write` state but reset to Preamble to write the new headers
       state = ProcessorState.Write;
-      responseProcessor.failure();
+      responseProcessor.failure(response -> {
+        if (t instanceof HTTPProcessingException hpe) {
+          response.setStatus(hpe.getStatus());
+          response.setStatusMessage(hpe.getStatusMessage());
+        }
+      });
+
+      logger.debug("Processing failed. Return status [" + response.getStatus() + "] Cause [" + t.getClass().getSimpleName() + "] Message: " + t.getMessage());
     }
 
     notifier.notifyNow();
@@ -157,7 +169,7 @@ public class HTTP11Processor implements HTTPProcessor {
       // If the next state is not preamble, that means we are done processing that and ready to handle the request in a separate thread
       if (requestState != RequestState.Preamble && requestState != RequestState.Expect) {
         logger.trace("(RWo)");
-        future = threadPool.submit(new HTTPWorker(configuration.getHandler(), configuration.getLoggerFactory(), this, request, response));
+        future = threadPool.submit(new HTTPWorker(configuration, this, request, response));
       }
     } else {
       logger.trace("(RB)");
@@ -277,7 +289,7 @@ public class HTTP11Processor implements HTTPProcessor {
       // Flip back to reading and back to the preamble state, so we write the real response headers. Then start the worker thread and flip the ops
       requestProcessor.resetState(RequestState.Body);
       responseProcessor.resetState(ResponseState.Preamble);
-      future = threadPool.submit(new HTTPWorker(configuration.getHandler(), configuration.getLoggerFactory(), this, request, response));
+      future = threadPool.submit(new HTTPWorker(configuration, this, request, response));
       state = ProcessorState.Read;
     } else if (responseState == ResponseState.KeepAlive) {
       logger.trace("(WKA)");
