@@ -20,12 +20,15 @@ import java.io.OutputStream;
 import java.net.Socket;
 import java.net.SocketException;
 import java.net.SocketTimeoutException;
+import java.nio.file.Files;
 
+import io.fusionauth.http.HTTPProcessingException;
 import io.fusionauth.http.HTTPValues;
 import io.fusionauth.http.HTTPValues.Connections;
 import io.fusionauth.http.HTTPValues.Headers;
 import io.fusionauth.http.HTTPValues.Protocols;
 import io.fusionauth.http.ParseException;
+import io.fusionauth.http.io.MultipartConfiguration;
 import io.fusionauth.http.io.PushbackInputStream;
 import io.fusionauth.http.log.Logger;
 import io.fusionauth.http.server.HTTPHandler;
@@ -110,8 +113,10 @@ public class HTTPWorker implements Runnable {
 
       while (true) {
         logger.trace("[{}] Running HTTP worker. Block while we wait to read the preamble", Thread.currentThread().threadId());
-        var request = new HTTPRequest(configuration.getContextPath(), configuration.getMultipartBufferSize(),
-            listener.getCertificate() != null ? "https" : "http", listener.getPort(), socket.getInetAddress().getHostAddress());
+        var request = new HTTPRequest(configuration.getContextPath(), listener.getCertificate() != null ? "https" : "http", listener.getPort(), socket.getInetAddress().getHostAddress());
+
+        // Create a deep copy of the MultipartConfiguration so that the request may optionally modify the configuration on a per-request basis.
+        request.getMultiPartStreamProcessor().setMultipartConfiguration(new MultipartConfiguration(configuration.getMultipartConfiguration()));
 
         // Set up the output stream so that if we fail we have the opportunity to write a response that contains a status code.
         var throughputOutputStream = new ThroughputOutputStream(socket.getOutputStream(), throughput);
@@ -170,8 +175,26 @@ public class HTTPWorker implements Runnable {
         // Transition to processing
         state = State.Process;
         logger.trace("[{}] Set state [{}]. Call the request handler.", Thread.currentThread().threadId(), state);
-        configuration.getHandler().handle(request, response);
-        logger.trace("[{}] Handler completed successfully", Thread.currentThread().threadId());
+        try {
+          configuration.getHandler().handle(request, response);
+          logger.trace("[{}] Handler completed successfully", Thread.currentThread().threadId());
+        } finally {
+          // Clean up temporary files if instructed to do so.
+          // - Note that this is using the request scoped configuration. It is possible for the request handler to disable
+          //   deletion of temporary files on a request basis.
+          var multiPartProcessor = request.getMultiPartStreamProcessor();
+          if (multiPartProcessor.getMultiPartConfiguration().isDeleteTemporaryFiles()) {
+            var fileManager = multiPartProcessor.getMultipartFileManager();
+            for (var file : fileManager.getTemporaryFiles()) {
+              try {
+                logger.debug("Delete temporary file [{}]", file);
+                Files.deleteIfExists(file);
+              } catch (Exception e) {
+                logger.error("Unable to delete temporary file. [" + file + "]", e);
+              }
+            }
+          }
+        }
 
         // Do this before we write the response preamble. The normal Keep-Alive check below will handle closing the socket.
         if (handledRequests >= configuration.getMaxRequestsPerConnection()) {
@@ -207,6 +230,11 @@ public class HTTPWorker implements Runnable {
       // The client closed the socket. Trace log this since it is an expected case.
       logger.trace("[{}] Closing socket. Client closed the connection. Reason [{}].", Thread.currentThread().threadId(), e.getMessage());
       closeSocketOnly(CloseSocketReason.Expected);
+    } catch (HTTPProcessingException e) {
+      // Note that I am only tracing this. This is sort of expected - in that it is possible that the request handler will catch this exception and handle it. If the request handler
+      // does not handle this exception, it is totally fine to handle it here.
+      logger.trace("[{}] Closing socket with status [{}]. An unhandled [{}] exception was taken. Reason [{}].", Thread.currentThread().threadId(), e.getStatus(), e.getClass().getSimpleName(), e.getMessage());
+      closeSocketOnError(response, e.getStatus());
     } catch (TooManyBytesToDrainException e) {
       // The request handler did not read the entire InputStream, we tried to drain it but there were more bytes remaining than the configured maximum.
       // - Close the connection, unless we drain it, the connection cannot be re-used.

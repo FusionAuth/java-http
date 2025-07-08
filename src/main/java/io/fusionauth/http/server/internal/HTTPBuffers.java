@@ -1,5 +1,5 @@
 /*
- * Copyright (c) 2024, FusionAuth, All Rights Reserved
+ * Copyright (c) 2024-2025, FusionAuth, All Rights Reserved
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -83,7 +83,8 @@ public class HTTPBuffers {
 
   /**
    * @return A byte array used to buffer the response such that the server can replace the response with an error response if an error
-   *     occurs during processing, but after the preamble and body has already been partially written.
+   *     occurs during processing, but after the preamble and body has already been partially written. May be null if the response buffer
+   *     has been disabled.
    */
   public byte[] responseBuffer() {
     return responseBuffer;

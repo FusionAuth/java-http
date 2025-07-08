@@ -21,6 +21,7 @@ import java.util.ArrayList;
 import java.util.List;
 import java.util.Objects;
 
+import io.fusionauth.http.io.MultipartConfiguration;
 import io.fusionauth.http.log.LoggerFactory;
 import io.fusionauth.http.log.SystemOutLoggerFactory;
 
@@ -65,6 +66,8 @@ public class HTTPServerConfiguration implements Configurable<HTTPServerConfigura
   private long minimumWriteThroughput = 16 * 1024; // 16k/second
 
   private int multipartBufferSize = 16 * 1024; // 16k bytes
+
+  private MultipartConfiguration multipartStreamConfiguration = new MultipartConfiguration();
 
   private Duration processingTimeoutDuration = Duration.ofSeconds(10);
 
@@ -221,8 +224,16 @@ public class HTTPServerConfiguration implements Configurable<HTTPServerConfigura
    * @return The multipart buffer size in bytes. This is primary used for parsing multipart requests by the {@link HTTPRequest} class.
    *     Defaults to 16k bytes.
    */
+  @Deprecated
   public int getMultipartBufferSize() {
     return multipartBufferSize;
+  }
+
+  /**
+   * @return the multipart configuration.
+   */
+  public MultipartConfiguration getMultipartConfiguration() {
+    return multipartStreamConfiguration;
   }
 
   /**
@@ -451,7 +462,7 @@ public class HTTPServerConfiguration implements Configurable<HTTPServerConfigura
   @Override
   public HTTPServerConfiguration withMinimumReadThroughput(long bytesPerSecond) {
     if (bytesPerSecond != -1 && bytesPerSecond < 512) {
-      throw new IllegalArgumentException("The minimum bytes per second must be greater than 512. Note that the theoretical maximum transmission speed of a 28.8k is 28,800 bits /second, or 3,600 bytes /second. Maybe consider requiring the read throughput to be faster than a 28.8k modem.");
+      throw new IllegalArgumentException("The minimum bytes per second must be greater than 512. Note that the theoretical maximum transmission speed of a 28.8k is 28,800 bits /second, or 3,600 bytes /second. Maybe consider requiring the read throughput to be faster than a 28.8k modem. Set this to -1 to disable this check.");
     }
 
     this.minimumReadThroughput = bytesPerSecond;
@@ -463,7 +474,7 @@ public class HTTPServerConfiguration implements Configurable<HTTPServerConfigura
    */
   public HTTPServerConfiguration withMinimumWriteThroughput(long bytesPerSecond) {
     if (bytesPerSecond != -1 && bytesPerSecond < 512) {
-      throw new IllegalArgumentException("The minimum bytes per second must be greater than 512. Note that the theoretical maximum transmission speed of a 28.8k is 28,800 bits /second, or 3,600 bytes /second. Maybe consider requiring the write throughput to be faster than a 28.8k modem.");
+      throw new IllegalArgumentException("The minimum bytes per second must be greater than 512. Note that the theoretical maximum transmission speed of a 28.8k is 28,800 bits /second, or 3,600 bytes /second. Maybe consider requiring the write throughput to be faster than a 28.8k modem. Set this to -1 to disable this check.");
     }
 
     this.minimumWriteThroughput = bytesPerSecond;
@@ -480,6 +491,14 @@ public class HTTPServerConfiguration implements Configurable<HTTPServerConfigura
     }
 
     this.multipartBufferSize = multipartBufferSize;
+    return this;
+  }
+
+  @Override
+  public HTTPServerConfiguration withMultipartConfiguration(MultipartConfiguration multipartStreamConfiguration) {
+    Objects.requireNonNull(multipartStreamConfiguration, "You cannot set the multipart stream configuration to null");
+
+    this.multipartStreamConfiguration = multipartStreamConfiguration;
     return this;
   }
 
@@ -531,6 +550,10 @@ public class HTTPServerConfiguration implements Configurable<HTTPServerConfigura
    */
   @Override
   public HTTPServerConfiguration withResponseBufferSize(int responseBufferSize) {
+    if (responseBufferSize != -1 && responseBufferSize <= 0) {
+      throw new IllegalArgumentException("The response buffer size must be greater than 0. Set to -1 to disable buffering completely.");
+    }
+
     this.responseBufferSize = responseBufferSize;
     return this;
   }
