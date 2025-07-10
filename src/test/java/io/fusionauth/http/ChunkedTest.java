@@ -314,7 +314,9 @@ public class ChunkedTest extends BaseTest {
 
     int iterations = 15_000;
     CountingInstrumenter instrumenter = new CountingInstrumenter();
-    try (var client = makeClient(scheme, null); var ignore = makeServer(scheme, handler, instrumenter).start()) {
+    try (var client = makeClient(scheme, null); var ignore = makeServer(scheme, handler, instrumenter)
+        // Note default max requests per connection is 100k, so we shouldn't be closing the connections based upon the total requests.
+        .start()) {
       URI uri = makeURI(scheme, "");
       long start = System.currentTimeMillis();
       long lastLog = start;
@@ -364,6 +366,12 @@ public class ChunkedTest extends BaseTest {
     }
 
     // We are using keep-alive, so expect 1 connection, and the total requests accepted, and chunked responses should equal the iteration count.
+    // - This assertion does seem to fail every once in a while, and it will be 2 instead of 1. My guess is that this is ok - we don't always know
+    //   how an HTTP client is going to work, and it may decide to cycle a connection even if the server didn't force it. We are using the JDK
+    //   REST client which does seem to be fairly predictable, but for example, using a REST client that uses HttpURLConnection is much less
+    //   predictable, but fast. 😀
+    //
+    //   If it keeps failing, we could modify this assertion to assert 1 or 2.
     assertEquals(instrumenter.getConnections(), 1);
     assertEquals(instrumenter.getChunkedResponses(), iterations);
     assertEquals(instrumenter.getAcceptedRequests(), iterations);
