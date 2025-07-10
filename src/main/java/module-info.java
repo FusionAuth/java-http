@@ -1,4 +1,5 @@
 module io.fusionauth.http {
+  exports io.fusionauth.http;
   exports io.fusionauth.http.io;
   exports io.fusionauth.http.log;
   exports io.fusionauth.http.security;

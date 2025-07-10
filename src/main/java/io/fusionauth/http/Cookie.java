@@ -74,6 +74,7 @@ public class Cookie implements Buildable<Cookie> {
       return;
     }
 
+    this.attributes.putAll(other.attributes);
     this.domain = other.domain;
     this.expires = other.expires;
     this.httpOnly = other.httpOnly;

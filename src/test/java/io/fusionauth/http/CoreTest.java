@@ -823,7 +823,8 @@ public class CoreTest extends BaseTest {
       }
     };
 
-    try (var client = makeClient(scheme, null); var ignore = makeServer(scheme, handler).withResponseBufferSize(responseBufferSize).start()) {
+    try (var client = makeClient(scheme, null);
+         var ignore = makeServer(scheme, handler).withResponseBufferSize(responseBufferSize).start()) {
       URI uri = makeURI(scheme, "?foo%20=bar%20");
       HttpRequest request = HttpRequest.newBuilder()
                                        .uri(uri)
