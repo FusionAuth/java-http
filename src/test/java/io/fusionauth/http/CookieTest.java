@@ -309,6 +309,18 @@ public class CookieTest extends BaseTest {
     cookie = Cookie.fromResponseHeader("=a");
     assertNull(cookie);
 
+    // Borked coookie, ending with a semicolon;
+    cookie = Cookie.fromResponseHeader("foo=%2Fbar; Path=/; Secure; HTTPonly;");
+    assertNull(cookie.domain);
+    assertNull(cookie.expires);
+    assertTrue(cookie.httpOnly);
+    assertNull(cookie.maxAge);
+    assertEquals(cookie.name, "foo");
+    assertEquals(cookie.path, "/");
+    assertNull(cookie.sameSite);
+    assertTrue(cookie.secure);
+    assertEquals(cookie.value, "%2Fbar");
+
     // additional attributes
     // - name and value
     cookie = Cookie.fromResponseHeader("foo=;utm=123");

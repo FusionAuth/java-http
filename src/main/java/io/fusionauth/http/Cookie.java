@@ -290,11 +290,13 @@ public class Cookie implements Buildable<Cookie> {
     }
     return httpOnly == cookie.httpOnly &&
            secure == cookie.secure &&
+           Objects.equals(attributes, cookie.attributes) &&
            Objects.equals(domain, cookie.domain) &&
            Objects.equals(expires, cookie.expires) &&
            Objects.equals(maxAge, cookie.maxAge) &&
            Objects.equals(name, cookie.name) &&
            Objects.equals(path, cookie.path) &&
+           sameSite == cookie.sameSite &&
            Objects.equals(value, cookie.value);
   }
 
@@ -364,7 +366,16 @@ public class Cookie implements Buildable<Cookie> {
 
   @Override
   public int hashCode() {
-    return Objects.hash(domain, expires, httpOnly, maxAge, name, path, secure, value);
+    return Objects.hash(attributes,
+        domain,
+        expires,
+        httpOnly,
+        maxAge,
+        name,
+        path,
+        sameSite,
+        secure,
+        value);
   }
 
   public boolean isHttpOnly() {
