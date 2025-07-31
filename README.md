@@ -142,11 +142,11 @@ import io.fusionauth.http.server.HTTPHandler;
 import io.fusionauth.http.server.HTTPServer;
 
 public class Example {
-  private String certificate;
+  private static String certificate;
 
-  private String privateKey;
+  private static String privateKey;
 
-  public static void main(String[] args) {
+  public static void main(String[] args) throws Exception {
     String homeDir = System.getProperty("user.home");
     certificate = Files.readString(Paths.get(homeDir + "/dev/certificates/example.org.pem"));
     privateKey = Files.readString(Paths.get(homeDir + "/dev/certificates/example.org.key"));
