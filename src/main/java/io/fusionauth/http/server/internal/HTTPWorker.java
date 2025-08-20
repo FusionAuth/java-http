@@ -261,8 +261,8 @@ public class HTTPWorker implements Runnable {
       if (Thread.currentThread().isInterrupted()) {
         // Close socket only. We do not want to potentially delay the shutdown at all.
         logger.debug("[{}] Closing socket. Server is shutting down.", Thread.currentThread().threadId());
-        closeSocketOnly(CloseSocketReason.Expected);
       }
+      closeSocketOnly(CloseSocketReason.Expected);
     } catch (IOException e) {
       logger.debug(String.format("[%s] Closing socket with status [%d]. An IO exception was thrown during processing. These are pretty common.", Thread.currentThread().threadId(), Status.InternalServerError), e);
       closeSocketOnError(response, Status.InternalServerError);
