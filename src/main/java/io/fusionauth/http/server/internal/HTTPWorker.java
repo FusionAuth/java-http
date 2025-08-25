@@ -36,6 +36,7 @@ import io.fusionauth.http.server.HTTPListenerConfiguration;
 import io.fusionauth.http.server.HTTPRequest;
 import io.fusionauth.http.server.HTTPResponse;
 import io.fusionauth.http.server.HTTPServerConfiguration;
+import io.fusionauth.http.server.HTTPUnexpectedExceptionHandler;
 import io.fusionauth.http.server.Instrumenter;
 import io.fusionauth.http.server.io.ConnectionClosedException;
 import io.fusionauth.http.server.io.HTTPInputStream;
@@ -267,9 +268,27 @@ public class HTTPWorker implements Runnable {
       logger.debug(String.format("[%s] Closing socket with status [%d]. An IO exception was thrown during processing. These are pretty common.", Thread.currentThread().threadId(), Status.InternalServerError), e);
       closeSocketOnError(response, Status.InternalServerError);
     } catch (Throwable e) {
-      // Log the error and signal a failure
+      HTTPUnexpectedExceptionHandler unexpectedExceptionHandler = configuration.getDefaultExceptionHandler();
       var status = Status.InternalServerError;
-      logger.error(String.format("[%s] Closing socket with status [%d]. An HTTP worker threw an exception while processing a request.", Thread.currentThread().threadId(), status), e);
+      if (unexpectedExceptionHandler != null) {
+        if (response != null) {
+          // Set the initial status, allowing the handler to attempt to modify the status code.
+          response.setHeader(Headers.Connection, Connections.Close);
+          response.setStatus(status);
+        }
+
+        try {
+          unexpectedExceptionHandler.handle(response, e);
+        } catch (Throwable ignore) {
+        }
+
+        status = response != null ? response.getStatus() : status;
+      } else {
+        // Log the error
+        logger.error(String.format("[%s] Closing socket with status [%d]. An HTTP worker threw an exception while processing a request.", Thread.currentThread().threadId(), status), e);
+      }
+
+      // Signal an error
       closeSocketOnError(response, status);
     } finally {
       if (instrumenter != null) {
