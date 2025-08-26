@@ -18,21 +18,16 @@ package io.fusionauth.http.server;
 import io.fusionauth.http.log.Logger;
 
 /**
- * An interface defining the HTTP unexpected exception handler contract.
+ * THe default HTTP unexpected exception handler.
  *
  * @author Daniel DeGroff
  */
-public interface HTTPUnexpectedExceptionHandler {
-  /**
-   *
-   * This handler will be called when an unexpected exception is taken while processing an HTTP request by the HTTP worker.
-   * <p>
-   * The intent is that this provides additional flexibility on the status code and the logging behavior when an unexpected exception
-   * caught.
-   *
-   * @param logger the HTTP worker logger.
-   * @param t      the unexpected exception to handle.
-   * @return the desired HTTP status code. Note that if the response has already been committed this will be ignored.
-   */
-  int handle(Logger logger, Throwable t);
+public class DefaultHTTPUnexpectedExceptionHandler implements HTTPUnexpectedExceptionHandler {
+
+  @Override
+  public int handle(Logger logger, Throwable t) {
+    int internalServerError = 500;
+    logger.error(String.format("[%s] Closing socket with status [%d]. An HTTP worker threw an exception while processing a request.", Thread.currentThread().threadId(), internalServerError), t);
+    return internalServerError;
+  }
 }

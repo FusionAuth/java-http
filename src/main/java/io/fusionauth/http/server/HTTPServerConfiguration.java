@@ -79,7 +79,7 @@ public class HTTPServerConfiguration implements Configurable<HTTPServerConfigura
 
   private Duration shutdownDuration = Duration.ofSeconds(10);
 
-  private HTTPUnexpectedExceptionHandler unexpectedExceptionHandler;
+  private HTTPUnexpectedExceptionHandler unexpectedExceptionHandler = new DefaultHTTPUnexpectedExceptionHandler();
 
   private Duration writeThroughputCalculationDelayDuration = Duration.ofSeconds(5);
 
@@ -111,14 +111,6 @@ public class HTTPServerConfiguration implements Configurable<HTTPServerConfigura
   public String getContextPath() {
     return contextPath;
   }
-
-  /**
-   * @return The HTTP unexpected exception handler for this server or null if a default was not set.
-   */
-  public HTTPUnexpectedExceptionHandler getDefaultExceptionHandler() {
-    return unexpectedExceptionHandler;
-  }
-
 
   /**
    * @return The expect validator. Cannot be null and is required.
@@ -283,6 +275,13 @@ public class HTTPServerConfiguration implements Configurable<HTTPServerConfigura
    */
   public Duration getShutdownDuration() {
     return shutdownDuration;
+  }
+
+  /**
+   * @return The HTTP unexpected exception handler for this server or null if a default was not set.
+   */
+  public HTTPUnexpectedExceptionHandler getUnexpectedExceptionHandler() {
+    return unexpectedExceptionHandler;
   }
 
   /**
