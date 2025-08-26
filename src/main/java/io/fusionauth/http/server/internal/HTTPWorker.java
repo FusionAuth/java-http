@@ -261,7 +261,7 @@ public class HTTPWorker implements Runnable {
       if (Thread.currentThread().isInterrupted()) {
         logger.debug("[{}] Closing socket. Server is shutting down.", Thread.currentThread().threadId());
       } else {
-        logger.debug("[{}] Closing socket. The socket by a client, proxy or otherwise.", Thread.currentThread().threadId());
+        logger.debug("[{}] Closing socket. The socket was closed by a client, proxy or otherwise.", Thread.currentThread().threadId());
       }
       closeSocketOnly(CloseSocketReason.Expected);
     } catch (IOException e) {
