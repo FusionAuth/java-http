@@ -256,13 +256,14 @@ public class HTTPWorker implements Runnable {
       logger.debug("[{}] Closing socket with status [{}]. Bad request, failed to parse request. Reason [{}] Parser state [{}]", Thread.currentThread().threadId(), Status.BadRequest, e.getMessage(), e.getState());
       closeSocketOnError(response, Status.BadRequest);
     } catch (SocketException e) {
-      // This should only happen when the server is shutdown and this thread is waiting to read or write. In that case, this will throw a
-      // SocketException and the thread will be interrupted. Since the server is being shutdown, we should let the client know.
+      // When the HTTPServerThread shuts down, we will interrupt each client thread, so debug log it accordingly.
+      // - This will cause the socket to throw a SocketException, so log it.
       if (Thread.currentThread().isInterrupted()) {
-        // Close socket only. We do not want to potentially delay the shutdown at all.
         logger.debug("[{}] Closing socket. Server is shutting down.", Thread.currentThread().threadId());
-        closeSocketOnly(CloseSocketReason.Expected);
+      } else {
+        logger.debug("[{}] Closing socket. The socket was closed by a client, proxy or otherwise.", Thread.currentThread().threadId());
       }
+      closeSocketOnly(CloseSocketReason.Expected);
     } catch (IOException e) {
       logger.debug(String.format("[%s] Closing socket with status [%d]. An IO exception was thrown during processing. These are pretty common.", Thread.currentThread().threadId(), Status.InternalServerError), e);
       closeSocketOnError(response, Status.InternalServerError);
