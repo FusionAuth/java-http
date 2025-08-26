@@ -58,6 +58,7 @@ import io.fusionauth.http.log.FileLoggerFactory;
 import io.fusionauth.http.log.Level;
 import io.fusionauth.http.log.LoggerFactory;
 import io.fusionauth.http.security.SecurityTools;
+import io.fusionauth.http.server.AlwaysContinueExpectValidator;
 import io.fusionauth.http.server.ExpectValidator;
 import io.fusionauth.http.server.HTTPHandler;
 import io.fusionauth.http.server.HTTPListenerConfiguration;
@@ -297,7 +298,7 @@ public abstract class BaseTest {
                            .withKeepAliveTimeoutDuration(ServerTimeout)
                            .withInitialReadTimeout(ServerTimeout)
                            .withProcessingTimeoutDuration(ServerTimeout)
-                           .withExpectValidator(expectValidator)
+                           .withExpectValidator(expectValidator != null ? expectValidator : new AlwaysContinueExpectValidator())
                            .withInstrumenter(instrumenter)
                            .withLoggerFactory(factory)
                            .withMinimumReadThroughput(200 * 1024)
