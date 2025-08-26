@@ -24,11 +24,15 @@ import io.fusionauth.http.log.LoggerFactory;
  * @author Daniel DeGroff
  */
 public class DefaultHTTPUnexpectedExceptionHandler implements HTTPUnexpectedExceptionHandler {
+  private final Logger logger;
+
+  public DefaultHTTPUnexpectedExceptionHandler(LoggerFactory loggerFactory) {
+    this.logger = loggerFactory.getLogger(DefaultHTTPUnexpectedExceptionHandler.class);
+  }
 
   @Override
-  public int handle(LoggerFactory loggerFactory, Throwable t) {
+  public int handle(Throwable t) {
     int internalServerError = 500;
-    Logger logger = loggerFactory.getLogger(DefaultHTTPUnexpectedExceptionHandler.class);
     logger.error(String.format("[%s] Closing socket with status [%d]. An HTTP worker threw an exception while processing a request.", Thread.currentThread().threadId(), internalServerError), t);
     return internalServerError;
   }

@@ -270,7 +270,7 @@ public class HTTPWorker implements Runnable {
     } catch (Throwable e) {
       var status = Status.InternalServerError;
       try {
-        status = configuration.getUnexpectedExceptionHandler().handle(logger, e);
+        status = configuration.getUnexpectedExceptionHandler().handle(e);
       } catch (Throwable ignore) {
       }
 
