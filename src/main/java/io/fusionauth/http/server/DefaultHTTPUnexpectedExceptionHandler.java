@@ -16,6 +16,7 @@
 package io.fusionauth.http.server;
 
 import io.fusionauth.http.log.Logger;
+import io.fusionauth.http.log.LoggerFactory;
 
 /**
  * THe default HTTP unexpected exception handler.
@@ -25,8 +26,9 @@ import io.fusionauth.http.log.Logger;
 public class DefaultHTTPUnexpectedExceptionHandler implements HTTPUnexpectedExceptionHandler {
 
   @Override
-  public int handle(Logger logger, Throwable t) {
+  public int handle(LoggerFactory loggerFactory, Throwable t) {
     int internalServerError = 500;
+    Logger logger = loggerFactory.getLogger(DefaultHTTPUnexpectedExceptionHandler.class);
     logger.error(String.format("[%s] Closing socket with status [%d]. An HTTP worker threw an exception while processing a request.", Thread.currentThread().threadId(), internalServerError), t);
     return internalServerError;
   }

@@ -15,7 +15,7 @@
  */
 package io.fusionauth.http.server;
 
-import io.fusionauth.http.log.Logger;
+import io.fusionauth.http.log.LoggerFactory;
 
 /**
  * An interface defining the HTTP unexpected exception handler contract.
@@ -30,9 +30,9 @@ public interface HTTPUnexpectedExceptionHandler {
    * The intent is that this provides additional flexibility on the status code and the logging behavior when an unexpected exception
    * caught.
    *
-   * @param logger the HTTP worker logger.
-   * @param t      the unexpected exception to handle.
+   * @param loggerFactory the configured logger factory.
+   * @param t             the unexpected exception to handle.
    * @return the desired HTTP status code. Note that if the response has already been committed this will be ignored.
    */
-  int handle(Logger logger, Throwable t);
+  int handle(LoggerFactory loggerFactory, Throwable t);
 }
