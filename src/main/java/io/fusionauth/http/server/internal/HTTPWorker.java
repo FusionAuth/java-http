@@ -277,7 +277,7 @@ public class HTTPWorker implements Runnable {
       }
 
       // Signal an error
-      closeSocketOnError(response, context.statusCode);
+      closeSocketOnError(response, context.getStatusCode());
     } finally {
       if (instrumenter != null) {
         instrumenter.workerStopped();

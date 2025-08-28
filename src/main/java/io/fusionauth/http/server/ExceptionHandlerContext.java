@@ -23,18 +23,64 @@ import io.fusionauth.http.log.Logger;
  * @author Daniel DeGroff
  */
 public class ExceptionHandlerContext {
-  public Logger logger;
+  private final Logger logger;
 
-  public HTTPRequest request;
+  private final HTTPRequest request;
 
-  public int statusCode;
+  private final Throwable throwable;
 
-  public Throwable throwable;
+  private int statusCode;
 
   public ExceptionHandlerContext(Logger logger, HTTPRequest request, int statusCode, Throwable throwable) {
     this.logger = logger;
-    this.request = request; // may be null
+    this.request = request;
     this.statusCode = statusCode;
     this.throwable = throwable;
+  }
+
+  /**
+   * This is provided for convenience, but you may wish to use your own logger.
+   *
+   * @return the optional logger to use in the exception handler.
+   */
+  public Logger getLogger() {
+    return logger;
+  }
+
+  /**
+   * This may be useful if you wish to know additional context of the exception such as the URI of the current HTTP request.
+   * <p>
+   * Modifications to this object will have no effect on current or futures requests.
+   *
+   * @return the current HTTP request, or null if this exception was taking prior to constructing the HTTP request. This is unlikely but
+   *     please account for this value being null.
+   */
+  public HTTPRequest getRequest() {
+    return request;
+  }
+
+  /**
+   * @return the desired status code for the HTTP response.
+   */
+  public int getStatusCode() {
+    return statusCode;
+  }
+
+  /**
+   * Suggest a status code for the HTTP response. This value will be used unless the response has already been committed meaning bytes have
+   * already been written to the client and the HTTP server is not able to modify the response code.
+   *
+   * @param statusCode the desired status code to set on the HTTP response.
+   */
+  public void setStatusCode(int statusCode) {
+    this.statusCode = statusCode;
+  }
+
+  /**
+   *
+   * @return the unexpected exception to handle
+   */
+  public Throwable getThrowable() {
+    return throwable;
   }
 }
