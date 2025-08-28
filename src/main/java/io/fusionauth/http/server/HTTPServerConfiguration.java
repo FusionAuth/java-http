@@ -79,7 +79,7 @@ public class HTTPServerConfiguration implements Configurable<HTTPServerConfigura
 
   private Duration shutdownDuration = Duration.ofSeconds(10);
 
-  private HTTPUnexpectedExceptionHandler unexpectedExceptionHandler;
+  private HTTPUnexpectedExceptionHandler unexpectedExceptionHandler = new DefaultHTTPUnexpectedExceptionHandler();
 
   private Duration writeThroughputCalculationDelayDuration = Duration.ofSeconds(5);
 
@@ -281,11 +281,6 @@ public class HTTPServerConfiguration implements Configurable<HTTPServerConfigura
    * @return The HTTP unexpected exception handler for this server. Never null.
    */
   public HTTPUnexpectedExceptionHandler getUnexpectedExceptionHandler() {
-    // Lazily construct a default so we can use the configured loggerFactory.
-    if (unexpectedExceptionHandler == null) {
-      unexpectedExceptionHandler = new DefaultHTTPUnexpectedExceptionHandler(loggerFactory);
-    }
-
     return unexpectedExceptionHandler;
   }
 

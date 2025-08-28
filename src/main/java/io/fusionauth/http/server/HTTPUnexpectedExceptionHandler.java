@@ -28,8 +28,7 @@ public interface HTTPUnexpectedExceptionHandler {
    * The intent is that this provides additional flexibility on the status code and the logging behavior when an unexpected exception
    * caught.
    *
-   * @param t the unexpected exception to handle.
-   * @return the desired HTTP status code. Note that if the response has already been committed this will be ignored.
+   * @param context the exception context
    */
-  int handle(Throwable t);
+  void handle(ExceptionHandlerContext context);
 }

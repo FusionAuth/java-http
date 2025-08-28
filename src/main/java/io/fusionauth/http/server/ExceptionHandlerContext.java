@@ -15,14 +15,26 @@
  */
 package io.fusionauth.http.server;
 
+import io.fusionauth.http.log.Logger;
+
 /**
- * THe default HTTP unexpected exception handler.
+ * Provide context to the exception handler.
  *
  * @author Daniel DeGroff
  */
-public class DefaultHTTPUnexpectedExceptionHandler implements HTTPUnexpectedExceptionHandler {
-  @Override
-  public void handle(ExceptionHandlerContext context) {
-    context.logger.error(String.format("[%s] Closing socket with status [%d]. An HTTP worker threw an exception while processing a request.", Thread.currentThread().threadId(), context.statusCode), context.throwable);
+public class ExceptionHandlerContext {
+  public Logger logger;
+
+  public HTTPRequest request;
+
+  public int statusCode;
+
+  public Throwable throwable;
+
+  public ExceptionHandlerContext(Logger logger, HTTPRequest request, int statusCode, Throwable throwable) {
+    this.logger = logger;
+    this.request = request; // may be null
+    this.statusCode = statusCode;
+    this.throwable = throwable;
   }
 }
