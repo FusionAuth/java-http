@@ -168,6 +168,11 @@ public interface Configurable<T extends Configurable<T>> {
     return (T) this;
   }
 
+  default T withMaxFormDataSize(int maxFormDataSize) {
+    configuration().withMaxFormDataSize(maxFormDataSize);
+    return (T) this;
+  }
+
   /**
    * Sets the maximum number of pending socket connections per HTTP listener.
    * <p>
@@ -181,6 +186,16 @@ public interface Configurable<T extends Configurable<T>> {
    */
   default T withMaxPendingSocketConnections(int maxPendingSocketConnections) {
     configuration().withMaxPendingSocketConnections(maxPendingSocketConnections);
+    return (T) this;
+  }
+
+  default T withMaxRequestBodySize(int maxRequestBodySize) {
+    configuration().withMaxRequestBodySize(maxRequestBodySize);
+    return (T) this;
+  }
+
+  default T withMaxRequestHeaderSize(int maxRequestHeaderSize) {
+    configuration().withMaxRequestHeaderSize(maxRequestHeaderSize);
     return (T) this;
   }
 

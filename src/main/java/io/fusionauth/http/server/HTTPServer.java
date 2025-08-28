@@ -83,6 +83,15 @@ public class HTTPServer implements Closeable, Configurable<HTTPServer> {
       return this;
     }
 
+    // Validate inter-dependant configuration options.
+    int maxRequestBodySize = configuration.getMaxRequestBodySize();
+    int maxFormDataSize = configuration.getMaxFormDataSize();
+    long maxMultipartRequestSize = configuration.getMultipartConfiguration().getMaxRequestSize();
+    if (maxRequestBodySize < maxFormDataSize || maxRequestBodySize < maxMultipartRequestSize)  {
+      logger.error("Unable to start the HTTP server because the configuration is invalid. The [maxRequestBodySize] configuration is intended as a fail-safe, and must be greater than or equal to [maxFormDataSize] and [multipartStreamConfiguration.maxRequestSize].");
+      return this;
+    }
+
     // Set up the server logger and the static loggers
     logger = configuration.getLoggerFactory().getLogger(HTTPServer.class);
     HTTPTools.initialize(configuration().getLoggerFactory());

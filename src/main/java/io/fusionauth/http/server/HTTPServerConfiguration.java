@@ -35,7 +35,7 @@ public class HTTPServerConfiguration implements Configurable<HTTPServerConfigura
 
   private Path baseDir = Path.of("");
 
-  private int chunkedBufferSize = 4 * 1024; // 4k bytes
+  private int chunkedBufferSize = 4 * 1024; // 4 Kilobytes
 
   private boolean compressByDefault = true;
 
@@ -53,19 +53,25 @@ public class HTTPServerConfiguration implements Configurable<HTTPServerConfigura
 
   private LoggerFactory loggerFactory = SystemOutLoggerFactory.FACTORY;
 
-  private int maxBytesToDrain = 256 * 1024; // 256k bytes
+  private int maxBytesToDrain = 256 * 1024; // 256 kilobytes
+
+  private int maxFormDataSize = 10 * 1024 * 1024; // 10 megabytes, ideally same as MultipartConfiguration.maxRequestSize default
 
   private int maxPendingSocketConnections = 250;
 
+  private int maxRequestBodySize = 128 * 1024 * 1024; // 128 megabytes, ideally the same or larger than maxFormDataSize, and MultipartConfiguration.maxRequestSize
+
+  private int maxRequestHeaderSize = 64 * 1024; // 64 kilobytes
+
   private int maxRequestsPerConnection = 100_000; // 100,000
 
-  private int maxResponseChunkSize = 16 * 1024; // 16k bytes
+  private int maxResponseChunkSize = 16 * 1024; // 16 kilobytes
 
-  private long minimumReadThroughput = 16 * 1024; // 16k/second
+  private long minimumReadThroughput = 16 * 1024; // 16 kilobytes/second
 
-  private long minimumWriteThroughput = 16 * 1024; // 16k/second
+  private long minimumWriteThroughput = 16 * 1024; // 16 kilobytes/second
 
-  private int multipartBufferSize = 16 * 1024; // 16k bytes
+  private int multipartBufferSize = 16 * 1024; // 16 kilobytes
 
   private MultipartConfiguration multipartStreamConfiguration = new MultipartConfiguration();
 
@@ -73,9 +79,9 @@ public class HTTPServerConfiguration implements Configurable<HTTPServerConfigura
 
   private Duration readThroughputCalculationDelayDuration = Duration.ofSeconds(5);
 
-  private int requestBufferSize = 16 * 1024; // 16k bytes
+  private int requestBufferSize = 16 * 1024; // 16 kilobytes
 
-  private int responseBufferSize = 64 * 1024; // 16k bytes
+  private int responseBufferSize = 64 * 1024; // 64 kilobytes
 
   private Duration shutdownDuration = Duration.ofSeconds(10);
 
@@ -171,6 +177,15 @@ public class HTTPServerConfiguration implements Configurable<HTTPServerConfigura
   }
 
   /**
+   *
+   * @return the maximum size of the HTTP request body in bytes when the HTTP server process a Content-Type of
+   *     application/x-www-form-urlencoded. Defaults to 10 Megabytes.
+   */
+  public int getMaxFormDataSize() {
+    return maxFormDataSize;
+  }
+
+  /**
    * The maximum number of pending socket connections per HTTP listener.
    * <p>
    * This number represents how many pending socket connections are allowed to queue before they are rejected. Once the connection is
@@ -181,6 +196,24 @@ public class HTTPServerConfiguration implements Configurable<HTTPServerConfigura
    */
   public int getMaxPendingSocketConnections() {
     return maxPendingSocketConnections;
+  }
+
+  /**
+   *
+   * @return the maximum size of the HTTP request body in bytes. This configuration will affect all requests regardless of Content-Type.
+   *     This value must be equal to or larger than the maximum request size configured for multipart requests. This configuration is
+   *     intended to be a fail-safe for unexpected large requests. Defaults to 1024 Megabytes.
+   */
+  public int getMaxRequestBodySize() {
+    return maxRequestBodySize;
+  }
+
+  /**
+   * @return the maximum size of the HTTP request header in bytes. This configuration does not affect the HTTP response header. Defaults to
+   *     64k bytes.
+   */
+  public int getMaxRequestHeaderSize() {
+    return maxRequestHeaderSize;
   }
 
   /**
@@ -412,12 +445,42 @@ public class HTTPServerConfiguration implements Configurable<HTTPServerConfigura
    * {@inheritDoc}
    */
   @Override
+  public HTTPServerConfiguration withMaxFormDataSize(int maxFormDataSize) {
+    // 0 turns this off
+    this.maxFormDataSize = maxFormDataSize;
+    return this;
+  }
+
+  /**
+   * {@inheritDoc}
+   */
+  @Override
   public HTTPServerConfiguration withMaxPendingSocketConnections(int maxPendingSocketConnections) {
     if (maxPendingSocketConnections < 25) {
       throw new IllegalArgumentException("The minimum pending socket connections must be greater than or equal to 25");
     }
 
     this.maxPendingSocketConnections = maxPendingSocketConnections;
+    return this;
+  }
+
+  /**
+   * {@inheritDoc}
+   */
+  @Override
+  public HTTPServerConfiguration withMaxRequestBodySize(int maxRequestBodySize) {
+    // 0 turns this off
+    this.maxRequestBodySize = maxRequestBodySize;
+    return this;
+  }
+
+  /**
+   * {@inheritDoc}
+   */
+  @Override
+  public HTTPServerConfiguration withMaxRequestHeaderSize(int maxRequestHeaderSize) {
+    // 0 turns this off
+    this.maxRequestHeaderSize = maxRequestHeaderSize;
     return this;
   }
 

@@ -30,9 +30,9 @@ public class MultipartConfiguration {
 
   private long maxFileSize = 1024 * 1024; // 1 Megabyte
 
-  private long maxRequestSize = 10 * 1024 * 1024; // 10 Megabyte
+  private long maxRequestSize = 10 * 1024 * 1024; // 10 Megabytes
 
-  private int multipartBufferSize = 8 * 1024; // 8 Kilobyte
+  private int multipartBufferSize = 8 * 1024; // 8k bytes
 
   private String temporaryFileLocation = System.getProperty("java.io.tmpdir");
 
