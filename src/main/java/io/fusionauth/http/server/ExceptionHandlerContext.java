@@ -77,7 +77,6 @@ public class ExceptionHandlerContext {
   }
 
   /**
-   *
    * @return the unexpected exception to handle
    */
   public Throwable getThrowable() {
