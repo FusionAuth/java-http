@@ -2,7 +2,7 @@
 
 ### Latest versions
 
-* Latest stable version: `1.1.1`
+* Latest stable version: `1.2.0`
    * Now with 100% more virtual threads!
 * Prior stable version `0.3.7` 
 
@@ -27,20 +27,20 @@ To add this library to your project, you can include this dependency in your Mav
 <dependency>
   <groupId>io.fusionauth</groupId>
   <artifactId>java-http</artifactId>
-  <version>1.1.1</version>
+  <version>1.2.0</version>
 </dependency>
 ```
 
 If you are using Gradle, you can add this to your build file:
 
 ```groovy
-implementation 'io.fusionauth:java-http:1.1.1'
+implementation 'io.fusionauth:java-http:1.2.0'
 ```
 
 If you are using Savant, you can add this to your build file:
 
 ```groovy
-dependency(id: "io.fusionauth:java-http:1.1.1")
+dependency(id: "io.fusionauth:java-http:1.2.0")
 ```
 
 ## Examples Usages:
