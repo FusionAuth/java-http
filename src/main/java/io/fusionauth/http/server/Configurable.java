@@ -332,6 +332,23 @@ public interface Configurable<T extends Configurable<T>> {
   }
 
   /**
+   *
+   * Sets the unexpected exception handler. This handler will be called when an unexpected exception is taken while processing the HTTP
+   * request by the HTTP worker.
+   * <p>
+   * This allows you to customize the status code and logging behavior.
+   * <p>
+   * Must not be null.
+   *
+   * @param unexpectedExceptionHandler The unexpected exception handler.
+   * @return This.
+   */
+  default T withUnexpectedExceptionHandler(HTTPUnexpectedExceptionHandler unexpectedExceptionHandler) {
+    configuration().withUnexpectedExceptionHandler(unexpectedExceptionHandler);
+    return (T) this;
+  }
+
+  /**
    * This configures the duration of the initial delay before calculating and enforcing the minimum write throughput. Defaults to 5
    * seconds.
    * <p>
