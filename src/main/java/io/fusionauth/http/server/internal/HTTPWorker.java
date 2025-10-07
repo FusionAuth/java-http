@@ -31,6 +31,7 @@ import io.fusionauth.http.ParseException;
 import io.fusionauth.http.io.MultipartConfiguration;
 import io.fusionauth.http.io.PushbackInputStream;
 import io.fusionauth.http.log.Logger;
+import io.fusionauth.http.server.ExceptionHandlerContext;
 import io.fusionauth.http.server.HTTPHandler;
 import io.fusionauth.http.server.HTTPListenerConfiguration;
 import io.fusionauth.http.server.HTTPRequest;
@@ -104,6 +105,7 @@ public class HTTPWorker implements Runnable {
   @Override
   public void run() {
     HTTPInputStream httpInputStream;
+    HTTPRequest request = null;
     HTTPResponse response = null;
 
     try {
@@ -113,7 +115,7 @@ public class HTTPWorker implements Runnable {
 
       while (true) {
         logger.trace("[{}] Running HTTP worker. Block while we wait to read the preamble", Thread.currentThread().threadId());
-        var request = new HTTPRequest(configuration.getContextPath(), listener.getCertificate() != null ? "https" : "http", listener.getPort(), socket.getInetAddress().getHostAddress());
+        request = new HTTPRequest(configuration.getContextPath(), listener.getCertificate() != null ? "https" : "http", listener.getPort(), socket.getInetAddress().getHostAddress());
 
         // Create a deep copy of the MultipartConfiguration so that the request may optionally modify the configuration on a per-request basis.
         request.getMultiPartStreamProcessor().setMultipartConfiguration(new MultipartConfiguration(configuration.getMultipartConfiguration()));
@@ -268,10 +270,14 @@ public class HTTPWorker implements Runnable {
       logger.debug(String.format("[%s] Closing socket with status [%d]. An IO exception was thrown during processing. These are pretty common.", Thread.currentThread().threadId(), Status.InternalServerError), e);
       closeSocketOnError(response, Status.InternalServerError);
     } catch (Throwable e) {
-      // Log the error and signal a failure
-      var status = Status.InternalServerError;
-      logger.error(String.format("[%s] Closing socket with status [%d]. An HTTP worker threw an exception while processing a request.", Thread.currentThread().threadId(), status), e);
-      closeSocketOnError(response, status);
+      ExceptionHandlerContext context = new ExceptionHandlerContext(logger, request, Status.InternalServerError, e);
+      try {
+        configuration.getUnexpectedExceptionHandler().handle(context);
+      } catch (Throwable ignore) {
+      }
+
+      // Signal an error
+      closeSocketOnError(response, context.getStatusCode());
     } finally {
       if (instrumenter != null) {
         instrumenter.workerStopped();

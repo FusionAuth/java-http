@@ -85,6 +85,8 @@ public class HTTPServerConfiguration implements Configurable<HTTPServerConfigura
 
   private Duration shutdownDuration = Duration.ofSeconds(10);
 
+  private HTTPUnexpectedExceptionHandler unexpectedExceptionHandler = new DefaultHTTPUnexpectedExceptionHandler();
+
   private Duration writeThroughputCalculationDelayDuration = Duration.ofSeconds(5);
 
   /**
@@ -309,6 +311,13 @@ public class HTTPServerConfiguration implements Configurable<HTTPServerConfigura
   }
 
   /**
+   * @return The HTTP unexpected exception handler for this server. Never null.
+   */
+  public HTTPUnexpectedExceptionHandler getUnexpectedExceptionHandler() {
+    return unexpectedExceptionHandler;
+  }
+
+  /**
    * @return the duration that will be used to delay the calculation and enforcement of the minimum write throughput.
    */
   public Duration getWriteThroughputCalculationDelay() {
@@ -367,7 +376,7 @@ public class HTTPServerConfiguration implements Configurable<HTTPServerConfigura
    */
   @Override
   public HTTPServerConfiguration withExpectValidator(ExpectValidator validator) {
-    Objects.requireNonNull(handler, "You cannot set ExpectValidator to null");
+    Objects.requireNonNull(validator, "You cannot set the expect validator to null");
     this.expectValidator = validator;
     return this;
   }
@@ -377,7 +386,7 @@ public class HTTPServerConfiguration implements Configurable<HTTPServerConfigura
    */
   @Override
   public HTTPServerConfiguration withHandler(HTTPHandler handler) {
-    Objects.requireNonNull(handler, "You cannot set HTTPHandler to null");
+    Objects.requireNonNull(handler, "You cannot set the handler to null");
     this.handler = handler;
     return this;
   }
@@ -387,7 +396,7 @@ public class HTTPServerConfiguration implements Configurable<HTTPServerConfigura
    */
   @Override
   public HTTPServerConfiguration withInitialReadTimeout(Duration duration) {
-    Objects.requireNonNull(duration, "You cannot set the client timeout to null");
+    Objects.requireNonNull(duration, "You cannot set the client read timeout duration to null");
     if (duration.isZero() || duration.isNegative()) {
       throw new IllegalArgumentException("The client timeout duration must be greater than 0");
     }
@@ -412,7 +421,6 @@ public class HTTPServerConfiguration implements Configurable<HTTPServerConfigura
   @Override
   public HTTPServerConfiguration withKeepAliveTimeoutDuration(Duration duration) {
     Objects.requireNonNull(duration, "You cannot set the keep-alive timeout duration to null");
-
     if (duration.isZero() || duration.isNegative()) {
       throw new IllegalArgumentException("The keep-alive timeout duration must be grater than 0");
     }
@@ -426,7 +434,7 @@ public class HTTPServerConfiguration implements Configurable<HTTPServerConfigura
    */
   @Override
   public HTTPServerConfiguration withListener(HTTPListenerConfiguration listener) {
-    Objects.requireNonNull(listener, "You cannot set HTTPListenerConfiguration to null");
+    Objects.requireNonNull(listener, "You cannot add a null HTTPListenerConfiguration");
     this.listeners.add(listener);
     return this;
   }
@@ -436,7 +444,7 @@ public class HTTPServerConfiguration implements Configurable<HTTPServerConfigura
    */
   @Override
   public HTTPServerConfiguration withLoggerFactory(LoggerFactory loggerFactory) {
-    Objects.requireNonNull(loggerFactory, "You cannot set LoggerFactory to null");
+    Objects.requireNonNull(loggerFactory, "You cannot set the logger factory to null");
     this.loggerFactory = loggerFactory;
     return this;
   }
@@ -560,7 +568,6 @@ public class HTTPServerConfiguration implements Configurable<HTTPServerConfigura
   @Override
   public HTTPServerConfiguration withMultipartConfiguration(MultipartConfiguration multipartStreamConfiguration) {
     Objects.requireNonNull(multipartStreamConfiguration, "You cannot set the multipart stream configuration to null");
-
     this.multipartStreamConfiguration = multipartStreamConfiguration;
     return this;
   }
@@ -571,7 +578,6 @@ public class HTTPServerConfiguration implements Configurable<HTTPServerConfigura
   @Override
   public HTTPServerConfiguration withProcessingTimeoutDuration(Duration duration) {
     Objects.requireNonNull(duration, "You cannot set the processing timeout duration to null");
-
     if (duration.isZero() || duration.isNegative()) {
       throw new IllegalArgumentException("The processing timeout duration must be grater than 0");
     }
@@ -586,7 +592,6 @@ public class HTTPServerConfiguration implements Configurable<HTTPServerConfigura
   @Override
   public HTTPServerConfiguration withReadThroughputCalculationDelayDuration(Duration duration) {
     Objects.requireNonNull(duration, "You cannot set the read throughput delay duration to null");
-
     if (duration.isZero() || duration.isNegative()) {
       throw new IllegalArgumentException("The read throughput delay duration must be grater than 0");
     }
@@ -627,7 +632,6 @@ public class HTTPServerConfiguration implements Configurable<HTTPServerConfigura
   @Override
   public HTTPServerConfiguration withShutdownDuration(Duration duration) {
     Objects.requireNonNull(duration, "You cannot set the shutdown duration to null");
-
     if (duration.isZero() || duration.isNegative()) {
       throw new IllegalArgumentException("The shutdown duration must be grater than 0");
     }
@@ -640,9 +644,18 @@ public class HTTPServerConfiguration implements Configurable<HTTPServerConfigura
    * {@inheritDoc}
    */
   @Override
+  public HTTPServerConfiguration withUnexpectedExceptionHandler(HTTPUnexpectedExceptionHandler unexpectedExceptionHandler) {
+    Objects.requireNonNull(unexpectedExceptionHandler, "You cannot set the unexpected exception handler to null");
+    this.unexpectedExceptionHandler = unexpectedExceptionHandler;
+    return this;
+  }
+
+  /**
+   * {@inheritDoc}
+   */
+  @Override
   public HTTPServerConfiguration withWriteThroughputCalculationDelayDuration(Duration duration) {
     Objects.requireNonNull(duration, "You cannot set the write throughput delay duration to null");
-
     if (duration.isZero() || duration.isNegative()) {
       throw new IllegalArgumentException("The write throughput delay duration must be grater than 0");
     }
