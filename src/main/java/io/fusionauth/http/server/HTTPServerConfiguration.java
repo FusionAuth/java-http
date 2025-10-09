@@ -53,25 +53,25 @@ public class HTTPServerConfiguration implements Configurable<HTTPServerConfigura
 
   private LoggerFactory loggerFactory = SystemOutLoggerFactory.FACTORY;
 
-  private int maxBytesToDrain = 256 * 1024; // 256 kilobytes
+  private int maxBytesToDrain = 256 * 1024; // 256 Kilobytes
 
-  private int maxFormDataSize = 10 * 1024 * 1024; // 10 megabytes, ideally same as MultipartConfiguration.maxRequestSize default
+  private int maxFormDataSize = 10 * 1024 * 1024; // 10 Megabytes, ideally same as MultipartConfiguration.maxRequestSize default
 
   private int maxPendingSocketConnections = 250;
 
-  private int maxRequestBodySize = 128 * 1024 * 1024; // 128 megabytes, ideally the same or larger than maxFormDataSize, and MultipartConfiguration.maxRequestSize
+  private int maxRequestBodySize = 128 * 1024 * 1024; // 128 Megabytes, ideally the same or larger than maxFormDataSize, and MultipartConfiguration.maxRequestSize
 
-  private int maxRequestHeaderSize = 64 * 1024; // 64 kilobytes
+  private int maxRequestHeaderSize = 128 * 1024; // 128 Kilobytes
 
   private int maxRequestsPerConnection = 100_000; // 100,000
 
-  private int maxResponseChunkSize = 16 * 1024; // 16 kilobytes
+  private int maxResponseChunkSize = 16 * 1024; // 16 Kilobytes
 
-  private long minimumReadThroughput = 16 * 1024; // 16 kilobytes/second
+  private long minimumReadThroughput = 16 * 1024; // 16 Kilobytes/second
 
-  private long minimumWriteThroughput = 16 * 1024; // 16 kilobytes/second
+  private long minimumWriteThroughput = 16 * 1024; // 16 Kilobytes/second
 
-  private int multipartBufferSize = 16 * 1024; // 16 kilobytes
+  private int multipartBufferSize = 16 * 1024; // 16 Kilobytes
 
   private MultipartConfiguration multipartStreamConfiguration = new MultipartConfiguration();
 
@@ -79,9 +79,9 @@ public class HTTPServerConfiguration implements Configurable<HTTPServerConfigura
 
   private Duration readThroughputCalculationDelayDuration = Duration.ofSeconds(5);
 
-  private int requestBufferSize = 16 * 1024; // 16 kilobytes
+  private int requestBufferSize = 16 * 1024; // 16 Kilobytes
 
-  private int responseBufferSize = 64 * 1024; // 64 kilobytes
+  private int responseBufferSize = 64 * 1024; // 64 Kilobytes
 
   private Duration shutdownDuration = Duration.ofSeconds(10);
 
@@ -212,9 +212,17 @@ public class HTTPServerConfiguration implements Configurable<HTTPServerConfigura
 
   /**
    * @return the maximum size of the HTTP request header in bytes. This configuration does not affect the HTTP response header. Defaults to
-   *     64k bytes.
+   *     128k bytes.
    */
   public int getMaxRequestHeaderSize() {
+    // TODO : Notes:
+    //          https://docs.aws.amazon.com/elasticloadbalancing/latest/application/load-balancer-limits.html
+    //          AWS Request header max is 64k, and is fixed.
+    //          AWS Response header max is 32k, and is fixed.
+    //          AWS single header max size is 16k, and is fixed.
+    //          https://docs.fastly.com/products/network-services-resource-limits
+    //          Fastly Request header max is 128k.
+    //          Fastly Response header max is 128k.
     return maxRequestHeaderSize;
   }
 
@@ -238,6 +246,8 @@ public class HTTPServerConfiguration implements Configurable<HTTPServerConfigura
   /**
    * This configuration is the minimum number of bytes per second that a client must send a request to the server before the server closes
    * the connection.
+   * <p>
+   * A value of -1 indicates the minimum read throughput limitation has been disabled.
    *
    * @return The minimum throughput for any connection with the server in bytes per second.
    */
@@ -248,6 +258,8 @@ public class HTTPServerConfiguration implements Configurable<HTTPServerConfigura
   /**
    * This configuration is the minimum number of bytes per second that a client must read the response from the server before the server
    * closes the connection.
+   * <p>
+   * A value of -1 indicates the minimum write throughput limitation has been disabled.
    *
    * @return The minimum throughput for any connection with the server in bytes per second.
    */
@@ -477,7 +489,6 @@ public class HTTPServerConfiguration implements Configurable<HTTPServerConfigura
    */
   @Override
   public HTTPServerConfiguration withMaxRequestBodySize(int maxRequestBodySize) {
-    // 0 turns this off
     this.maxRequestBodySize = maxRequestBodySize;
     return this;
   }
@@ -487,7 +498,6 @@ public class HTTPServerConfiguration implements Configurable<HTTPServerConfigura
    */
   @Override
   public HTTPServerConfiguration withMaxRequestHeaderSize(int maxRequestHeaderSize) {
-    // 0 turns this off
     this.maxRequestHeaderSize = maxRequestHeaderSize;
     return this;
   }
@@ -556,6 +566,7 @@ public class HTTPServerConfiguration implements Configurable<HTTPServerConfigura
    * {@inheritDoc}
    */
   @Override
+  @SuppressWarnings("deprecation")
   public HTTPServerConfiguration withMultipartBufferSize(int multipartBufferSize) {
     if (multipartBufferSize <= 0) {
       throw new IllegalArgumentException("The multi-part buffer size must be greater than 0");

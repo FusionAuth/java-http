@@ -84,6 +84,7 @@ public class HTTPWorker implements Runnable {
     this.throughput = throughput;
     this.buffers = new HTTPBuffers(configuration);
     this.logger = configuration.getLoggerFactory().getLogger(HTTPWorker.class);
+    // TODO : Ideally we'd wrap this in another FilterInputStream to manage the maximum body size that can be read.
     this.inputStream = new PushbackInputStream(new ThroughputInputStream(socket.getInputStream(), throughput), instrumenter);
     this.state = State.Read;
     this.startInstant = System.currentTimeMillis();

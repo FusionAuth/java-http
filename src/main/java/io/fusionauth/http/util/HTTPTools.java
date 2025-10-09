@@ -284,6 +284,8 @@ public final class HTTPTools {
 
       logger.trace("Read [{}] from client for preamble.", read);
 
+//      if (read > configuration)
+
       // Tell the callback that we've read at least one byte
       readObserver.run();
 
