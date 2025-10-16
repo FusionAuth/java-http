@@ -34,7 +34,7 @@ public class ReadLimitedInputStream extends InputStream {
 
   private int bytesRead;
 
-  private Function<Integer, HTTPProcessingException> exceptionMessageFunction;
+  private Function<Integer, HTTPProcessingException> exceptionFunction;
 
   private int maximumBytesToRead = -1;
 
@@ -62,7 +62,7 @@ public class ReadLimitedInputStream extends InputStream {
     bytesRead += read;
 
     if (bytesRead > maximumBytesToRead) {
-      throw exceptionMessageFunction.apply(maximumBytesToRead);
+      throw exceptionFunction.apply(maximumBytesToRead);
     }
 
     return read;
@@ -79,13 +79,14 @@ public class ReadLimitedInputStream extends InputStream {
   }
 
   public void setMaximumBytesToRead(Long expectedLength, int maximumBytesToRead,
-                                    Function<Integer, HTTPProcessingException> exceptionMessageFunction) {
-    Objects.requireNonNull(exceptionMessageFunction);
+                                    Function<Integer, HTTPProcessingException> exceptionFunction) {
+    Objects.requireNonNull(exceptionFunction);
+    this.bytesRead = 0;
     this.maximumBytesToRead = maximumBytesToRead;
-    this.exceptionMessageFunction = exceptionMessageFunction;
+    this.exceptionFunction = exceptionFunction;
 
     if (expectedLength != null && expectedLength > maximumBytesToRead) {
-      throw exceptionMessageFunction.apply(maximumBytesToRead);
+      throw exceptionFunction.apply(maximumBytesToRead);
     }
   }
 }
