@@ -22,6 +22,7 @@ import java.util.function.Consumer;
 
 import io.fusionauth.http.HTTPValues.Headers;
 import io.fusionauth.http.server.HTTPRequest;
+import org.testng.Assert;
 import org.testng.annotations.Test;
 import static org.testng.Assert.assertEquals;
 import static org.testng.Assert.assertTrue;
@@ -43,14 +44,38 @@ public class HTTPRequestTest {
   @Test
   public void decodeHeaders() {
     HTTPRequest request = new HTTPRequest();
-    request.addHeader("coNTent-LENGTH", "42");
-    request.addHeader("coNTent-type", "multipart/form-data; boundary=--foobarbaz");
+    request.setHeader("coNTent-LENGTH", "42");
+    request.setHeader("coNTent-type", "multipart/form-data; boundary=--foobarbaz");
     assertTrue(request.isMultipart());
     assertEquals(request.getMultipartBoundary(), "--foobarbaz");
     assertEquals(request.getContentLength(), (Long) 42L);
+    Assert.assertNull(request.getCharacterEncoding());
 
-    request.addHeader("coNTent-type", "text/html; charset=UTF-8");
+    // Explicit UTF8
+    request.setHeader("coNTent-type", "text/html; charset=UTF-8");
     assertEquals(request.getCharacterEncoding(), StandardCharsets.UTF_8);
+
+    // Explicit ISO 8859 1
+    request.setHeader("Content-Type", "text/html; charset=ISO-8859-1");
+    assertEquals(request.getCharacterEncoding(), StandardCharsets.ISO_8859_1);
+
+    // Test encoding type w/ and w/out charset for form encoding
+    request.setHeader("content-type", "application/x-www-form-urlencoded");
+    Assert.assertFalse(request.isMultipart());
+    assertEquals(request.getContentLength(), (Long) 42L);
+    Assert.assertNull(request.getCharacterEncoding());
+
+    // Explicit UTF8
+    request.setHeader("content-type", "application/x-www-form-urlencoded; charset=UTF-8");
+    Assert.assertFalse(request.isMultipart());
+    assertEquals(request.getContentLength(), (Long) 42L);
+    assertEquals(request.getCharacterEncoding(), StandardCharsets.UTF_8);
+
+    // Explicit ISO 8859 1
+    request.setHeader("content-type", "application/x-www-form-urlencoded; charset=ISO-8859-1");
+    Assert.assertFalse(request.isMultipart());
+    assertEquals(request.getContentLength(), (Long) 42L);
+    assertEquals(request.getCharacterEncoding(), StandardCharsets.ISO_8859_1);
   }
 
   @Test

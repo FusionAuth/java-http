@@ -92,8 +92,8 @@ public final class HTTPTools {
    */
   public static boolean isTokenCharacter(byte ch) {
     return ch == '!' || ch == '#' || ch == '$' || ch == '%' || ch == '&' || ch == '\'' || ch == '*' || ch == '+' || ch == '-' || ch == '.' ||
-        ch == '^' || ch == '_' || ch == '`' || ch == '|' || ch == '~' || (ch >= 'A' && ch <= 'Z') || (ch >= 'a' && ch <= 'z') ||
-        (ch >= '0' && ch <= '9');
+           ch == '^' || ch == '_' || ch == '`' || ch == '|' || ch == '~' || (ch >= 'A' && ch <= 'Z') || (ch >= 'a' && ch <= 'z') ||
+           (ch >= '0' && ch <= '9');
   }
 
   /**
@@ -131,12 +131,18 @@ public final class HTTPTools {
   /**
    * Parses URL encoded data either from a URL parameter list in the query string or the form body.
    *
-   * @param data   The data as a character array.
-   * @param start  The start index to start parsing from.
-   * @param length The length to parse.
-   * @param result The result Map to put the value into.
+   * @param data    The data as a character array.
+   * @param start   The start index to start parsing from.
+   * @param length  The length to parse.
+   * @param charset The charset used to decode the key and value. May be null, and will default to UTF-8.
+   * @param result  The result Map to put the value into.
    */
-  public static void parseEncodedData(byte[] data, int start, int length, Map<String, List<String>> result) {
+  public static void parseEncodedData(byte[] data, int start, int length, Charset charset, Map<String, List<String>> result) {
+    // Default to UTF-8
+    if (charset == null) {
+      charset = StandardCharsets.UTF_8;
+    }
+
     boolean inName = true;
     String name = null;
     String value;
@@ -151,7 +157,7 @@ public final class HTTPTools {
         inName = false;
 
         try {
-          name = URLDecoder.decode(new String(data, start, i - start), StandardCharsets.UTF_8);
+          name = URLDecoder.decode(new String(data, start, i - start), charset);
         } catch (Exception e) {
           name = null; // Malformed
         }
@@ -167,7 +173,7 @@ public final class HTTPTools {
         //noinspection DuplicatedCode
         try {
           if (start < i) {
-            value = URLDecoder.decode(new String(data, start, i - start), StandardCharsets.UTF_8);
+            value = URLDecoder.decode(new String(data, start, i - start), charset);
           } else {
             value = "";
           }
@@ -186,7 +192,7 @@ public final class HTTPTools {
       //noinspection DuplicatedCode
       try {
         if (start < length) {
-          value = URLDecoder.decode(new String(data, start, length - start), StandardCharsets.UTF_8);
+          value = URLDecoder.decode(new String(data, start, length - start), charset);
         } else {
           value = "";
         }
@@ -196,6 +202,18 @@ public final class HTTPTools {
         // Ignore
       }
     }
+  }
+
+  /**
+   * Parses URL encoded data either from a URL parameter list in the query string or the form body. Assumes the values are UTF-8 encoded.
+   *
+   * @param data   The data as a character array.
+   * @param start  The start index to start parsing from.
+   * @param length The length to parse.
+   * @param result The result Map to put the value into.
+   */
+  public static void parseEncodedData(byte[] data, int start, int length, Map<String, List<String>> result) {
+    parseEncodedData(data, start, length, StandardCharsets.UTF_8, result);
   }
 
   /**
@@ -283,8 +301,6 @@ public final class HTTPTools {
       }
 
       logger.trace("Read [{}] from client for preamble.", read);
-
-//      if (read > configuration)
 
       // Tell the callback that we've read at least one byte
       readObserver.run();

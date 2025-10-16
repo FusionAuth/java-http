@@ -22,14 +22,18 @@ import java.net.SocketException;
 import java.net.SocketTimeoutException;
 import java.nio.file.Files;
 
+import io.fusionauth.http.ContentTooLargeException;
 import io.fusionauth.http.HTTPProcessingException;
 import io.fusionauth.http.HTTPValues;
 import io.fusionauth.http.HTTPValues.Connections;
+import io.fusionauth.http.HTTPValues.ContentTypes;
 import io.fusionauth.http.HTTPValues.Headers;
 import io.fusionauth.http.HTTPValues.Protocols;
 import io.fusionauth.http.ParseException;
+import io.fusionauth.http.RequestHeadersTooLargeException;
 import io.fusionauth.http.io.MultipartConfiguration;
 import io.fusionauth.http.io.PushbackInputStream;
+import io.fusionauth.http.io.ReadLimitedInputStream;
 import io.fusionauth.http.log.Logger;
 import io.fusionauth.http.server.ExceptionHandlerContext;
 import io.fusionauth.http.server.HTTPHandler;
@@ -65,6 +69,8 @@ public class HTTPWorker implements Runnable {
 
   private final Logger logger;
 
+  private final ReadLimitedInputStream readLimitedInputStream;
+
   private final Socket socket;
 
   private final long startInstant;
@@ -84,8 +90,8 @@ public class HTTPWorker implements Runnable {
     this.throughput = throughput;
     this.buffers = new HTTPBuffers(configuration);
     this.logger = configuration.getLoggerFactory().getLogger(HTTPWorker.class);
-    // TODO : Ideally we'd wrap this in another FilterInputStream to manage the maximum body size that can be read.
-    this.inputStream = new PushbackInputStream(new ThroughputInputStream(socket.getInputStream(), throughput), instrumenter);
+    this.readLimitedInputStream = new ReadLimitedInputStream(new ThroughputInputStream(socket.getInputStream(), throughput));
+    this.inputStream = new PushbackInputStream(readLimitedInputStream, instrumenter);
     this.state = State.Read;
     this.startInstant = System.currentTimeMillis();
     logger.trace("[{}] Starting HTTP worker.", Thread.currentThread().threadId());
@@ -128,6 +134,10 @@ public class HTTPWorker implements Runnable {
         HTTPOutputStream outputStream = new HTTPOutputStream(configuration, request.getAcceptEncodings(), response, throughputOutputStream, buffers, () -> state = State.Write);
         response.setOutputStream(outputStream);
 
+        // Limit the maximum header size
+        readLimitedInputStream.setMaximumBytesToRead(null, configuration.getMaxRequestHeaderSize(), maxSize ->
+            new RequestHeadersTooLargeException(maxSize, "The maximum size of the request header has been exceeded. The maximum size is [" + maxSize + "] bytes."));
+
         // Not this line of code will block
         // - When a client is using Keep-Alive - we will loop and block here while we wait for the client to send us bytes.
         byte[] requestBuffer = buffers.requestBuffer();
@@ -144,6 +154,13 @@ public class HTTPWorker implements Runnable {
         if (instrumenter != null) {
           instrumenter.acceptedRequest();
         }
+
+        // Limit the maximum body size
+        var maximumContentLength = ContentTypes.Form.equalsIgnoreCase(request.getContentType())
+            ? configuration.getMaxFormDataSize()
+            : configuration.getMaxRequestBodySize();
+        readLimitedInputStream.setMaximumBytesToRead(request.getContentLength(), maximumContentLength, maxSize ->
+            new ContentTooLargeException(maxSize, "The maximum size of the request body has been exceeded. The maximum size is [" + maxSize + "] bytes."));
 
         httpInputStream = new HTTPInputStream(configuration, request, inputStream);
         request.setInputStream(httpInputStream);

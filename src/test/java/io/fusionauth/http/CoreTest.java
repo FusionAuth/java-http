@@ -410,7 +410,7 @@ public class CoreTest extends BaseTest {
 
     HTTPHandler handler = (req, res) -> {
       res.setStatus(200);
-      res.setContentType("application/x-www-form-urlencoded");
+      res.setContentType("application/x-www-form-urlencoded; charset=UTF-8");
       res.setContentLength(req.getBodyBytes().length);
       res.getOutputStream().write(req.getBodyBytes());
       res.getOutputStream().close();
@@ -830,7 +830,7 @@ public class CoreTest extends BaseTest {
                                        .uri(uri)
                                        .header(Headers.AcceptEncoding, "deflate, compress, br;q=0.5, gzip;q=0.8, identity;q=1.0")
                                        .header(Headers.AcceptLanguage, "en, fr;q=0.7, de;q=0.8")
-                                       .header(Headers.ContentType, "text/plain; charset=ISO8859-1")
+                                       .header(Headers.ContentType, "text/plain; charset=ISO-8859-1")
                                        .header(Headers.Origin, "https://example.com")
                                        .header(Headers.Referer, "foobar.com")
                                        .header(Headers.UserAgent, "java-http test")

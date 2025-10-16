@@ -59,7 +59,7 @@ public class HTTPServerConfiguration implements Configurable<HTTPServerConfigura
 
   private int maxPendingSocketConnections = 250;
 
-  private int maxRequestBodySize = 128 * 1024 * 1024; // 128 Megabytes, ideally the same or larger than maxFormDataSize, and MultipartConfiguration.maxRequestSize
+  private int maxRequestBodySize = 128 * 1024 * 1024; // 128 Megabytes, must be equal to or larger than maxFormDataSize, and MultipartConfiguration.maxRequestSize
 
   private int maxRequestHeaderSize = 128 * 1024; // 128 Kilobytes
 
@@ -170,9 +170,18 @@ public class HTTPServerConfiguration implements Configurable<HTTPServerConfigura
   }
 
   /**
-   * @return The maximum number of bytes to drain from the InputStream when the request handler did not read all available bytes and the
-   *     connection is using a keep-alive which means the server must drain the InputStream in preparation for the next request. Defaults to
-   *     256k.
+   * When using keep-alive, this configuration represents the maximum number of bytes to drain from the InputStream when the request handler
+   * did not read all available bytes. This is done to drain the InputStream, attempting to reach the end of the request in order to prepare
+   * for the next request.
+   * <p>
+   * If you are not using keep-alive, this configuration will not be utilized.
+   * <p>
+   * When this configured limit is reached, the socket will be closed. This would be equivalent to adding Connection: close to the request.
+   * Setting this limit too low could cause connections not to be re-used, setting this limit too high simply means that the server will
+   * take more time to read more bytes from the client before being able to re-use the connection.
+   *
+   * @return The maximum number of bytes to drain from the InputStream when the request handler did not read all available bytes. Defaults
+   *     to 256k.
    */
   public int getMaxBytesToDrain() {
     return maxBytesToDrain;
@@ -201,10 +210,13 @@ public class HTTPServerConfiguration implements Configurable<HTTPServerConfigura
   }
 
   /**
+   * The maximum size in bytes of the HTTP request body. This configuration excludes the size of the HTTP request header.
+   * <p>
+   * This configuration will affect all requests regardless of Content-Type. Practically this means this value must be greater than or equal
+   * to the larger of the two values configured by {@link #getMaxFormDataSize()} or {@link MultipartConfiguration#getMaxRequestSize()}. This
+   * configuration is intended to be a fail-safe for unexpected large requests.
    *
-   * @return the maximum size of the HTTP request body in bytes. This configuration will affect all requests regardless of Content-Type.
-   *     This value must be equal to or larger than the maximum request size configured for multipart requests. This configuration is
-   *     intended to be a fail-safe for unexpected large requests. Defaults to 1024 Megabytes.
+   * @return the maximum size in bytes of the HTTP request body.  Defaults to 128 Megabytes.
    */
   public int getMaxRequestBodySize() {
     return maxRequestBodySize;
@@ -212,7 +224,7 @@ public class HTTPServerConfiguration implements Configurable<HTTPServerConfigura
 
   /**
    * @return the maximum size of the HTTP request header in bytes. This configuration does not affect the HTTP response header. Defaults to
-   *     128k bytes.
+   *     128 Kilobytes.
    */
   public int getMaxRequestHeaderSize() {
     // TODO : Notes:
@@ -237,7 +249,7 @@ public class HTTPServerConfiguration implements Configurable<HTTPServerConfigura
   }
 
   /**
-   * @return The max chunk size in the response. Defaults to 16k bytes.
+   * @return The max chunk size in the response. Defaults to 16 Kilobytes.
    */
   public int getMaxResponseChunkSize() {
     return maxResponseChunkSize;
@@ -269,7 +281,7 @@ public class HTTPServerConfiguration implements Configurable<HTTPServerConfigura
 
   /**
    * @return The multipart buffer size in bytes. This is primary used for parsing multipart requests by the {@link HTTPRequest} class.
-   *     Defaults to 16k bytes.
+   *     Defaults to 16 Kilobytes.
    */
   @Deprecated
   public int getMultipartBufferSize() {
@@ -300,7 +312,7 @@ public class HTTPServerConfiguration implements Configurable<HTTPServerConfigura
   }
 
   /**
-   * @return The size of the buffer used to read the request. This defaults to 16k bytes.
+   * @return The size of the buffer used to read the request. Defaults to 16 Kilobytes
    */
   public int getRequestBufferSize() {
     return requestBufferSize;
@@ -308,7 +320,7 @@ public class HTTPServerConfiguration implements Configurable<HTTPServerConfigura
 
   /**
    * @return The size of the buffer used to store the response. This allows the server to handle exceptions and errors without writing back
-   *     a 200 response that is actually an error. This defaults to 64k bytes.
+   *     a 200 response that is actually an error. Defaults to 64 Kilobytes.
    */
   public int getResponseBufferSize() {
     return responseBufferSize;
@@ -530,7 +542,7 @@ public class HTTPServerConfiguration implements Configurable<HTTPServerConfigura
   @Override
   public HTTPServerConfiguration withMaximumBytesToDrain(int maxBytesToDrain) {
     if (maxBytesToDrain < 1024 || maxBytesToDrain >= 256 * 1024 * 1024) {
-      throw new IllegalArgumentException("The maximum bytes to drain must be greater than or equal to 1024 and less than or equal to 268,435,456 (256 megabytes)");
+      throw new IllegalArgumentException("The maximum bytes to drain must be greater than or equal to 1024 and less than or equal to 268,435,456 (256 Megabytes)");
     }
 
     this.maxBytesToDrain = maxBytesToDrain;

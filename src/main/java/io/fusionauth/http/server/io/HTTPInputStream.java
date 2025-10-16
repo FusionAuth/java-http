@@ -145,9 +145,11 @@ public class HTTPInputStream extends InputStream {
     // When we have a fixed length request, read beyond the remainingBytes if possible.
     // - If we have read past the end of the current request, push those bytes back onto the InputStream.
     int read = delegate.read(b, off, len);
+    int reportBytesRead = read;
     if (fixedLength && read > 0) {
       int extraBytes = (int) (read - bytesRemaining);
       if (extraBytes > 0) {
+        reportBytesRead -= extraBytes;
         pushbackInputStream.push(b, (int) bytesRemaining, extraBytes);
       }
     }
@@ -158,7 +160,8 @@ public class HTTPInputStream extends InputStream {
       }
     }
 
-    return read;
+    // TODO : Daniel : Review : If we push back n bytes, don't we need to return read - n? This was previously read which ignored bytes pushed back.
+    return reportBytesRead;
   }
 
   private void commit() {

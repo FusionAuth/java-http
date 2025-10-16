@@ -51,7 +51,7 @@ public class MultipartTest extends BaseTest {
       bar\r
       ------WebKitFormBoundaryTWfMVJErBoLURJIe\r
       Content-Disposition: form-data; name="file"; filename="foo.jpg"\r
-      Content-Type: text/plain; charset=ISO8859-1\r
+      Content-Type: text/plain; charset=ISO-8859-1\r
       \r
       filecontents\r
       ------WebKitFormBoundaryTWfMVJErBoLURJIe--""";
@@ -242,7 +242,7 @@ public class MultipartTest extends BaseTest {
           body += """
               \r
               Content-Disposition: form-data; name="file"; filename="foo.jpg"\r
-              Content-Type: text/plain; charset=ISO8859-1\r
+              Content-Type: text/plain; charset=ISO-8859-1\r
               \r
               {file}\r
               """.replace("{file}", file);
