@@ -33,8 +33,8 @@ public class HTTPInputStreamTest {
     // Ensure that when we read a chunked encoded body that the InputStream returns the correct number of bytes read even when
     // we read past the end of the current request and use the PushbackInputStream.
 
-    int contentLength = 113;
     String content = "These pretzels are making me thirsty. These pretzels are making me thirsty. These pretzels are making me thirsty.";
+    int contentLength = content.getBytes(StandardCharsets.UTF_8).length;
 
     // Chunk the content
     byte[] bytes = """
@@ -60,8 +60,8 @@ public class HTTPInputStreamTest {
     // Ensure that when we read a fixed length body that the InputStream returns the correct number of bytes read even when
     // we read past the end of the current request and use the PushbackInputStream.
 
-    int contentLength = 113;
     String content = "These pretzels are making me thirsty. These pretzels are making me thirsty. These pretzels are making me thirsty.";
+    int contentLength = content.getBytes(StandardCharsets.UTF_8).length;
 
     // Fixed length body with the start of the next request in the buffer
     byte[] bytes = (content + "GET / HTTP/1.1\r\n").getBytes(StandardCharsets.UTF_8);

@@ -387,9 +387,11 @@ public abstract class BaseTest {
     var is = socket.getInputStream();
     var expectedResponseLength = expectedResponse.getBytes(StandardCharsets.UTF_8).length;
     try {
-      byte[] buffer = new byte[expectedResponse.length() * 2];
+
+      byte[] buffer = new byte[expectedResponseLength * 2];
       int read = is.read(buffer);
       var actualResponse = new String(buffer, 0, read, StandardCharsets.UTF_8);
+
       // Perform an initial equality check, this is fast. If it fails, it may because there are remaining bytes left to read. This is slower.
       if (!actualResponse.equals(expectedResponse)) {
         // Note this is going to block until the socket keep-alive times out.

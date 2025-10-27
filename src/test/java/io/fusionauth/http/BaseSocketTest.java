@@ -21,6 +21,7 @@ import java.time.Duration;
 
 import io.fusionauth.http.server.HTTPHandler;
 import io.fusionauth.http.server.HTTPServer;
+import static org.testng.Assert.assertEquals;
 
 /**
  * A base class to provide some helpers for socket based tests. A socket test doesn't use an HTTP client, but instead manually writes to the
@@ -54,6 +55,8 @@ public abstract class BaseSocketTest extends BaseTest {
         .start();
          Socket socket = makeClientSocket("http")) {
 
+      socket.setSoTimeout((int) Duration.ofSeconds(30).toMillis());
+
       var bodyString = "These pretzels are making me thirsty. ";
       // Ensure this is larger than the default configured size for the request buffer.
       // - This body is added to each request to ensure we correctly drain the InputStream before we can write the HTTP response.
@@ -85,10 +88,21 @@ public abstract class BaseSocketTest extends BaseTest {
       }
 
       request = request.replace("{body}", body);
-      request = request.replace("{contentLength}", body.getBytes(StandardCharsets.UTF_8).length + "");
+      var contentLength = body.getBytes(StandardCharsets.UTF_8).length;
+      request = request.replace("{contentLength}", contentLength + "");
+
+      // Ensure the caller didn't add an extra line return to the request.
+      int bodyStart = request.indexOf("\r\n\r\n") + 4;
+      String payload = request.substring(bodyStart);
+      assertEquals(contentLength, payload.getBytes(StandardCharsets.UTF_8).length, "Check the value you provided for 'withRequest' it looks like you may have a trailing line return or something.\n");
 
       var os = socket.getOutputStream();
       os.write(request.getBytes(StandardCharsets.UTF_8));
+
+      // 1. Write bytes, the content-length is short by one byte.
+      // 2. Next byte \n
+      // 3. Success.
+      // 4. Next keep-alive request reads preamble, and reads the \n and throws an exception
 
       assertHTTPResponseEquals(socket, response);
     }

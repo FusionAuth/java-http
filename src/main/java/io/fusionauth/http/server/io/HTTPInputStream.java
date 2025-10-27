@@ -151,8 +151,9 @@ public class HTTPInputStream extends InputStream {
 
     // When we have a fixed length request, read beyond the remainingBytes if possible.
     // - If we have read past the end of the current request, push those bytes back onto the InputStream.
-    int maxLen = maximumContentLength == -1 ? len : Math.min(len, maximumContentLength - bytesRead + 1);
-    int read = delegate.read(b, off, maxLen);
+    // - When a maximum content length has been specified, read at most one byte past the maximum.
+    int maxReadLen = maximumContentLength == -1 ? len : Math.min(len, maximumContentLength - bytesRead + 1);
+    int read = delegate.read(b, off, maxReadLen);
 
     int reportBytesRead = read;
     if (fixedLength && read > 0) {
@@ -163,16 +164,14 @@ public class HTTPInputStream extends InputStream {
       }
     }
 
-    if (read > 0) {
-      if (fixedLength) {
-        bytesRemaining -= reportBytesRead;
-      }
+    if (read > 0 && fixedLength) {
+      bytesRemaining -= reportBytesRead;
     }
 
     bytesRead += reportBytesRead;
 
-    // This won't cause us to fail as fast as we could, but it keeps the code a bit simpler.
-    // - This means we will have read past the maximum by n where n is > 0 && < len. This seems like an acceptable over-read, in practice the buffers will be
+    // Note that when the request is fixed length, we will have failed early during commit().
+    // - This will handle all requests that are not fixed length.
     if (maximumContentLength != -1) {
       if (bytesRead > maximumContentLength) {
         String detailedMessage = "The maximum request size has been exceeded.The maximum request size is [" + maximumContentLength + "] bytes.";
@@ -185,8 +184,6 @@ public class HTTPInputStream extends InputStream {
 
   private void commit() {
     committed = true;
-
-    // TODO : Handle : Content-Encoding
 
     // Note that isChunked() should take precedence over the fact that we have a Content-Length.
     // - The client should not send both, but in the case they are both present we ignore Content-Length

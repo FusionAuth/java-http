@@ -30,8 +30,7 @@ public class HTTP11SocketTest extends BaseSocketTest {
     withRequest("""
         cat /etc/password\r
         \r
-        {body}
-        """
+        {body}"""
     ).expectResponse("""
         HTTP/1.1 400 \r
         connection: close\r
@@ -391,12 +390,18 @@ public class HTTP11SocketTest extends BaseSocketTest {
         Content-Length: {contentLength}\r
         Transfer-Encoding: chunked\r
         \r
-        {body}"""
+        {body}
+        """
     ).expectResponse("""
         HTTP/1.1 200 \r
         connection: keep-alive\r
         content-length: 0\r
         \r
         """);
+
+    // Order of operation:
+    // 1. Write body w/ a trailing line return not accounted for in Content-Length.
+    // 2. Read body, write 200 response. Keep alive.
+    // 3. Read remaining byte, parse error. Write 400 response. Close connection.
   }
 }
