@@ -311,20 +311,9 @@ public class HTTPWorker implements Runnable {
         response.setHeader(Headers.Connection, Connections.Close);
         response.setStatus(status);
         response.setContentLength(0L);
-//        System.out.println("return ["  + status + "]");
-
-        // Here
-        // Close this sucker out!
-//        socket.setSoLinger(true, 0);
-
-//        socket.shutdownInput();
-//        socket.getInputStream().close();
         response.close();
       }
     } catch (IOException e) {
-      System.out.println("\n\n\nHere!");
-      System.out.println(e.getClass().getSimpleName());
-      System.out.println(e.getMessage());
       logger.debug(String.format("[%s] Could not close the HTTP response.", Thread.currentThread().threadId()), e);
     } finally {
       // It is plausible that calling response.close() could throw an exception. We must ensure we close the socket.

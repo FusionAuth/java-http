@@ -49,7 +49,7 @@ public class FormDataTest extends BaseTest {
       .replaceAll("\\s", "");
 
   @Test(dataProvider = "schemes")
-  public void post_server_configuration_form_data_tooBig(String scheme) throws Exception {
+  public void post_server_configuration_max_form_data(String scheme) throws Exception {
     // Fixed length. n, n is < max length, Ok.
     // Fixed length. n, n > too big
     // Not tested yet: Chunked, too big.
@@ -86,13 +86,25 @@ public class FormDataTest extends BaseTest {
             \r
             """)
         .expectExceptionOnWrite(SocketException.class);
+
+    // Large, but max size has been disabled
+    withScheme(scheme)
+        .withBodyParameterCount(42 * 1024)  // 131,072, 131,072
+        .withBodyParameterSize(128)
+        // Disable the limit
+        .withConfiguration(config -> config.withMaxFormDataSize(-1))
+        .expectResponse("""
+            HTTP/1.1 200 \r
+            connection: keep-alive\r
+            content-type: application/json\r
+            content-length: 16\r
+            \r
+            {"version":"42"}""")
+        .expectNoExceptionOnWrite();
   }
 
   @Test(dataProvider = "schemes")
-  public void post_server_configuration_header_tooBig(String scheme) throws Exception {
-    // http, base header will be 263
-    // https, base header will be 167
-
+  public void post_server_configuration_max_request_header_size(String scheme) throws Exception {
     // Header size ok.
     withScheme(scheme)
         // Try and get as close as we can to the maximum. Default is 128k, which is 131,072 bytes.
@@ -104,7 +116,6 @@ public class FormDataTest extends BaseTest {
         // https: (1655 * (11 + 2 + 64 + 2)) + 175 = 130,920
         .withHeaderCount(1655)
         .withHeaderSize(64)
-        // TODO : Daniel : Send a small body
         // Default is 128k, this should fit.
         // - The header size includes the request line, and the request headers.
         .expectResponse("""
@@ -122,7 +133,6 @@ public class FormDataTest extends BaseTest {
         //   2048 * 64 == 131,072 + request line will exceed 128k
         .withHeaderCount(1024 * 1024)
         .withHeaderSize(128)
-        // TODO : Daniel : Send a small body
         .expectResponse("""
             HTTP/1.1 431 \r
             connection: close\r
@@ -130,6 +140,21 @@ public class FormDataTest extends BaseTest {
             \r
             """)
         .expectExceptionOnWrite(SocketException.class);
+
+    // Same big size, but disable header size limit.
+    withScheme(scheme)
+        .withHeaderCount(1024 * 1024)
+        .withHeaderSize(128)
+        // Disable the limit
+        .withConfiguration(config -> config.withMaxRequestHeaderSize(-1))
+        .expectResponse("""
+            HTTP/1.1 200 \r
+            connection: keep-alive\r
+            content-type: application/json\r
+            content-length: 16\r
+            \r
+            {"version":"42"}""")
+        .expectNoExceptionOnWrite();
 
   }
 

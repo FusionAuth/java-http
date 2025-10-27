@@ -165,14 +165,9 @@ public class HTTPInputStream extends InputStream {
 
     if (read > 0) {
       if (fixedLength) {
-        bytesRemaining -= read;
+        bytesRemaining -= reportBytesRead;
       }
     }
-
-    // TODO : Daniel : Review : If we push back n bytes, don't we need to return read - n? This was previously read which ignored bytes pushed back.
-    // TODO : Daniel : Write a test to prove this, send a content-length of 100, buffer size 80 (as an example), ensure this returns 80, and then
-    //                 the next call returns 20?
-
 
     bytesRead += reportBytesRead;
 
