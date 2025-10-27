@@ -276,6 +276,9 @@ public final class HTTPTools {
 
   /**
    * Parses the request preamble directly from the given InputStream.
+   * <p>
+   * The HTTP request is made up of the request line, headers and an optional body. The request preamble comprises the Request line and the
+   * Headers. All that remains after the preamble is the optional body.
    *
    * @param inputStream          The input stream to read the preamble from.
    * @param maxRequestHeaderSize The maximum number of bytes to read for the header. If exceed throw an exception.
@@ -317,6 +320,10 @@ public final class HTTPTools {
         readObserver.run();
       }
 
+      // bytesRead will include bytes that are read past the end of the preamble. This should be ok because we will only throw an exception
+      // for readExceeded once we have reached this state AND we are not yet in a complete state.
+      // - So if we exceed the max header size from this read, as long as this buffer includes the entire preamble we will not throw
+      //   an exception.
       bytesRead += read;
       readExceeded = maxRequestHeaderSize != -1 && bytesRead >= maxRequestHeaderSize;
 

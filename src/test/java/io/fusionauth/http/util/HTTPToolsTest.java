@@ -15,6 +15,7 @@
  */
 package io.fusionauth.http.util;
 
+import java.io.ByteArrayInputStream;
 import java.net.URLEncoder;
 import java.nio.charset.StandardCharsets;
 import java.util.HashMap;
@@ -22,6 +23,12 @@ import java.util.List;
 import java.util.Map;
 
 import com.inversoft.json.ToString;
+import io.fusionauth.http.HTTPMethod;
+import io.fusionauth.http.io.PushbackInputStream;
+import io.fusionauth.http.server.HTTPRequest;
+import io.fusionauth.http.server.HTTPServerConfiguration;
+import io.fusionauth.http.server.internal.HTTPBuffers;
+import io.fusionauth.http.server.io.HTTPInputStream;
 import io.fusionauth.http.util.HTTPTools.HeaderValue;
 import org.testng.annotations.Test;
 import static org.testng.Assert.assertEquals;
@@ -100,5 +107,79 @@ public class HTTPToolsTest {
     assertEquals(HTTPTools.parseHeaderValue("value; f=f"), new HeaderValue("value", Map.of("f", "f")));
     assertEquals(HTTPTools.parseHeaderValue("value; f =f"), new HeaderValue("value", Map.of("f ", "f")));
     assertEquals(HTTPTools.parseHeaderValue("value; f= f"), new HeaderValue("value", Map.of("f", " f")));
+  }
+
+  @Test
+  public void parsePreamble() throws Exception {
+    // Ensure that we can correctly read the preamble when the InputStream contains the next request.
+
+    //noinspection ExtractMethodRecommender
+    String request = """
+        GET / HTTP/1.1\r
+        Host: localhost:42\r
+        Connection: close\r
+        Content-Length: 113\r
+        Header1: Value1\r
+        Header2: Value2\r
+        Header3: Value3\r
+        Header4: Value4\r
+        Header5: Value5\r
+        Header6: Value6\r
+        Header7: Value7\r
+        Header8: Value8\r
+        Header9: Value9\r
+        Header10: Value10\r
+        \r
+        These pretzels are making me thirsty. These pretzels are making me thirsty. These pretzels are making me thirsty.GET / HTTP/1.1\r
+        """;
+
+    // Fixed length body with the start of the next request in the buffer
+    byte[] bytes = request.getBytes(StandardCharsets.UTF_8);
+    int bytesAvailable = bytes.length;
+
+    // Ensure the request buffer size will contain the entire request.
+    HTTPServerConfiguration configuration = new HTTPServerConfiguration().withRequestBufferSize(bytesAvailable + 100);
+
+    ByteArrayInputStream is = new ByteArrayInputStream(bytes);
+    PushbackInputStream pushbackInputStream = new PushbackInputStream(is, null);
+
+    HTTPRequest httpRequest = new HTTPRequest();
+    HTTPBuffers buffers = new HTTPBuffers(configuration);
+    byte[] requestBuffer = buffers.requestBuffer();
+
+    HTTPTools.initialize(configuration.getLoggerFactory());
+    HTTPTools.parseRequestPreamble(pushbackInputStream, 128 * 1024, httpRequest, requestBuffer, () -> {
+    });
+
+    // Ensure we parsed the request and that the right number of bytes is left over
+    assertEquals(httpRequest.getMethod(), HTTPMethod.GET);
+    assertEquals(httpRequest.getHost(), "localhost");
+    assertEquals(httpRequest.getPort(), 42);
+    assertEquals(httpRequest.getContentLength(), 113);
+    assertEquals(httpRequest.getHeaders().size(), 13);
+    assertEquals(httpRequest.getHeader("Content-Length"), "113");
+    assertEquals(httpRequest.getHeader("Connection"), "close");
+    assertEquals(httpRequest.getHeader("Host"), "localhost:42");
+    for (int i = 1; i <= 10; i++) {
+      assertEquals(httpRequest.getHeader("Header" + i), "Value" + i);
+    }
+
+    // Expect 129 bytes left over which is 113 for the body + 16 from the next request
+    assertEquals(pushbackInputStream.getAvailableBufferedBytesRemaining(), 113 + 16);
+
+    // Read the remaining bytes for this request, we should still have some left over.
+    HTTPInputStream httpInputStream = new HTTPInputStream(configuration, httpRequest, pushbackInputStream, -1);
+    byte[] buffer = new byte[1024];
+    int read = httpInputStream.read(buffer);
+    assertEquals(read, 113);
+
+    // Another read should return -1 because we are at the end of this request.
+    int nextRead = httpInputStream.read(buffer);
+    assertEquals(nextRead, -1);
+
+    // The next read from the pushback which will be used by the next request should return the remaining bytes.
+    assertEquals(pushbackInputStream.getAvailableBufferedBytesRemaining(), 16);
+    int nextRequestRead = pushbackInputStream.read(buffer);
+    assertEquals(nextRequestRead, 16);
   }
 }

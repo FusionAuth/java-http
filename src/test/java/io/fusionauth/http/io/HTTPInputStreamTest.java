@@ -74,8 +74,6 @@ public class HTTPInputStreamTest {
 
   private void assertReadWithPushback(byte[] bytes, String content, int contentLength, HTTPRequest request) throws Exception {
     int bytesAvailable = bytes.length;
-    System.out.println("available bytes [" + bytesAvailable + "]");
-    System.out.println("buffer size [" + (bytesAvailable + 100) + "]");
     HTTPServerConfiguration configuration = new HTTPServerConfiguration().withRequestBufferSize(bytesAvailable + 100);
 
     ByteArrayInputStream is = new ByteArrayInputStream(bytes);
