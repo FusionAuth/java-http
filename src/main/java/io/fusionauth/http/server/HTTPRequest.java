@@ -801,15 +801,12 @@ public class HTTPRequest implements Buildable<HTTPRequest> {
             }
           }
         } else {
+          this.host = value;
           if ("http".equalsIgnoreCase(scheme)) {
             this.port = 80;
-          }
-          else if ("https".equalsIgnoreCase(scheme)) {
+          } else if ("https".equalsIgnoreCase(scheme)) {
             this.port = 443;
-          } else {
-            // fallback, intentionally do nothing
           }
-          this.host = value;
         }
         break;
     }
