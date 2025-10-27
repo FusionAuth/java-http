@@ -162,8 +162,8 @@ public class HTTPRequestTest {
   @Test
   public void hostHeaderPortHandling() {
     // positive cases
-    assertURLs("http", "myhost", "myhost", -1, "http://myhost");
-    assertURLs("https", "myhost", "myhost", -1, "https://myhost");
+    assertURLs("http", "myhost", "myhost", 80, "http://myhost");
+    assertURLs("https", "myhost", "myhost", 443, "https://myhost");
     assertURLs("http", "myhost:80", "myhost", 80, "http://myhost");
     assertURLs("https", "myhost:80", "myhost", 80, "https://myhost:80");
     assertURLs("http", "myhost:443", "myhost", 443, "http://myhost:443");
