@@ -25,7 +25,7 @@ import org.testng.annotations.Test;
  * @author Daniel DeGroff
  */
 public class HTTP10SocketTest extends BaseSocketTest {
-  @Test
+  @Test(invocationCount = 100)
   public void keep_alive_defaults() throws Exception {
     // Ensure that the HTTP/1.0 defaults are observed for keep-alive
 
@@ -36,8 +36,7 @@ public class HTTP10SocketTest extends BaseSocketTest {
         Content-Type: plain/text\r
         Content-Length: {contentLength}\r
         \r
-        {body}
-        """
+        {body}"""
     ).expectResponse("""
         HTTP/1.1 200 \r
         connection: close\r
@@ -53,8 +52,7 @@ public class HTTP10SocketTest extends BaseSocketTest {
         Content-Length: {contentLength}\r
         Connection: close\r
         \r
-        {body}
-        """
+        {body}"""
     ).expectResponse("""
         HTTP/1.1 200 \r
         connection: close\r
@@ -70,8 +68,7 @@ public class HTTP10SocketTest extends BaseSocketTest {
         Content-Length: {contentLength}\r
         Connection: keep-alive\r
         \r
-        {body}
-        """
+        {body}"""
     ).expectResponse("""
         HTTP/1.1 200 \r
         connection: keep-alive\r
@@ -80,7 +77,7 @@ public class HTTP10SocketTest extends BaseSocketTest {
         """);
   }
 
-  @Test
+  @Test(invocationCount = 100)
   public void test_HTTP_10_OK() throws Exception {
     // Minor version less than the highest supported: HTTP/1.0
     // - While this is an HTTP 1.1 server, RFC 7230 indicates that a message with a higher minor version that is supported
@@ -104,8 +101,7 @@ public class HTTP10SocketTest extends BaseSocketTest {
         Content-Type: plain/text\r
         Content-Length: {contentLength}\r
         \r
-        {body}
-        """
+        {body}"""
     ).expectResponse("""
         HTTP/1.1 200 \r
         connection: close\r

@@ -22,7 +22,6 @@ import java.net.SocketException;
 import java.net.SocketTimeoutException;
 import java.nio.file.Files;
 
-import io.fusionauth.http.ContentTooLargeException;
 import io.fusionauth.http.HTTPProcessingException;
 import io.fusionauth.http.HTTPValues;
 import io.fusionauth.http.HTTPValues.Connections;
@@ -30,10 +29,8 @@ import io.fusionauth.http.HTTPValues.ContentTypes;
 import io.fusionauth.http.HTTPValues.Headers;
 import io.fusionauth.http.HTTPValues.Protocols;
 import io.fusionauth.http.ParseException;
-import io.fusionauth.http.RequestHeadersTooLargeException;
 import io.fusionauth.http.io.MultipartConfiguration;
 import io.fusionauth.http.io.PushbackInputStream;
-import io.fusionauth.http.io.ReadLimitedInputStream;
 import io.fusionauth.http.log.Logger;
 import io.fusionauth.http.server.ExceptionHandlerContext;
 import io.fusionauth.http.server.HTTPHandler;
@@ -69,8 +66,6 @@ public class HTTPWorker implements Runnable {
 
   private final Logger logger;
 
-  private final ReadLimitedInputStream readLimitedInputStream;
-
   private final Socket socket;
 
   private final long startInstant;
@@ -90,8 +85,7 @@ public class HTTPWorker implements Runnable {
     this.throughput = throughput;
     this.buffers = new HTTPBuffers(configuration);
     this.logger = configuration.getLoggerFactory().getLogger(HTTPWorker.class);
-    this.readLimitedInputStream = new ReadLimitedInputStream(new ThroughputInputStream(socket.getInputStream(), throughput));
-    this.inputStream = new PushbackInputStream(readLimitedInputStream, instrumenter);
+    this.inputStream = new PushbackInputStream(new ThroughputInputStream(socket.getInputStream(), throughput), instrumenter);
     this.state = State.Read;
     this.startInstant = System.currentTimeMillis();
     logger.trace("[{}] Starting HTTP worker.", Thread.currentThread().threadId());
@@ -134,14 +128,10 @@ public class HTTPWorker implements Runnable {
         HTTPOutputStream outputStream = new HTTPOutputStream(configuration, request.getAcceptEncodings(), response, throughputOutputStream, buffers, () -> state = State.Write);
         response.setOutputStream(outputStream);
 
-        // Limit the maximum header size
-        readLimitedInputStream.setMaximumBytesToRead(null, configuration.getMaxRequestHeaderSize(), maxSize ->
-            new RequestHeadersTooLargeException(maxSize, "The maximum size of the request header has been exceeded. The maximum size is [" + maxSize + "] bytes."));
-
         // Not this line of code will block
         // - When a client is using Keep-Alive - we will loop and block here while we wait for the client to send us bytes.
         byte[] requestBuffer = buffers.requestBuffer();
-        HTTPTools.parseRequestPreamble(inputStream, request, requestBuffer, () -> state = State.Read);
+        HTTPTools.parseRequestPreamble(inputStream, configuration.getMaxRequestHeaderSize(), request, requestBuffer, () -> state = State.Read);
         if (logger.isTraceEnabled()) {
           int availableBufferedBytes = inputStream.getAvailableBufferedBytesRemaining();
           if (availableBufferedBytes != 0) {
@@ -155,14 +145,9 @@ public class HTTPWorker implements Runnable {
           instrumenter.acceptedRequest();
         }
 
-        // Limit the maximum body size
-        var maximumContentLength = ContentTypes.Form.equalsIgnoreCase(request.getContentType())
-            ? configuration.getMaxFormDataSize()
-            : configuration.getMaxRequestBodySize();
-        readLimitedInputStream.setMaximumBytesToRead(request.getContentLength(), maximumContentLength, maxSize ->
-            new ContentTooLargeException(maxSize, "The maximum size of the request body has been exceeded. The maximum size is [" + maxSize + "] bytes."));
-
-        httpInputStream = new HTTPInputStream(configuration, request, inputStream);
+        // Configure maximum content length
+        int maximumContentLength = getMaximumContentLength(request);
+        httpInputStream = new HTTPInputStream(configuration, request, inputStream, maximumContentLength);
         request.setInputStream(httpInputStream);
 
         // Set the Connection response header as soon as possible
@@ -251,8 +236,7 @@ public class HTTPWorker implements Runnable {
       logger.trace("[{}] Closing socket. Client closed the connection. Reason [{}].", Thread.currentThread().threadId(), e.getMessage());
       closeSocketOnly(CloseSocketReason.Expected);
     } catch (HTTPProcessingException e) {
-      // Note that I am only tracing this. This is sort of expected - in that it is possible that the request handler will catch this exception and handle it. If the request handler
-      // does not handle this exception, it is totally fine to handle it here.
+      // Note that I am only tracing this, because this exception is mostly expected. Use closeSocketOnError so we can attempt to write a response.
       logger.trace("[{}] Closing socket with status [{}]. An unhandled [{}] exception was taken. Reason [{}].", Thread.currentThread().threadId(), e.getStatus(), e.getClass().getSimpleName(), e.getMessage());
       closeSocketOnError(response, e.getStatus());
     } catch (TooManyBytesToDrainException e) {
@@ -327,9 +311,20 @@ public class HTTPWorker implements Runnable {
         response.setHeader(Headers.Connection, Connections.Close);
         response.setStatus(status);
         response.setContentLength(0L);
+//        System.out.println("return ["  + status + "]");
+
+        // Here
+        // Close this sucker out!
+//        socket.setSoLinger(true, 0);
+
+//        socket.shutdownInput();
+//        socket.getInputStream().close();
         response.close();
       }
     } catch (IOException e) {
+      System.out.println("\n\n\nHere!");
+      System.out.println(e.getClass().getSimpleName());
+      System.out.println(e.getMessage());
       logger.debug(String.format("[%s] Could not close the HTTP response.", Thread.currentThread().threadId()), e);
     } finally {
       // It is plausible that calling response.close() could throw an exception. We must ensure we close the socket.
@@ -347,6 +342,19 @@ public class HTTPWorker implements Runnable {
     } catch (IOException e) {
       logger.debug(String.format("[%s] Could not close the socket.", Thread.currentThread().threadId()), e);
     }
+  }
+
+  private int getMaximumContentLength(HTTPRequest request) {
+    var maximumContentLength = -1;
+    if (ContentTypes.Form.equalsIgnoreCase(request.getContentType())) {
+      maximumContentLength = configuration.getMaxFormDataSize();
+    }
+
+    if (maximumContentLength == -1) {
+      maximumContentLength = configuration.getMaxRequestBodySize();
+    }
+
+    return maximumContentLength;
   }
 
   private boolean handleExpectContinue(HTTPRequest request) throws IOException {

@@ -34,6 +34,7 @@ import io.fusionauth.http.HTTPValues.ControlBytes;
 import io.fusionauth.http.HTTPValues.HeaderBytes;
 import io.fusionauth.http.HTTPValues.ProtocolBytes;
 import io.fusionauth.http.ParseException;
+import io.fusionauth.http.RequestHeadersTooLargeException;
 import io.fusionauth.http.io.PushbackInputStream;
 import io.fusionauth.http.log.Logger;
 import io.fusionauth.http.log.LoggerFactory;
@@ -276,13 +277,15 @@ public final class HTTPTools {
   /**
    * Parses the request preamble directly from the given InputStream.
    *
-   * @param inputStream   The input stream to read the preamble from.
-   * @param request       The HTTP request to populate.
-   * @param requestBuffer A buffer used for reading to help reduce memory thrashing.
-   * @param readObserver  An observer that is called once one byte has been read.
+   * @param inputStream          The input stream to read the preamble from.
+   * @param maxRequestHeaderSize The maximum number of bytes to read for the header. If exceed throw an exception.
+   * @param request              The HTTP request to populate.
+   * @param requestBuffer        A buffer used for reading to help reduce memory thrashing.
+   * @param readObserver         An observer that is called once one byte has been read.
    * @throws IOException If the read fails.
    */
-  public static void parseRequestPreamble(PushbackInputStream inputStream, HTTPRequest request, byte[] requestBuffer, Runnable readObserver)
+  public static void parseRequestPreamble(PushbackInputStream inputStream, int maxRequestHeaderSize, HTTPRequest request,
+                                          byte[] requestBuffer, Runnable readObserver)
       throws IOException {
     RequestPreambleState state = RequestPreambleState.RequestMethod;
     var valueBuffer = new ByteArrayOutputStream(512);
@@ -290,7 +293,14 @@ public final class HTTPTools {
 
     int read = 0;
     int index = 0;
+    int bytesRead = 0;
+    boolean readExceeded = false;
+
     while (state != RequestPreambleState.Complete) {
+      if (readExceeded) {
+        throw new RequestHeadersTooLargeException(maxRequestHeaderSize, "The maximum size of the request header has been exceeded. The maximum size is [" + maxRequestHeaderSize + "] bytes.");
+      }
+
       long start = System.currentTimeMillis();
       read = inputStream.read(requestBuffer);
 
@@ -303,7 +313,12 @@ public final class HTTPTools {
       logger.trace("Read [{}] from client for preamble.", read);
 
       // Tell the callback that we've read at least one byte
-      readObserver.run();
+      if (bytesRead == 0) {
+        readObserver.run();
+      }
+
+      bytesRead += read;
+      readExceeded = maxRequestHeaderSize != -1 && bytesRead >= maxRequestHeaderSize;
 
       for (index = 0; index < read && state != RequestPreambleState.Complete; index++) {
         // If there is a state transition, store the value properly and reset the builder (if needed)

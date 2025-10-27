@@ -168,6 +168,15 @@ public interface Configurable<T extends Configurable<T>> {
     return (T) this;
   }
 
+  /**
+   * The maximum size of the HTTP request body in bytes when the Content-Type is application/x-www-form-urlencoded. Defaults to 10
+   * Megabytes.
+   * <p>
+   * Set this to -1 to disable this limitation.
+   *
+   * @param maxFormDataSize the maximum size of the HTTP request body in bytes.
+   * @return This.
+   */
   default T withMaxFormDataSize(int maxFormDataSize) {
     configuration().withMaxFormDataSize(maxFormDataSize);
     return (T) this;
@@ -203,7 +212,9 @@ public interface Configurable<T extends Configurable<T>> {
   }
 
   /**
-   * Sets the maximum size of the HTTP request header. If this limit is exceeded, the connection will be closed. Defaults to 128 Kilobytes.
+   * Sets the maximum size of the HTTP request header. The request header includes the HTTP request line, and all HTTP request headers,
+   * essentially everything except the request body. If this maximum limit is exceeded, the connection will be closed. Defaults to 128
+   * Kilobytes.
    * <p>
    * Set this to -1 to disable this limitation.
    *
@@ -228,7 +239,8 @@ public interface Configurable<T extends Configurable<T>> {
   }
 
   /**
-   * This configures the maximum size of a chunk in the response when the server is using chunked response encoding. Defaults to 16 Kilobytes.
+   * This configures the maximum size of a chunk in the response when the server is using chunked response encoding. Defaults to 16
+   * Kilobytes.
    *
    * @param size The size in bytes.
    * @return This.
@@ -342,8 +354,10 @@ public interface Configurable<T extends Configurable<T>> {
    * Sets the size of the buffer that is used to store the HTTP response before any bytes are written back to the client. This is useful
    * when the server is generating the response but encounters an error. In this case, the server will throw out the response and change to
    * a 500 error response. This defaults to 64 Kilobytes. Negative values disable the response buffer.
+   * <p>
+   * Set to -1 do disable buffering completely.
    *
-   * @param responseBufferSize The size of the buffer. Set to -1 to disable buffering completely.
+   * @param responseBufferSize The size of the buffer.
    * @return This.
    */
   default T withResponseBufferSize(int responseBufferSize) {

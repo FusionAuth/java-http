@@ -226,6 +226,7 @@ public class HTTPServerConfiguration implements Configurable<HTTPServerConfigura
    * @return the maximum size of the HTTP request header in bytes. This configuration does not affect the HTTP response header. Defaults to
    *     128 Kilobytes.
    */
+  // TODO : Naming : Preamble
   public int getMaxRequestHeaderSize() {
     // TODO : Notes:
     //          https://docs.aws.amazon.com/elasticloadbalancing/latest/application/load-balancer-limits.html
@@ -478,7 +479,10 @@ public class HTTPServerConfiguration implements Configurable<HTTPServerConfigura
    */
   @Override
   public HTTPServerConfiguration withMaxFormDataSize(int maxFormDataSize) {
-    // 0 turns this off
+    if (maxFormDataSize != -1 && maxFormDataSize <= 0) {
+      throw new IllegalArgumentException("The maximum form data size must be greater than 0. Set to -1 to disable this limitation.");
+    }
+
     this.maxFormDataSize = maxFormDataSize;
     return this;
   }
@@ -541,7 +545,7 @@ public class HTTPServerConfiguration implements Configurable<HTTPServerConfigura
    */
   @Override
   public HTTPServerConfiguration withMaximumBytesToDrain(int maxBytesToDrain) {
-    if (maxBytesToDrain < 1024 || maxBytesToDrain >= 256 * 1024 * 1024) {
+    if (maxBytesToDrain < 1024 || maxBytesToDrain > 256 * 1024 * 1024) {
       throw new IllegalArgumentException("The maximum bytes to drain must be greater than or equal to 1024 and less than or equal to 268,435,456 (256 Megabytes)");
     }
 

@@ -18,6 +18,7 @@ package io.fusionauth.http.server.io;
 import java.io.IOException;
 import java.io.InputStream;
 
+import io.fusionauth.http.ContentTooLargeException;
 import io.fusionauth.http.io.ChunkedInputStream;
 import io.fusionauth.http.io.PushbackInputStream;
 import io.fusionauth.http.log.Logger;
@@ -43,9 +44,13 @@ public class HTTPInputStream extends InputStream {
 
   private final int maximumBytesToDrain;
 
+  private final int maximumContentLength;
+
   private final PushbackInputStream pushbackInputStream;
 
   private final HTTPRequest request;
+
+  private int bytesRead;
 
   private long bytesRemaining;
 
@@ -57,7 +62,8 @@ public class HTTPInputStream extends InputStream {
 
   private boolean drained;
 
-  public HTTPInputStream(HTTPServerConfiguration configuration, HTTPRequest request, PushbackInputStream pushbackInputStream) {
+  public HTTPInputStream(HTTPServerConfiguration configuration, HTTPRequest request, PushbackInputStream pushbackInputStream,
+                         int maximumContentLength) {
     this.logger = configuration.getLoggerFactory().getLogger(HTTPInputStream.class);
     this.instrumenter = configuration.getInstrumenter();
     this.request = request;
@@ -65,6 +71,7 @@ public class HTTPInputStream extends InputStream {
     this.pushbackInputStream = pushbackInputStream;
     this.chunkedBufferSize = configuration.getChunkedBufferSize();
     this.maximumBytesToDrain = configuration.getMaxBytesToDrain();
+    this.maximumContentLength = maximumContentLength;
 
     // Start the countdown
     if (request.getContentLength() != null) {
@@ -144,7 +151,9 @@ public class HTTPInputStream extends InputStream {
 
     // When we have a fixed length request, read beyond the remainingBytes if possible.
     // - If we have read past the end of the current request, push those bytes back onto the InputStream.
-    int read = delegate.read(b, off, len);
+    int maxLen = maximumContentLength == -1 ? len : Math.min(len, maximumContentLength - bytesRead + 1);
+    int read = delegate.read(b, off, maxLen);
+
     int reportBytesRead = read;
     if (fixedLength && read > 0) {
       int extraBytes = (int) (read - bytesRemaining);
@@ -161,14 +170,32 @@ public class HTTPInputStream extends InputStream {
     }
 
     // TODO : Daniel : Review : If we push back n bytes, don't we need to return read - n? This was previously read which ignored bytes pushed back.
+    // TODO : Daniel : Write a test to prove this, send a content-length of 100, buffer size 80 (as an example), ensure this returns 80, and then
+    //                 the next call returns 20?
+
+
+    bytesRead += reportBytesRead;
+
+    // This won't cause us to fail as fast as we could, but it keeps the code a bit simpler.
+    // - This means we will have read past the maximum by n where n is > 0 && < len. This seems like an acceptable over-read, in practice the buffers will be
+    if (maximumContentLength != -1) {
+      if (bytesRead > maximumContentLength) {
+        String detailedMessage = "The maximum request size has been exceeded.The maximum request size is [" + maximumContentLength + "] bytes.";
+        throw new ContentTooLargeException(maximumContentLength, detailedMessage);
+      }
+    }
+
     return reportBytesRead;
   }
 
   private void commit() {
     committed = true;
 
+    // TODO : Handle : Content-Encoding
+
     // Note that isChunked() should take precedence over the fact that we have a Content-Length.
     // - The client should not send both, but in the case they are both present we ignore Content-Length
+    //   In practice, we will remove the Content-Length header when sent in addition to Transfer-Encoding. See HTTPWorker.validatePreamble.
     Long contentLength = request.getContentLength();
     boolean hasBody = (contentLength != null && contentLength > 0) || request.isChunked();
     if (!hasBody) {
@@ -183,6 +210,16 @@ public class HTTPInputStream extends InputStream {
       logger.trace("Client indicated it was sending an entity-body in the request. Handling body using Content-Length header {}.", contentLength);
     } else {
       logger.trace("Client indicated it was NOT sending an entity-body in the request");
+    }
+
+    // If we have a maximumContentLength, and this is a fixed content length request, before we read any bytes, fail early.
+    // For good measure do this last so if anyone downstream wants to read from the InputStream they could in theory because
+    // we will have set up the InputStream.
+    if (contentLength != null && maximumContentLength != -1) {
+      if (contentLength > maximumContentLength) {
+        String detailedMessage = "The maximum request size has been exceeded. The reported Content-Length is [" + contentLength + "] and the maximum request size is [" + maximumContentLength + "] bytes.";
+        throw new ContentTooLargeException(maximumContentLength, detailedMessage);
+      }
     }
   }
 }

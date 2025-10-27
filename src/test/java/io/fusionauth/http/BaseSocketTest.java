@@ -41,7 +41,6 @@ public abstract class BaseSocketTest extends BaseTest {
     };
 
     try (HTTPServer ignore = makeServer("http", handler)
-        .withInitialReadTimeout(Duration.ofMinutes(2))
         .withReadThroughputCalculationDelayDuration(Duration.ofMinutes(2))
         .withWriteThroughputCalculationDelayDuration(Duration.ofMinutes(2))
 
