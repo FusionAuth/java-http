@@ -45,59 +45,63 @@ public class HTTPToolsTest {
   @Test
   public void parseEncodedData() {
     // Happy path
-    assertEncoding("bar", "bar", StandardCharsets.UTF_8);
+    assertEncodedData("bar", "bar", StandardCharsets.UTF_8);
 
     // Note, there are 3 try/catches in the parseEncodedDate. This tests them in order, each hitting a specific try/catch.
 
     // Bad name encoding
-    assertEncoding("bar&%%%=baz", "bar", StandardCharsets.UTF_8);
+    assertEncodedData("bar&%%%=baz", "bar", StandardCharsets.UTF_8);
 
     // Bad value encoding
-    assertEncoding("bar&bar=ba%å&=boom", "bar", StandardCharsets.UTF_8);
+    assertEncodedData("bar&bar=ba%å&=boom", "bar", StandardCharsets.UTF_8);
 
     // Bad value encoding
-    assertEncoding("bar&bar=% % %", "bar", StandardCharsets.UTF_8);
+    assertEncodedData("bar&bar=% % %", "bar", StandardCharsets.UTF_8);
 
     // UTF-8 encoding of characters not in the ISO-8859-1 character set
-    assertEncoding("😎", "😎", StandardCharsets.UTF_8);
-    assertEncoding("é", "é", StandardCharsets.UTF_8);
-    assertEncoding("€", "€", StandardCharsets.UTF_8);
-    assertEncoding("Héllö", "Héllö", StandardCharsets.UTF_8);
+    assertEncodedData("😎", "😎", StandardCharsets.UTF_8);
+    assertEncodedData("€", "€", StandardCharsets.UTF_8);
 
-    // Double byte values are outside ISO-88559-1, so we should expect them to not render correctly. See next test.
+    // UTF-8 encoding of characters are that also in the ISO-8859-1 character set but have different mappings
+    assertEncodedData("é", "é", StandardCharsets.UTF_8);
+    assertEncodedData("Héllö", "Héllö", StandardCharsets.UTF_8);
+
+    // These UTF-8 double byte values are outside ISO-88559-1, so we should expect them to not render correctly. See next test.
     assertHexValue("😎", "D83D DE0E");
     assertHexValue("€", "20AC");
 
-    // ISO-8559-1 encoding of characters outside the character set
-    assertEncoding("😎", "?", StandardCharsets.ISO_8859_1);
-    assertEncoding("€", "?", StandardCharsets.ISO_8859_1);
+    // ISO-8559-1 encoding of characters outside the ISO-8559-1 character set
+    assertEncodedData("😎", "?", StandardCharsets.ISO_8859_1);
+    assertEncodedData("€", "?", StandardCharsets.ISO_8859_1);
 
     // These values are within the ISO-8559-1 charset, expect them to render correctly.
     assertHexValue("é", "E9");
     assertHexValue("Héllö", "48 E9 6C 6C F6");
 
     // ISO-8559-1 encoding of non-ASCII characters inside the character set
-    assertEncoding("é", "é", StandardCharsets.ISO_8859_1);
-    assertEncoding("Héllö", "Héllö", StandardCharsets.ISO_8859_1);
+    assertEncodedData("é", "é", StandardCharsets.ISO_8859_1);
+    assertEncodedData("Héllö", "Héllö", StandardCharsets.ISO_8859_1);
 
     // Mixing and matching. Expect some wonky behavior.
     // - Encoded using ISO-8559-1 and decoded as UTF-8
-    assertEncoding("Héllö", "H�ll�", StandardCharsets.ISO_8859_1, StandardCharsets.UTF_8);
-    assertEncoding("Hello world", "Hello world", StandardCharsets.ISO_8859_1, StandardCharsets.UTF_8);
-    // - Reverse
-    // The é fails here because while it does exist in both UTF-8 and ISO-8859-1, it is not the same byte. So expect the rendering to be off.
-    assertHexValue("é", "C3 A9", StandardCharsets.UTF_8);
-    assertHexValue("é", "E9", StandardCharsets.ISO_8859_1);
-    assertHexValue("Ã", "C3", StandardCharsets.ISO_8859_1);
-    assertHexValue("©", "A9", StandardCharsets.ISO_8859_1);
-    assertEncoding("é", "Ã©", StandardCharsets.UTF_8, StandardCharsets.ISO_8859_1);
+    assertEncodedData("Héllö", "H�ll�", StandardCharsets.ISO_8859_1, StandardCharsets.UTF_8);
+    assertEncodedData("Hello world", "Hello world", StandardCharsets.ISO_8859_1, StandardCharsets.UTF_8);
+    // The é and the ö will fail to render because while this character exists in both character sets, they are encoded differently.
+    // - So we should expec them to render incorrectly.
+    // - See below, this is just here to validate why the above assertions are accurate.
+    assertHexValue("Héllö", "48    E9 6C 6C F6   ", StandardCharsets.ISO_8859_1);
+    assertHexValue("Héllö", "48 C3 A9 6C 6C C3 B6", StandardCharsets.UTF_8);
 
-    // The ö fails here because while it does exist in both UTF-8 and ISO-8859-1, it is not the same byte. So expect the rendering to be off.
+    // - Reverse
+    assertEncodedData("Héllö", "HÃ©llÃ¶", StandardCharsets.UTF_8, StandardCharsets.ISO_8859_1);
+    assertEncodedData("Hello world", "Hello world", StandardCharsets.UTF_8, StandardCharsets.ISO_8859_1);
+    // The é and the ö will fail to render because while this character exists in both character sets, they are encoded differently.
+    // - So we should expec them to render incorrectly.
+    // - See below, this is just here to validate why the above assertions are accurate.
+    assertHexValue("é", "C3 A9", StandardCharsets.UTF_8);
+    assertHexValue("Ã©", "C3 A9", StandardCharsets.ISO_8859_1);
     assertHexValue("ö", "C3 B6", StandardCharsets.UTF_8);
-    assertHexValue("ö", "F6", StandardCharsets.ISO_8859_1);
-    assertHexValue("¶", "B6", StandardCharsets.ISO_8859_1);
-    assertEncoding("Héllö", "HÃ©llÃ¶", StandardCharsets.UTF_8, StandardCharsets.ISO_8859_1);
-    assertEncoding("Hello world", "Hello world", StandardCharsets.UTF_8, StandardCharsets.ISO_8859_1);
+    assertHexValue("Ã¶", "C3 B6", StandardCharsets.ISO_8859_1);
   }
 
   @Test
@@ -214,12 +218,12 @@ public class HTTPToolsTest {
     assertEquals(nextRequestRead, 16);
   }
 
-  private void assertEncoding(String actualValue, String expectedValue, Charset charset) {
-    assertEncoding(actualValue, expectedValue, charset, charset);
+  private void assertEncodedData(String actualValue, String expectedValue, Charset charset) {
+    assertEncodedData(actualValue, expectedValue, charset, charset);
 
   }
 
-  private void assertEncoding(String actualValue, String expectedValue, Charset encodingCharset, Charset decodingCharset) {
+  private void assertEncodedData(String actualValue, String expectedValue, Charset encodingCharset, Charset decodingCharset) {
     Map<String, List<String>> result = new HashMap<>(1);
     byte[] encoded = ("foo=" + actualValue).getBytes(encodingCharset);
     HTTPTools.parseEncodedData(encoded, 0, encoded.length, decodingCharset, result);
@@ -231,7 +235,9 @@ public class HTTPToolsTest {
   }
 
   private void assertHexValue(String s, String expected, Charset charset) {
-    assertEquals(hex(s.getBytes(charset)), expected);
+    var trimmed = expected.trim();
+    trimmed = trimmed.replaceAll(" +", " ");
+    assertEquals(hex(s.getBytes(charset)), trimmed);
   }
 
   private String hex(byte[] bytes) {
