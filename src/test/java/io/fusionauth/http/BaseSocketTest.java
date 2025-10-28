@@ -66,25 +66,7 @@ public abstract class BaseSocketTest extends BaseTest {
       var body = bodyString.repeat(((requestBufferSize / bodyString.length())) * 2);
 
       if (request.contains("Transfer-Encoding: chunked")) {
-        //noinspection ExtractMethodRecommender
-        var result = "";
-        // Chunk in 100 byte increments. Using a smaller chunk size to ensure we don't end up with a single chunk.
-        int chunkSize = 100;
-        for (var i = 0; i < body.length(); i += chunkSize) {
-          var endIndex = Math.min(i + chunkSize, body.length());
-          var chunk = body.substring(i, endIndex);
-          var chunkLength = chunk.getBytes(StandardCharsets.UTF_8).length;
-          String hex = Integer.toHexString(chunkLength);
-          //noinspection StringConcatenationInLoop
-          result += hex;
-
-          if (chunkedExtension != null) {
-            result += chunkedExtension;
-          }
-
-          result += ("\r\n" + chunk + "\r\n");
-        }
-        body = result + "0\r\n\r\n";
+        body = chunkItUp(body, chunkedExtension);
       }
 
       request = request.replace("{body}", body);

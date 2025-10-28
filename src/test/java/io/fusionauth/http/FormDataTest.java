@@ -48,14 +48,11 @@ public class FormDataTest extends BaseTest {
       """
       .replaceAll("\\s", "");
 
-  @Test(dataProvider = "schemes")
-  public void post_server_configuration_max_form_data(String scheme) throws Exception {
-    // Fixed length. n, n is < max length, Ok.
-    // Fixed length. n, n > too big
-    // Not tested yet: Chunked, too big.
-
+  @Test(dataProvider = "schemesAndChunked")
+  public void post_server_configuration_max_form_data(String scheme, boolean chunked) throws Exception {
     // File too big even though the overall request size is ok.
     withScheme(scheme)
+        .withChunked(chunked)
         .withBodyParameterCount(4096)
         .withBodyParameterSize(32)
         // Body is [180,223]
@@ -75,7 +72,8 @@ public class FormDataTest extends BaseTest {
 
     // Exceeded
     withScheme(scheme)
-        .withBodyParameterCount(42 * 1024)  // 131,072, 131,072
+        .withChunked(chunked)
+        .withBodyParameterCount(42 * 1024)  // 43,008
         .withBodyParameterSize(128)
         // 4k * 33 > 128k
         .withConfiguration(config -> config.withMaxFormDataSize(128 * 1024))
@@ -89,6 +87,7 @@ public class FormDataTest extends BaseTest {
 
     // Large, but max size has been disabled
     withScheme(scheme)
+        .withChunked(chunked)
         .withBodyParameterCount(42 * 1024)  // 131,072, 131,072
         .withBodyParameterSize(128)
         // Disable the limit
@@ -155,7 +154,6 @@ public class FormDataTest extends BaseTest {
             \r
             {"version":"42"}""")
         .expectNoExceptionOnWrite();
-
   }
 
   private Builder withScheme(String scheme) {
@@ -167,6 +165,8 @@ public class FormDataTest extends BaseTest {
     private int bodyParameterCount = 1;
 
     private int bodyParameterSize = 42;
+
+    private boolean chunked;
 
     private Consumer<HTTPServerConfiguration> configuration;
 
@@ -257,11 +257,20 @@ public class FormDataTest extends BaseTest {
           body += String.join("&", bodyParameters);
         }
 
-        var contentLength = body.getBytes(StandardCharsets.UTF_8).length;
-        if (contentLength > 0) {
+        if (chunked) {
           request += """
-              Content-Length: {contentLength}\r
-              """.replace("{contentLength}", contentLength + "");
+              Transfer-Encoding: chunked\r
+              """;
+
+          // Convert body to chunked
+          body = chunkItUp(body, null);
+        } else {
+          var contentLength = body.getBytes(StandardCharsets.UTF_8).length;
+          if (contentLength > 0) {
+            request += """
+                Content-Length: {contentLength}\r
+                """.replace("{contentLength}", contentLength + "");
+          }
         }
 
         List<String> headers = new ArrayList<>();
@@ -273,9 +282,7 @@ public class FormDataTest extends BaseTest {
           request += String.join("\r\n", headers) + "\r\n";
         }
 
-        request += """
-            \r
-            {body}""".replace("{body}", body);
+        request = request + "\r\n" + body;
 
         var os = socket.getOutputStream();
         // Do our best to write, but ignore exceptions.
@@ -298,6 +305,11 @@ public class FormDataTest extends BaseTest {
 
     public Builder withBodyParameterSize(int bodyParameterSize) {
       this.bodyParameterSize = bodyParameterSize;
+      return this;
+    }
+
+    public Builder withChunked(boolean chunked) {
+      this.chunked = chunked;
       return this;
     }
 

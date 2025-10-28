@@ -47,8 +47,10 @@ import java.time.Duration;
 import java.time.Instant;
 import java.time.ZonedDateTime;
 import java.time.format.DateTimeFormatter;
+import java.util.ArrayList;
 import java.util.Arrays;
 import java.util.Date;
+import java.util.List;
 import java.util.Map;
 import java.util.UUID;
 import java.util.stream.Collectors;
@@ -329,6 +331,19 @@ public abstract class BaseTest {
   }
 
   /**
+   * @return The possible schemes - {@code http} and {@code https} and chunked.
+   */
+  @DataProvider
+  public Object[][] schemesAndChunked() {
+    return new Object[][]{
+        {"http", true},
+        {"http", false},
+        {"https", true},
+        {"https", false}
+    };
+  }
+
+  /**
    * @return The possible response buffer lengths and schemes.
    */
   @DataProvider
@@ -413,6 +428,29 @@ public abstract class BaseTest {
         }
       }
     }
+  }
+
+  protected String chunkItUp(String body, String chunkedExtension) {
+    List<String> result = new ArrayList<>();
+    // Chunk in 100 byte increments. Using a smaller chunk size to ensure we don't end up with a single chunk.
+    int chunkSize = 100;
+    for (var i = 0; i < body.length(); i += chunkSize) {
+      var endIndex = Math.min(i + chunkSize, body.length());
+      var chunk = body.substring(i, endIndex);
+      var chunkLength = chunk.getBytes(StandardCharsets.UTF_8).length;
+
+      String hex = Integer.toHexString(chunkLength);
+      result.add(hex);
+
+      if (chunkedExtension != null) {
+        result.add(chunkedExtension);
+      }
+
+      result.add(("\r\n" + chunk + "\r\n"));
+    }
+
+    result.add(("0\r\n\r\n"));
+    return String.join("", result);
   }
 
   protected void printf(String format, Object... args) {
