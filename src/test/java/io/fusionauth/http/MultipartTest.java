@@ -186,7 +186,7 @@ public class MultipartTest extends BaseTest {
     // Request too big, file size is ok, overall request size too big.
     withScheme(scheme)
         .withFileSize(1024 * 1024)   // 1 Mb
-        .withFileCount(10)           // 10 files
+        .withFileCount(15)           // 15 files
         .withConfiguration(new MultipartConfiguration().withFileUploadPolicy(MultipartFileUploadPolicy.Allow)
                                                        // Max file size is 2 Mb bytes
                                                        .withMaxFileSize(2 * 1024 * 1024)
