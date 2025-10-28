@@ -174,7 +174,7 @@ public class HTTPInputStream extends InputStream {
     // - This will handle all requests that are not fixed length.
     if (maximumContentLength != -1) {
       if (bytesRead > maximumContentLength) {
-        String detailedMessage = "The maximum request size has been exceeded.The maximum request size is [" + maximumContentLength + "] bytes.";
+        String detailedMessage = "The maximum request size has been exceeded. The maximum request size is [" + maximumContentLength + "] bytes.";
         throw new ContentTooLargeException(maximumContentLength, detailedMessage);
       }
     }
