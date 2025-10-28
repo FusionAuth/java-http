@@ -158,7 +158,7 @@ public final class HTTPTools {
         inName = false;
 
         try {
-          name = URLDecoder.decode(new String(data, start, i - start), charset);
+          name = URLDecoder.decode(new String(data, start, i - start, charset), charset);
         } catch (Exception e) {
           name = null; // Malformed
         }
@@ -174,7 +174,7 @@ public final class HTTPTools {
         //noinspection DuplicatedCode
         try {
           if (start < i) {
-            value = URLDecoder.decode(new String(data, start, i - start), charset);
+            value = URLDecoder.decode(new String(data, start, i - start, charset), charset);
           } else {
             value = "";
           }
@@ -193,7 +193,7 @@ public final class HTTPTools {
       //noinspection DuplicatedCode
       try {
         if (start < length) {
-          value = URLDecoder.decode(new String(data, start, length - start), charset);
+          value = URLDecoder.decode(new String(data, start, length - start, charset), charset);
         } else {
           value = "";
         }
@@ -322,7 +322,7 @@ public final class HTTPTools {
 
       // bytesRead will include bytes that are read past the end of the preamble. This should be ok because we will only throw an exception
       // for readExceeded once we have reached this state AND we are not yet in a complete state.
-      // - So if we exceed the max header size from this read, as long as this buffer includes the entire preamble we will not throw
+      // - If we exceed the max header size from this read, as long as this buffer includes the entire preamble we will not throw
       //   an exception.
       bytesRead += read;
       readExceeded = maxRequestHeaderSize != -1 && bytesRead >= maxRequestHeaderSize;
