@@ -206,8 +206,8 @@ public class HTTPServerConfiguration implements Configurable<HTTPServerConfigura
    * The map that specifies the maximum size in bytes of the HTTP request body by Content-Type. This configuration excludes the size of the
    * HTTP request header.
    * <p>
-   * The returned map is keyed by Content-Type, and willy contain a default value identified by '*', and may optionally return content type
-   * values with a wild card '*' as the subtype.
+   * The returned map is keyed by Content-Type, and will contain a default value identified by '*', and may optionally contain a content
+   * type value with a wild card '*' as the subtype. For example, 'application/*' will match all subtypes of an application/ content type.
    *
    * @return the map keyed by Content-Type indicating the maximum size in bytes of the HTTP request body.  Defaults to 128 Megabytes as a
    *     default, and 10 Megabytes for application/x-www-form-urlencoded.

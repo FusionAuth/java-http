@@ -63,6 +63,17 @@ public class HTTPToolsTest {
     assertMaxConfiguredSize("multipart/form-data", 5, configuration);
     assertMaxConfiguredSize("text/css", 6, configuration);
     assertMaxConfiguredSize("text/html", 7, configuration);
+
+    // We don't expect this at runtime, but ideally we won't explode. These would be invalid values.
+    // - Some of these are legit Content-Type headers, but at runtime we will have already parsed the header so we do
+    //   not expect any attributes;
+    assertMaxConfiguredSize("", 1, configuration);
+    assertMaxConfiguredSize("null", 1, configuration);
+    assertMaxConfiguredSize("application/json; foo=bar", 2, configuration);
+    assertMaxConfiguredSize("multipart/form-data; boundary=------", 1, configuration);
+    assertMaxConfiguredSize("text/css; charset=ISO-8859-1", 6, configuration);
+    assertMaxConfiguredSize("text/unexpected", 6, configuration);
+    assertMaxConfiguredSize("text/unexpected/value", 6, configuration);
   }
 
   @Test
@@ -264,7 +275,7 @@ public class HTTPToolsTest {
   }
 
   private void assertMaxConfiguredSize(String contentType, int maximumSize, Map<String, Integer> maxRequestBodySize) {
-    assertEquals(maximumSize, HTTPTools.getMaxRequestBodySize(contentType, maxRequestBodySize));
+    assertEquals(HTTPTools.getMaxRequestBodySize(contentType, maxRequestBodySize), maximumSize);
   }
 
   private String hex(byte[] bytes) {
