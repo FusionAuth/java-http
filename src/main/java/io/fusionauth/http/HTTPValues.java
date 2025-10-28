@@ -216,6 +216,8 @@ public final class HTTPValues {
 
     public static final String ContentEncoding = "Content-Encoding";
 
+    public static final String ContentEncodingLower = "content-encoding";
+
     public static final String ContentLength = "Content-Length";
 
     public static final String ContentLengthLower = "content-length";

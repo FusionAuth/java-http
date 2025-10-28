@@ -17,7 +17,10 @@ package io.fusionauth.http.server.io;
 
 import java.io.IOException;
 import java.io.InputStream;
+import java.util.zip.DeflaterInputStream;
+import java.util.zip.GZIPInputStream;
 
+import io.fusionauth.http.HTTPValues.ContentEncodings;
 import io.fusionauth.http.io.ChunkedInputStream;
 import io.fusionauth.http.io.PushbackInputStream;
 import io.fusionauth.http.log.Logger;
@@ -161,13 +164,27 @@ public class HTTPInputStream extends InputStream {
     return read;
   }
 
-  private void commit() {
+  private void commit() throws IOException {
     committed = true;
+
+    Long contentLength = request.getContentLength();
+    boolean hasBody = (contentLength != null && contentLength > 0) || request.isChunked();
+
+//    if (hasBody) {
+//      // The request may contain more than one value, apply in reverse order.
+//      for (String contentEncoding : request.getContentEncodings().reversed()) {
+//        if (contentEncoding.equalsIgnoreCase(ContentEncodings.Deflate)) {
+//          // Use the default buffer size of 512
+//          delegate = new DeflaterInputStream(delegate);
+//        } else if (contentEncoding.equalsIgnoreCase(ContentEncodings.Gzip)) {
+//          // Use the default buffer size of 512
+//          delegate = new GZIPInputStream(delegate);
+//        }
+//      }
+//    }
 
     // Note that isChunked() should take precedence over the fact that we have a Content-Length.
     // - The client should not send both, but in the case they are both present we ignore Content-Length
-    Long contentLength = request.getContentLength();
-    boolean hasBody = (contentLength != null && contentLength > 0) || request.isChunked();
     if (!hasBody) {
       delegate = InputStream.nullInputStream();
     } else if (request.isChunked()) {

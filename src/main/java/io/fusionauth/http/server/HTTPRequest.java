@@ -68,6 +68,8 @@ public class HTTPRequest implements Buildable<HTTPRequest> {
 
   private final Map<String, Object> attributes = new HashMap<>();
 
+  private final List<String> contentEncodings = new LinkedList<>();
+
   private final Map<String, Cookie> cookies = new HashMap<>();
 
   private final List<FileInfo> files = new LinkedList<>();
@@ -294,6 +296,15 @@ public class HTTPRequest implements Buildable<HTTPRequest> {
 
   public void setCharacterEncoding(Charset encoding) {
     this.encoding = encoding;
+  }
+
+  public List<String> getContentEncodings() {
+    return contentEncodings;
+  }
+
+  public void setContentEncodings(List<String> encodings) {
+    this.contentEncodings.clear();
+    this.contentEncodings.addAll(encodings);
   }
 
   public Long getContentLength() {
@@ -715,7 +726,7 @@ public class HTTPRequest implements Buildable<HTTPRequest> {
 
   private void decodeHeader(String name, String value) {
     switch (name) {
-      case Headers.AcceptEncodingLower:
+      case Headers.AcceptEncodingLower, Headers.ContentEncodingLower:
         SortedSet<WeightedString> weightedStrings = new TreeSet<>();
         String[] parts = value.split(",");
         int index = 0;
@@ -738,11 +749,15 @@ public class HTTPRequest implements Buildable<HTTPRequest> {
         }
 
         // Transfer the Strings in weighted-position order
-        setAcceptEncodings(
-            weightedStrings.stream()
-                           .map(WeightedString::value)
-                           .toList()
-        );
+        var result = weightedStrings.stream()
+                                    .map(WeightedString::value)
+                                    .toList();
+
+        if (name.equals(Headers.AcceptEncodingLower)) {
+          setAcceptEncodings(result);
+        } else {
+          setContentEncodings(result);
+        }
         break;
       case Headers.AcceptLanguageLower:
         try {
@@ -801,15 +816,12 @@ public class HTTPRequest implements Buildable<HTTPRequest> {
             }
           }
         } else {
+          this.host = value;
           if ("http".equalsIgnoreCase(scheme)) {
             this.port = 80;
-          }
-          else if ("https".equalsIgnoreCase(scheme)) {
+          } else if ("https".equalsIgnoreCase(scheme)) {
             this.port = 443;
-          } else {
-            // fallback, intentionally do nothing
           }
-          this.host = value;
         }
         break;
     }

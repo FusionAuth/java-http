@@ -144,6 +144,11 @@ public class HTTPWorker implements Runnable {
           instrumenter.acceptedRequest();
         }
 
+        // TODO : Content-Encoding, we are currently keeping the PushbackInputStream for the entire keep-alive session.
+        //        Ideally we'd set the InputStream for gzip, deflate, etc lower.
+        //        Also... with Pushback bytes... the bytes may be compressed for the next request. So we'll need to be able to
+        //        read handle this. So perhaps this should all be handled at a high level?
+
         httpInputStream = new HTTPInputStream(configuration, request, inputStream);
         request.setInputStream(httpInputStream);
 

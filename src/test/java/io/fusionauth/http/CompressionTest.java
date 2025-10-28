@@ -105,10 +105,11 @@ public class CompressionTest extends BaseTest {
       }
     };
 
+    // Compress the request using the encoding parameter
     ByteArrayOutputStream baseOutputStream = new ByteArrayOutputStream();
     DeflaterOutputStream out = encoding.equals(ContentEncodings.Deflate)
-        ? new DeflaterOutputStream(baseOutputStream)
-        : new GZIPOutputStream(baseOutputStream);
+        ? new DeflaterOutputStream(baseOutputStream, true)
+        : new GZIPOutputStream(baseOutputStream, true);
     out.write("Hello world!".getBytes(StandardCharsets.UTF_8));
     out.finish();
     byte[] payload = baseOutputStream.toByteArray();
@@ -122,6 +123,10 @@ public class CompressionTest extends BaseTest {
                      .header(Headers.AcceptEncoding, encoding)
                      // Send the request using the same encoding
                      .header(Headers.ContentEncoding, encoding)
+                     .header(Headers.ContentType, "text/plain")
+                     // Manually set the header since the body is small, the client not turn on chunked.
+                     .header(Headers.TransferEncoding, "chunked")
+                     // A ByteArrayInputStream should cause the request to be chunk encoded
                      .POST(BodyPublishers.ofInputStream(() -> new ByteArrayInputStream(payload)))
                      .uri(uri).GET().build(),
           r -> BodySubscribers.ofInputStream()
