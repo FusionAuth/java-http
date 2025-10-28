@@ -386,33 +386,32 @@ public abstract class BaseTest {
   protected void assertHTTPResponseEquals(Socket socket, String expectedResponse) throws Exception {
     var is = socket.getInputStream();
     var expectedResponseLength = expectedResponse.getBytes(StandardCharsets.UTF_8).length;
-    try {
 
-      byte[] buffer = new byte[expectedResponseLength * 2];
-      int read = is.read(buffer);
-      var actualResponse = new String(buffer, 0, read, StandardCharsets.UTF_8);
+    byte[] buffer = new byte[expectedResponseLength * 2];
+    int read = is.read(buffer);
+    var actualResponse = new String(buffer, 0, read, StandardCharsets.UTF_8);
 
-      // Perform an initial equality check, this is fast. If it fails, it may because there are remaining bytes left to read. This is slower.
-      if (!actualResponse.equals(expectedResponse)) {
-        // Note this is going to block until the socket keep-alive times out.
-        try {
-          assertResponseEquals(is, actualResponse, expectedResponse);
-        } catch (SocketException se) {
-          // If the server has not read the entire request, trying to read from the InputStream will cause a SocketException due to Connection reset.
-          // - Attempt to recover from this condition and read the response.
-          // - Note that "normal" HTTP clients won't do this, so this isn't to show what a client would normally see, but it is to show what the server
-          //   is returning regardless if the client is smart enough or cares enough to read the response.
-          if (se.getMessage().equals("Connection reset")) {
-            var addr = socket.getRemoteSocketAddress();
-            socket.close();
+    // Perform an initial equality check, this is fast. If it fails, it may because there are remaining bytes left to read. This is slower.
+    if (!actualResponse.equals(expectedResponse)) {
+      // Note this is going to block until the socket keep-alive times out.
+      try {
+        assertResponseEquals(is, actualResponse, expectedResponse);
+      } catch (SocketException se) {
+        // If the server has not read the entire request, trying to read from the InputStream will cause a SocketException due to Connection reset.
+        // - Attempt to recover from this condition and read the response.
+        // - Note that "normal" HTTP clients won't do this, so this isn't to show what a client would normally see, but it is to show what the server
+        //   is returning regardless if the client is smart enough or cares enough to read the response.
+        if (se.getMessage().equals("Connection reset")) {
+          var addr = socket.getRemoteSocketAddress();
+          socket.close();
+          try {
             socket.connect(addr);
             assertResponseEquals(socket.getInputStream(), actualResponse, expectedResponse);
+          } catch (Exception e) {
+            assertEquals(actualResponse, expectedResponse, "[" + e.getClass().getSimpleName() + "] was thrown trying to read. We are going to assert on what we have.\n");
           }
         }
       }
-    } catch (SocketException e) {
-      System.out.println(e);
-      fail("Failed!", e);
     }
   }
 
@@ -470,7 +469,7 @@ public abstract class BaseTest {
       var remainingBytes = is.readAllBytes();
       String fullResponse = actualResponse + new String(remainingBytes, StandardCharsets.UTF_8);
       // Use assertEquals so we can get Eclipse error formatting
-      assertEquals(fullResponse, expectedResponse);
+      assertEquals(fullResponse, expectedResponse, "An additional [" + remainingBytes.length + "] was read from the InputStream to complete the message.\nInitial expected response\n[" + expectedResponse + "]\nInitial actual response\n[" + actualResponse + "]\n");
     } catch (SocketTimeoutException e) {
       assertEquals(actualResponse, expectedResponse, "[SocketTimeoutException] was thrown trying to read. We are going to assert on what we have.\n");
     }

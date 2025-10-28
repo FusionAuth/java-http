@@ -99,11 +99,6 @@ public abstract class BaseSocketTest extends BaseTest {
       var os = socket.getOutputStream();
       os.write(request.getBytes(StandardCharsets.UTF_8));
 
-      // 1. Write bytes, the content-length is short by one byte.
-      // 2. Next byte \n
-      // 3. Success.
-      // 4. Next keep-alive request reads preamble, and reads the \n and throws an exception
-
       assertHTTPResponseEquals(socket, response);
     }
   }

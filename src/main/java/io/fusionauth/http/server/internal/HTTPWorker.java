@@ -257,7 +257,7 @@ public class HTTPWorker implements Runnable {
       closeSocketOnly(reason);
     } catch (ParseException e) {
       logger.debug("[{}] Closing socket with status [{}]. Bad request, failed to parse request. Reason [{}] Parser state [{}]", Thread.currentThread().threadId(), Status.BadRequest, e.getMessage(), e.getState());
-      closeSocketOnError(response, Status.HTTPVersionNotSupported);
+      closeSocketOnError(response, Status.BadRequest);
     } catch (SocketException e) {
       // When the HTTPServerThread shuts down, we will interrupt each client thread, so debug log it accordingly.
       // - This will cause the socket to throw a SocketException, so log it.
