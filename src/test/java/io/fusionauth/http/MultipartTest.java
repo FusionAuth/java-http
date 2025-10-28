@@ -114,8 +114,8 @@ public class MultipartTest extends BaseTest {
     withScheme(scheme)
         .withFileSize(10 * 1024 * 1024) // 10 Mb
         .withConfiguration(new MultipartConfiguration().withFileUploadPolicy(MultipartFileUploadPolicy.Allow)
-                                                       // Max file size is 5Mb
-                                                       .withMaxFileSize(5 * 1024 * 1024)
+                                                       // Max file size is 2Mb
+                                                       .withMaxFileSize(2 * 1024 * 1024)
                                                        // Max request size is 15 Mb
                                                        .withMaxRequestSize(15 * 1024 * 1024))
         .expectResponse("""
