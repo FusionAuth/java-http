@@ -100,7 +100,7 @@ public class HTTPToolsTest {
     assertEncodedData("é", "é", StandardCharsets.UTF_8);
     assertEncodedData("Héllö", "Héllö", StandardCharsets.UTF_8);
 
-    // These UTF-8 double byte values are outside ISO-88559-1, so we should expect them to not render correctly. See next test.
+    // These UTF-8 double byte values are outside ISO-8559-1, so we should expect them to not render correctly. See next test.
     assertHexValue("😎", "D83D DE0E");
     assertHexValue("€", "20AC");
 
@@ -121,16 +121,16 @@ public class HTTPToolsTest {
     assertEncodedData("Héllö", "H�ll�", StandardCharsets.ISO_8859_1, StandardCharsets.UTF_8);
     assertEncodedData("Hello world", "Hello world", StandardCharsets.ISO_8859_1, StandardCharsets.UTF_8);
     // The é and the ö will fail to render because while this character exists in both character sets, they are encoded differently.
-    // - So we should expec them to render incorrectly.
+    // - So we should expect them to render incorrectly.
     // - See below, this is just here to validate why the above assertions are accurate.
     assertHexValue("Héllö", "48    E9 6C 6C F6   ", StandardCharsets.ISO_8859_1);
     assertHexValue("Héllö", "48 C3 A9 6C 6C C3 B6", StandardCharsets.UTF_8);
 
-    // - Reverse
+    // - Reverse order
     assertEncodedData("Héllö", "HÃ©llÃ¶", StandardCharsets.UTF_8, StandardCharsets.ISO_8859_1);
     assertEncodedData("Hello world", "Hello world", StandardCharsets.UTF_8, StandardCharsets.ISO_8859_1);
     // The é and the ö will fail to render because while this character exists in both character sets, they are encoded differently.
-    // - So we should expec them to render incorrectly.
+    // - So we should expect them to render incorrectly.
     // - See below, this is just here to validate why the above assertions are accurate.
     assertHexValue("é", "C3 A9", StandardCharsets.UTF_8);
     assertHexValue("Ã©", "C3 A9", StandardCharsets.ISO_8859_1);
@@ -140,8 +140,6 @@ public class HTTPToolsTest {
 
   @Test
   public void parseHeaderValue() {
-    String iso = "åpple";
-    String utf = "😁";
     assertEquals(HTTPTools.parseHeaderValue("text/plain; charset=iso8859-1"), new HeaderValue("text/plain", Map.of("charset", "iso8859-1")));
     assertEquals(HTTPTools.parseHeaderValue("text/plain; charset=iso-8859-1"), new HeaderValue("text/plain", Map.of("charset", "iso-8859-1")));
     assertEquals(HTTPTools.parseHeaderValue("text/plain; charset=iso8859-1; boundary=FOOBAR"), new HeaderValue("text/plain", Map.of("boundary", "FOOBAR", "charset", "iso8859-1")));
@@ -155,6 +153,9 @@ public class HTTPToolsTest {
     assertEquals(HTTPTools.parseHeaderValue("form-data; filename*=ISO-8859-1''foo.jpg"), new HeaderValue("form-data", Map.of("filename", "foo.jpg")));
     assertEquals(HTTPTools.parseHeaderValue("form-data; filename*=ISO-8859-1'en'foo.jpg"), new HeaderValue("form-data", Map.of("filename", "foo.jpg")));
     assertEquals(HTTPTools.parseHeaderValue("form-data; filename=ignore.jpg; filename*=ISO-8859-1'en'foo.jpg"), new HeaderValue("form-data", Map.of("filename", "foo.jpg")));
+
+    String iso = "åpple";
+    String utf = "😁";
 
     // Encoded
     assertEquals(HTTPTools.parseHeaderValue("form-data; filename*=ISO8859-1'en'" + URLEncoder.encode(iso, StandardCharsets.ISO_8859_1)), new HeaderValue("form-data", Map.of("filename", iso)));
