@@ -226,16 +226,7 @@ public class HTTPServerConfiguration implements Configurable<HTTPServerConfigura
    * @return the maximum size of the HTTP request header in bytes. This configuration does not affect the HTTP response header. Defaults to
    *     128 Kilobytes.
    */
-  // TODO : Naming : Preamble
   public int getMaxRequestHeaderSize() {
-    // TODO : Notes:
-    //          https://docs.aws.amazon.com/elasticloadbalancing/latest/application/load-balancer-limits.html
-    //          AWS Request header max is 64k, and is fixed.
-    //          AWS Response header max is 32k, and is fixed.
-    //          AWS single header max size is 16k, and is fixed.
-    //          https://docs.fastly.com/products/network-services-resource-limits
-    //          Fastly Request header max is 128k.
-    //          Fastly Response header max is 128k.
     return maxRequestHeaderSize;
   }
 
@@ -361,6 +352,7 @@ public class HTTPServerConfiguration implements Configurable<HTTPServerConfigura
    */
   @Override
   public HTTPServerConfiguration withBaseDir(Path baseDir) {
+    Objects.requireNonNull(baseDir, "You cannot set the base dir to null");
     this.baseDir = baseDir;
     return this;
   }
@@ -425,7 +417,6 @@ public class HTTPServerConfiguration implements Configurable<HTTPServerConfigura
     if (duration.isZero() || duration.isNegative()) {
       throw new IllegalArgumentException("The client timeout duration must be greater than 0");
     }
-
 
     this.initialReadTimeoutDuration = duration;
     return this;
@@ -505,6 +496,10 @@ public class HTTPServerConfiguration implements Configurable<HTTPServerConfigura
    */
   @Override
   public HTTPServerConfiguration withMaxRequestBodySize(int maxRequestBodySize) {
+    if (maxRequestBodySize != -1 && maxRequestBodySize <= 0) {
+      throw new IllegalArgumentException("The maximum request body size must be greater than 0. Set to -1 to disable this limitation.");
+    }
+
     this.maxRequestBodySize = maxRequestBodySize;
     return this;
   }
@@ -514,6 +509,10 @@ public class HTTPServerConfiguration implements Configurable<HTTPServerConfigura
    */
   @Override
   public HTTPServerConfiguration withMaxRequestHeaderSize(int maxRequestHeaderSize) {
+    if (maxRequestHeaderSize != -1 && maxRequestHeaderSize <= 0) {
+      throw new IllegalArgumentException("The maximum request header size must be greater than 0. Set to -1 to disable this limitation.");
+    }
+
     this.maxRequestHeaderSize = maxRequestHeaderSize;
     return this;
   }
@@ -535,8 +534,12 @@ public class HTTPServerConfiguration implements Configurable<HTTPServerConfigura
    * {@inheritDoc}
    */
   @Override
-  public HTTPServerConfiguration withMaxResponseChunkSize(int size) {
-    this.maxResponseChunkSize = size;
+  public HTTPServerConfiguration withMaxResponseChunkSize(int maxResponseChunkSize) {
+    if (maxResponseChunkSize < 128) {
+      throw new IllegalArgumentException("The maximum chunk size must be greater than or equal to 128.");
+    }
+
+    this.maxResponseChunkSize = maxResponseChunkSize;
     return this;
   }
 
