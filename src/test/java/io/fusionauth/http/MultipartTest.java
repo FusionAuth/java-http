@@ -28,6 +28,7 @@ import java.nio.file.Files;
 import java.time.Duration;
 import java.util.List;
 import java.util.Map;
+import java.util.function.Consumer;
 
 import io.fusionauth.http.HTTPValues.Headers;
 import io.fusionauth.http.io.MultipartConfiguration;
@@ -35,6 +36,7 @@ import io.fusionauth.http.io.MultipartFileUploadPolicy;
 import io.fusionauth.http.server.CountingInstrumenter;
 import io.fusionauth.http.server.HTTPHandler;
 import io.fusionauth.http.server.HTTPServer;
+import io.fusionauth.http.server.HTTPServerConfiguration;
 import org.testng.annotations.Test;
 import static org.testng.Assert.assertEquals;
 import static org.testng.Assert.assertNotNull;
@@ -113,11 +115,13 @@ public class MultipartTest extends BaseTest {
     // File too big even though the overall request size is ok.
     withScheme(scheme)
         .withFileSize(10 * 1024 * 1024) // 10 Mb
-        .withConfiguration(new MultipartConfiguration().withFileUploadPolicy(MultipartFileUploadPolicy.Allow)
-                                                       // Max file size is 2Mb
-                                                       .withMaxFileSize(2 * 1024 * 1024)
-                                                       // Max request size is 15 Mb
-                                                       .withMaxRequestSize(15 * 1024 * 1024))
+        .withConfiguration(config -> config.withMultipartConfiguration(
+            new MultipartConfiguration().withFileUploadPolicy(MultipartFileUploadPolicy.Allow)
+                                        // Max file size is 2Mb
+                                        .withMaxFileSize(2 * 1024 * 1024)
+                                        // Max request size is 15 Mb
+                                        .withMaxRequestSize(15 * 1024 * 1024))
+        )
         .expectResponse("""
             HTTP/1.1 413 \r
             connection: close\r
@@ -132,7 +136,9 @@ public class MultipartTest extends BaseTest {
     // File uploads allowed
     withScheme(scheme)
         .withFileCount(5)
-        .withConfiguration(new MultipartConfiguration().withFileUploadPolicy(MultipartFileUploadPolicy.Allow))
+        .withConfiguration(config -> config.withMultipartConfiguration(
+            new MultipartConfiguration().withFileUploadPolicy(MultipartFileUploadPolicy.Allow))
+        )
         .expectResponse("""
             HTTP/1.1 200 \r
             connection: keep-alive\r
@@ -148,7 +154,9 @@ public class MultipartTest extends BaseTest {
     // File uploads ignored
     withScheme(scheme)
         .withFileCount(5)
-        .withConfiguration(new MultipartConfiguration().withFileUploadPolicy(MultipartFileUploadPolicy.Ignore))
+        .withConfiguration(config -> config.withMultipartConfiguration(
+            new MultipartConfiguration().withFileUploadPolicy(MultipartFileUploadPolicy.Ignore))
+        )
         // Ignored means that we will not see any files in the request handler
         .expectedFileCount(0)
         .expectResponse("""
@@ -165,8 +173,10 @@ public class MultipartTest extends BaseTest {
   public void post_server_configuration_file_upload_reject(String scheme) throws Exception {
     // File uploads rejected
     withScheme(scheme)
-        .withConfiguration(new MultipartConfiguration().withFileUploadPolicy(MultipartFileUploadPolicy.Reject))
-        // 5 * 1 Mb = 5 Mb
+        .withConfiguration(config -> config.withMultipartConfiguration(
+            new MultipartConfiguration().withFileUploadPolicy(MultipartFileUploadPolicy.Reject))
+        )
+        // 5 * 1 MB = 5 Megabytes
         .withFileCount(5)
         .withFileSize(1024 * 1024)
         .expectResponse("""
@@ -187,11 +197,13 @@ public class MultipartTest extends BaseTest {
     withScheme(scheme)
         .withFileSize(1024 * 1024)   // 1 Mb
         .withFileCount(15)           // 15 files
-        .withConfiguration(new MultipartConfiguration().withFileUploadPolicy(MultipartFileUploadPolicy.Allow)
-                                                       // Max file size is 2 Mb bytes
-                                                       .withMaxFileSize(2 * 1024 * 1024)
-                                                       // Max request size is 3 Mb
-                                                       .withMaxRequestSize(3 * 1024 * 1024))
+        .withConfiguration(config -> config.withMultipartConfiguration(
+            new MultipartConfiguration().withFileUploadPolicy(MultipartFileUploadPolicy.Allow)
+                                        // Max file size is 2 Megabytes
+                                        .withMaxFileSize(2 * 1024 * 1024)
+                                        // Max request size is 3 Mb
+                                        .withMaxRequestSize(3 * 1024 * 1024))
+        )
         .expectResponse("""
             HTTP/1.1 413 \r
             connection: close\r
@@ -203,7 +215,35 @@ public class MultipartTest extends BaseTest {
         .expectExceptionOnWrite(SocketException.class);
   }
 
-  private Builder withConfiguration(MultipartConfiguration configuration) throws Exception {
+  @Test(dataProvider = "schemes")
+  public void post_server_configuration_requestTooBig_maxBodySize(String scheme) throws Exception {
+    // Request too big, file size is ok, overall request size too big.
+    // - Not using the MultipartConfiguration, instead use the default max body size.
+    withScheme(scheme)
+        .withFileSize(1024 * 1024)   // 1 Megabyte
+        .withFileCount(15)           // 15 files
+        .withConfiguration(config -> config.withMultipartConfiguration(
+                                               // Set the multipart configuration to something very large.
+                                               new MultipartConfiguration().withFileUploadPolicy(MultipartFileUploadPolicy.Allow)
+                                                                           // Max file size is 2 GB bytes
+                                                                           .withMaxFileSize(2L * 1024 * 1024 * 1024)
+                                                                           // Max request size is 5 GB
+                                                                           .withMaxRequestSize(5L * 1024 * 1024 * 1024))
+                                           // Max request size is 3 Megabytes
+                                           .withMaxRequestBodySize(Map.of("*", 3 * 1024 * 1024))
+        )
+        .expectResponse("""
+            HTTP/1.1 413 \r
+            connection: close\r
+            content-length: 0\r
+            \r
+            """)
+        // If the request is large enough, because we throw an exception before we have emptied the InputStream
+        // we will take an exception while trying to write all the bytes to the server.
+        .expectExceptionOnWrite(SocketException.class);
+  }
+
+  private Builder withConfiguration(Consumer<HTTPServerConfiguration> configuration) throws Exception {
     return new Builder("http").withConfiguration(configuration);
   }
 
@@ -213,7 +253,7 @@ public class MultipartTest extends BaseTest {
 
   @SuppressWarnings({"StringConcatenationInLoop", "unused", "UnusedReturnValue"})
   private class Builder {
-    private MultipartConfiguration configuration;
+    private Consumer<HTTPServerConfiguration> configuration;
 
     private int expectedFileCount = 1;
 
@@ -240,6 +280,7 @@ public class MultipartTest extends BaseTest {
       return this;
     }
 
+    @SuppressWarnings("resource")
     public Builder expectResponse(String response) throws Exception {
       HTTPHandler handler = (req, res) -> {
         assertEquals(req.getContentType(), "multipart/form-data");
@@ -270,14 +311,18 @@ public class MultipartTest extends BaseTest {
         }
       };
 
-      // Server level configuration : File uploads are disabled
-      try (HTTPServer ignore = makeServer(scheme, handler, null)
+      HTTPServer server = makeServer(scheme, handler, null)
           .withInitialReadTimeout(Duration.ofSeconds(30))
           .withKeepAliveTimeoutDuration(Duration.ofSeconds(30))
           .withMinimumWriteThroughput(1024)
-          .withMinimumReadThroughput(1024)
-          .withMultipartConfiguration(configuration)
-          .start();
+          .withMinimumReadThroughput(1024);
+
+      if (configuration != null) {
+        configuration.accept(server.configuration());
+      }
+
+      // Server level configuration : File uploads are disabled
+      try (HTTPServer ignore = server.start();
            Socket socket = makeClientSocket(scheme)) {
 
         socket.setSoTimeout((int) Duration.ofSeconds(30).toMillis());
@@ -336,7 +381,7 @@ public class MultipartTest extends BaseTest {
       return this;
     }
 
-    public Builder withConfiguration(MultipartConfiguration configuration) {
+    public Builder withConfiguration(Consumer<HTTPServerConfiguration> configuration) {
       this.configuration = configuration;
       return this;
     }

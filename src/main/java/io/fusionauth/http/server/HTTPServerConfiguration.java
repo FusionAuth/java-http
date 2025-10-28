@@ -183,7 +183,7 @@ public class HTTPServerConfiguration implements Configurable<HTTPServerConfigura
    * take more time to read more bytes from the client before being able to re-use the connection.
    *
    * @return The maximum number of bytes to drain from the InputStream when the request handler did not read all available bytes. Defaults
-   *     to 256k.
+   *     to 256 Kilobytes.
    */
   public int getMaxBytesToDrain() {
     return maxBytesToDrain;
