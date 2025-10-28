@@ -343,7 +343,7 @@ public final class HTTPTools {
 
       // index is the number of bytes we processed as part of the preamble
       premableLength += index;
-      if (premableLength > maxRequestHeaderSize) {
+      if (maxRequestHeaderSize !=-1 && premableLength > maxRequestHeaderSize) {
         throw new RequestHeadersTooLargeException(maxRequestHeaderSize, "The maximum size of the request header has been exceeded. The maximum size is [" + maxRequestHeaderSize + "] bytes.");
       }
     }
