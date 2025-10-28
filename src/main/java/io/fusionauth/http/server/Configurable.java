@@ -17,6 +17,7 @@ package io.fusionauth.http.server;
 
 import java.nio.file.Path;
 import java.time.Duration;
+import java.util.Map;
 
 import io.fusionauth.http.io.MultipartConfiguration;
 import io.fusionauth.http.log.LoggerFactory;
@@ -169,20 +170,6 @@ public interface Configurable<T extends Configurable<T>> {
   }
 
   /**
-   * The maximum size of the HTTP request body in bytes when the Content-Type is application/x-www-form-urlencoded. Defaults to 10
-   * Megabytes.
-   * <p>
-   * Set this to -1 to disable this limitation.
-   *
-   * @param maxFormDataSize the maximum size of the HTTP request body in bytes.
-   * @return This.
-   */
-  default T withMaxFormDataSize(int maxFormDataSize) {
-    configuration().withMaxFormDataSize(maxFormDataSize);
-    return (T) this;
-  }
-
-  /**
    * Sets the maximum number of pending socket connections per HTTP listener.
    * <p>
    * This number represents how many pending socket connections are allowed to queue before they are rejected. Once the connection is
@@ -199,14 +186,15 @@ public interface Configurable<T extends Configurable<T>> {
   }
 
   /**
-   * Sets the maximum size of the HTTP request body. If this limit is exceeded, the connection will be closed. Defaults to 128 Megabytes.
+   * Sets the maximum size of the HTTP request body by optionally per Content-Type. If this limit is exceeded, the connection will be closed.
+   * Defaults to 128 Megabytes.
    * <p>
    * Set this to -1 to disable this limitation.
    *
-   * @param maxRequestBodySize the maximum size in bytes for the HTTP request body
+   * @param maxRequestBodySize a map specifying the maximum size in bytes for the HTTP request body by Content-Type
    * @return This.
    */
-  default T withMaxRequestBodySize(int maxRequestBodySize) {
+  default T withMaxRequestBodySize(Map<String, Integer> maxRequestBodySize) {
     configuration().withMaxRequestBodySize(maxRequestBodySize);
     return (T) this;
   }

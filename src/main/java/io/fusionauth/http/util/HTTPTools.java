@@ -46,6 +46,37 @@ public final class HTTPTools {
   private static Logger logger;
 
   /**
+   * Return the maximum request body size for the requested content type.
+   *
+   * @param contentType        the content-type of the request
+   * @param maxRequestBodySize the maximum request size configuration
+   * @return the maximum request size, or -1 if no limit should be enforced.
+   */
+  public static int getMaxRequestBodySize(String contentType, Map<String, Integer> maxRequestBodySize) {
+    if (contentType == null) {
+      return maxRequestBodySize.get("*");
+    }
+
+    // Exact match
+    Integer maximumSize = maxRequestBodySize.get(contentType);
+    if (maximumSize != null) {
+      return maximumSize;
+    }
+
+    // Ignore subtype by replacing it with '*'. RFC 1341 says a subtype is required which means each Content-Type must contain a /.
+    // - But be more defensive, and account for a case where no subtype has been defined.
+    int index = contentType.indexOf('/');
+    if (index != -1) {
+      maximumSize = maxRequestBodySize.get(contentType.substring(0, index) + "/*");
+    }
+
+    // RFC 1341 indicates subtypes cannot be nested. So if we do not yet have a match, use the default key '*'.
+    return maximumSize != null
+        ? maximumSize
+        : maxRequestBodySize.get("*");
+  }
+
+  /**
    * Statically sets up the logger, mostly for trace logging.
    *
    * @param loggerFactory The logger factory.
@@ -343,7 +374,7 @@ public final class HTTPTools {
 
       // index is the number of bytes we processed as part of the preamble
       premableLength += index;
-      if (maxRequestHeaderSize !=-1 && premableLength > maxRequestHeaderSize) {
+      if (maxRequestHeaderSize != -1 && premableLength > maxRequestHeaderSize) {
         throw new RequestHeadersTooLargeException(maxRequestHeaderSize, "The maximum size of the request header has been exceeded. The maximum size is [" + maxRequestHeaderSize + "] bytes.");
       }
     }

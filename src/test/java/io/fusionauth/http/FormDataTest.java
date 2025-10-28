@@ -26,6 +26,7 @@ import java.util.List;
 import java.util.Map;
 import java.util.function.Consumer;
 
+import io.fusionauth.http.HTTPValues.ContentTypes;
 import io.fusionauth.http.HTTPValues.Headers;
 import io.fusionauth.http.server.HTTPHandler;
 import io.fusionauth.http.server.HTTPServer;
@@ -60,7 +61,7 @@ public class FormDataTest extends BaseTest {
         // Account for the equals size and a separator of & except for the first value
         // - This should mean we have just exactly the right size of configuration for this request body
         // Config is [180,223]
-        .withConfiguration(config -> config.withMaxFormDataSize((4096 * 10) + (4096 * 32) + (4096 * 2) - 1))
+        .withConfiguration(config -> config.withMaxRequestBodySize(Map.of(ContentTypes.Form, (4096 * 10) + (4096 * 32) + (4096 * 2) - 1)))
         .expectResponse("""
             HTTP/1.1 200 \r
             connection: keep-alive\r
@@ -76,7 +77,7 @@ public class FormDataTest extends BaseTest {
         .withBodyParameterCount(42 * 1024)  // 43,008
         .withBodyParameterSize(128)
         // 4k * 33 > 128k
-        .withConfiguration(config -> config.withMaxFormDataSize(128 * 1024))
+        .withConfiguration(config -> config.withMaxRequestBodySize(Map.of(ContentTypes.Form, 128 * 1024)))
         .expectResponse("""
             HTTP/1.1 413 \r
             connection: close\r
@@ -88,10 +89,10 @@ public class FormDataTest extends BaseTest {
     // Large, but max size has been disabled
     withScheme(scheme)
         .withChunked(chunked)
-        .withBodyParameterCount(42 * 1024)  // 131,072, 131,072
+        .withBodyParameterCount(42 * 1024)  // 43,008
         .withBodyParameterSize(128)
         // Disable the limit
-        .withConfiguration(config -> config.withMaxFormDataSize(-1))
+        .withConfiguration(config -> config.withMaxRequestBodySize(Map.of(ContentTypes.Form, -1)))
         .expectResponse("""
             HTTP/1.1 200 \r
             connection: keep-alive\r
@@ -100,6 +101,21 @@ public class FormDataTest extends BaseTest {
             \r
             {"version":"42"}""")
         .expectNoExceptionOnWrite();
+
+    // Large, enforce using default w/out a specific configuration for application/x-www-form-urlencoded
+    withScheme(scheme)
+        .withChunked(chunked)
+        .withBodyParameterCount(42 * 1024)  // 131,072, 131,072
+        .withBodyParameterSize(128)
+        // Disable the limit
+        .withConfiguration(config -> config.withMaxRequestBodySize(Map.of("*", 128 * 1024)))
+        .expectResponse("""
+            HTTP/1.1 413 \r
+            connection: close\r
+            content-length: 0\r
+            \r
+            """)
+        .expectExceptionOnWrite(SocketException.class);
   }
 
   @Test(dataProvider = "schemes")
@@ -313,7 +329,7 @@ public class FormDataTest extends BaseTest {
       return this;
     }
 
-    public Builder withConfiguration(Consumer<HTTPServerConfiguration> configuration) throws Exception {
+    public Builder withConfiguration(Consumer<HTTPServerConfiguration> configuration) {
       this.configuration = configuration;
       return this;
     }

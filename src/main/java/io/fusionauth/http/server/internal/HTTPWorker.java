@@ -25,7 +25,6 @@ import java.nio.file.Files;
 import io.fusionauth.http.HTTPProcessingException;
 import io.fusionauth.http.HTTPValues;
 import io.fusionauth.http.HTTPValues.Connections;
-import io.fusionauth.http.HTTPValues.ContentTypes;
 import io.fusionauth.http.HTTPValues.Headers;
 import io.fusionauth.http.HTTPValues.Protocols;
 import io.fusionauth.http.ParseException;
@@ -145,7 +144,7 @@ public class HTTPWorker implements Runnable {
           instrumenter.acceptedRequest();
         }
 
-        int maximumContentLength = getMaximumContentLength(request);
+        int maximumContentLength = HTTPTools.getMaxRequestBodySize(request.getContentType(), configuration.getMaxRequestBodySize());
         httpInputStream = new HTTPInputStream(configuration, request, inputStream, maximumContentLength);
         request.setInputStream(httpInputStream);
 
@@ -330,19 +329,6 @@ public class HTTPWorker implements Runnable {
     } catch (IOException e) {
       logger.debug(String.format("[%s] Could not close the socket.", Thread.currentThread().threadId()), e);
     }
-  }
-
-  private int getMaximumContentLength(HTTPRequest request) {
-    var maximumContentLength = -1;
-    if (ContentTypes.Form.equalsIgnoreCase(request.getContentType())) {
-      maximumContentLength = configuration.getMaxFormDataSize();
-    }
-
-    if (maximumContentLength == -1) {
-      maximumContentLength = configuration.getMaxRequestBodySize();
-    }
-
-    return maximumContentLength;
   }
 
   private boolean handleExpectContinue(HTTPRequest request) throws IOException {

@@ -18,7 +18,9 @@ package io.fusionauth.http.server;
 import java.nio.file.Path;
 import java.time.Duration;
 import java.util.ArrayList;
+import java.util.HashMap;
 import java.util.List;
+import java.util.Map;
 import java.util.Objects;
 
 import io.fusionauth.http.io.MultipartConfiguration;
@@ -55,11 +57,11 @@ public class HTTPServerConfiguration implements Configurable<HTTPServerConfigura
 
   private int maxBytesToDrain = 256 * 1024; // 256 Kilobytes
 
-  private int maxFormDataSize = 10 * 1024 * 1024; // 10 Megabytes, ideally same as MultipartConfiguration.maxRequestSize default
-
   private int maxPendingSocketConnections = 250;
 
-  private int maxRequestBodySize = 128 * 1024 * 1024; // 128 Megabytes, must be equal to or larger than maxFormDataSize, and MultipartConfiguration.maxRequestSize
+  private Map<String, Integer> maxRequestBodySize = Map.of(
+      "*", 128 * 1024 * 1024,                                   // 128 Megabytes
+      "application/x-www-form-urlencoded", 10 * 1024 * 1024);   // 10 Megabytes
 
   private int maxRequestHeaderSize = 128 * 1024; // 128 Kilobytes
 
@@ -188,14 +190,6 @@ public class HTTPServerConfiguration implements Configurable<HTTPServerConfigura
   }
 
   /**
-   * @return the maximum size of the HTTP request body in bytes when the HTTP server process a Content-Type of
-   *     application/x-www-form-urlencoded. Defaults to 10 Megabytes.
-   */
-  public int getMaxFormDataSize() {
-    return maxFormDataSize;
-  }
-
-  /**
    * The maximum number of pending socket connections per HTTP listener.
    * <p>
    * This number represents how many pending socket connections are allowed to queue before they are rejected. Once the connection is
@@ -209,14 +203,16 @@ public class HTTPServerConfiguration implements Configurable<HTTPServerConfigura
   }
 
   /**
-   * The maximum size in bytes of the HTTP request body. This configuration excludes the size of the HTTP request header.
+   * The map that specifies the maximum size in bytes of the HTTP request body by Content-Type. This configuration excludes the size of the
+   * HTTP request header.
    * <p>
-   * This configuration will affect all requests regardless of Content-Type and is intended to be a fail-safe for unexpected large
-   * requests.
+   * The returned map is keyed by Content-Type, and willy contain a default value identified by '*', and may optionally return content type
+   * values with a wild card '*' as the subtype.
    *
-   * @return the maximum size in bytes of the HTTP request body.  Defaults to 128 Megabytes.
+   * @return the map keyed by Content-Type indicating the maximum size in bytes of the HTTP request body.  Defaults to 128 Megabytes as a
+   *     default, and 10 Megabytes for application/x-www-form-urlencoded.
    */
-  public int getMaxRequestBodySize() {
+  public Map<String, Integer> getMaxRequestBodySize() {
     return maxRequestBodySize;
   }
 
@@ -467,19 +463,6 @@ public class HTTPServerConfiguration implements Configurable<HTTPServerConfigura
    * {@inheritDoc}
    */
   @Override
-  public HTTPServerConfiguration withMaxFormDataSize(int maxFormDataSize) {
-    if (maxFormDataSize != -1 && maxFormDataSize <= 0) {
-      throw new IllegalArgumentException("The maximum form data size must be greater than 0. Set to -1 to disable this limitation.");
-    }
-
-    this.maxFormDataSize = maxFormDataSize;
-    return this;
-  }
-
-  /**
-   * {@inheritDoc}
-   */
-  @Override
   public HTTPServerConfiguration withMaxPendingSocketConnections(int maxPendingSocketConnections) {
     if (maxPendingSocketConnections < 25) {
       throw new IllegalArgumentException("The minimum pending socket connections must be greater than or equal to 25");
@@ -493,9 +476,22 @@ public class HTTPServerConfiguration implements Configurable<HTTPServerConfigura
    * {@inheritDoc}
    */
   @Override
-  public HTTPServerConfiguration withMaxRequestBodySize(int maxRequestBodySize) {
-    if (maxRequestBodySize != -1 && maxRequestBodySize <= 0) {
-      throw new IllegalArgumentException("The maximum request body size must be greater than 0. Set to -1 to disable this limitation.");
+  public HTTPServerConfiguration withMaxRequestBodySize(Map<String, Integer> maxRequestBodySize) {
+    Objects.requireNonNull(maxRequestBodySize, "You cannot set the maximum request body size map to null");
+    for (String contentType : maxRequestBodySize.keySet()) {
+      Objects.requireNonNull(contentType, "You cannot specify a null value for content type");
+      Integer maxSize = maxRequestBodySize.get(contentType);
+      Objects.requireNonNull(maxSize, "You may not specify a null value for the maximum request body size");
+      if (maxSize != -1 && maxSize <= 0) {
+        throw new IllegalArgumentException("The maximum request body size must be greater than 0 for [" + contentType + "]. Set to -1 to disable this limitation.");
+      }
+    }
+
+    // Keep existing default if one was not provided.
+    if (!maxRequestBodySize.containsKey("*")) {
+      Map<String, Integer> copy = new HashMap<>(maxRequestBodySize);
+      copy.put("*", maxRequestBodySize.get("*"));
+      maxRequestBodySize = copy;
     }
 
     this.maxRequestBodySize = maxRequestBodySize;
@@ -592,8 +588,6 @@ public class HTTPServerConfiguration implements Configurable<HTTPServerConfigura
     this.multipartBufferSize = multipartBufferSize;
     return this;
   }
-
-  // TODO : Review coments for constraints for multi-part, etc.
 
   @Override
   public HTTPServerConfiguration withMultipartConfiguration(MultipartConfiguration multipartStreamConfiguration) {

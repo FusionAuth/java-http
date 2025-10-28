@@ -43,6 +43,29 @@ import static org.testng.Assert.assertEquals;
 @Test
 public class HTTPToolsTest {
   @Test
+  public void getMaxRequestBodySize() {
+    var configuration = Map.of(
+        "*", 1,
+        "application/*", 2,
+        "application/json", 3,
+        "application/x-www-form-urlencoded", 4,
+        "multipart/form-data", 5,
+        "text/*", 6,
+        "text/html", 7
+    );
+
+    assertMaxConfiguredSize(null, 1, configuration);
+    assertMaxConfiguredSize("application/json", 3, configuration);
+    assertMaxConfiguredSize("application/json-patch+json", 2, configuration);
+    assertMaxConfiguredSize("application/octet-stream", 2, configuration);
+    assertMaxConfiguredSize("application/pdf", 2, configuration);
+    assertMaxConfiguredSize("application/x-www-form-urlencoded", 4, configuration);
+    assertMaxConfiguredSize("multipart/form-data", 5, configuration);
+    assertMaxConfiguredSize("text/css", 6, configuration);
+    assertMaxConfiguredSize("text/html", 7, configuration);
+  }
+
+  @Test
   public void parseEncodedData() {
     // Happy path
     assertEncodedData("bar", "bar", StandardCharsets.UTF_8);
@@ -238,6 +261,10 @@ public class HTTPToolsTest {
     var trimmed = expected.trim();
     trimmed = trimmed.replaceAll(" +", " ");
     assertEquals(hex(s.getBytes(charset)), trimmed);
+  }
+
+  private void assertMaxConfiguredSize(String contentType, int maximumSize, Map<String, Integer> maxRequestBodySize) {
+    assertEquals(maximumSize, HTTPTools.getMaxRequestBodySize(contentType, maxRequestBodySize));
   }
 
   private String hex(byte[] bytes) {
