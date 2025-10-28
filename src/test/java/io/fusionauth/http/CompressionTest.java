@@ -15,12 +15,15 @@
  */
 package io.fusionauth.http;
 
+import java.io.ByteArrayInputStream;
+import java.io.ByteArrayOutputStream;
 import java.io.IOException;
 import java.io.InputStream;
 import java.io.OutputStream;
 import java.math.BigDecimal;
 import java.net.URI;
 import java.net.http.HttpRequest;
+import java.net.http.HttpRequest.BodyPublishers;
 import java.net.http.HttpResponse.BodySubscribers;
 import java.nio.charset.StandardCharsets;
 import java.nio.file.Files;
@@ -28,7 +31,9 @@ import java.nio.file.Path;
 import java.nio.file.Paths;
 import java.text.DecimalFormat;
 import java.util.List;
+import java.util.zip.DeflaterOutputStream;
 import java.util.zip.GZIPInputStream;
+import java.util.zip.GZIPOutputStream;
 import java.util.zip.InflaterInputStream;
 
 import io.fusionauth.http.HTTPValues.ContentEncodings;
@@ -37,6 +42,7 @@ import io.fusionauth.http.server.CountingInstrumenter;
 import io.fusionauth.http.server.HTTPHandler;
 import org.testng.annotations.DataProvider;
 import org.testng.annotations.Test;
+import org.testng.internal.protocols.Input;
 import static org.testng.Assert.assertEquals;
 import static org.testng.Assert.assertNull;
 import static org.testng.AssertJUnit.fail;
@@ -62,6 +68,11 @@ public class CompressionTest extends BaseTest {
   @Test(dataProvider = "compressedChunkedSchemes")
   public void compress(String encoding, boolean chunked, String scheme) throws Exception {
     HTTPHandler handler = (req, res) -> {
+
+      // Ensure we can read the body regardless of the Content-Encoding
+      String body = new String(req.getInputStream().readAllBytes());
+      assertEquals(body, "Hello world!");
+
       // Testing an indecisive user, can't make up their mind... this is allowed as long as you have not written ay bytes.
       res.setCompress(true);
       res.setCompress(false);
@@ -94,11 +105,25 @@ public class CompressionTest extends BaseTest {
       }
     };
 
+    ByteArrayOutputStream baseOutputStream = new ByteArrayOutputStream();
+    DeflaterOutputStream out = encoding.equals(ContentEncodings.Deflate)
+        ? new DeflaterOutputStream(baseOutputStream)
+        : new GZIPOutputStream(baseOutputStream);
+    out.write("Hello world!".getBytes(StandardCharsets.UTF_8));
+    out.finish();
+    byte[] payload = baseOutputStream.toByteArray();
+
     CountingInstrumenter instrumenter = new CountingInstrumenter();
     try (var client = makeClient(scheme, null); var ignore = makeServer(scheme, handler, instrumenter).start()) {
       URI uri = makeURI(scheme, "");
       var response = client.send(
-          HttpRequest.newBuilder().header(Headers.AcceptEncoding, encoding).uri(uri).GET().build(),
+          HttpRequest.newBuilder()
+                     // Request the response be compressed using the provided encodings
+                     .header(Headers.AcceptEncoding, encoding)
+                     // Send the request using the same encoding
+                     .header(Headers.ContentEncoding, encoding)
+                     .POST(BodyPublishers.ofInputStream(() -> new ByteArrayInputStream(payload)))
+                     .uri(uri).GET().build(),
           r -> BodySubscribers.ofInputStream()
       );
 
