@@ -188,7 +188,6 @@ public class HTTPServerConfiguration implements Configurable<HTTPServerConfigura
   }
 
   /**
-   *
    * @return the maximum size of the HTTP request body in bytes when the HTTP server process a Content-Type of
    *     application/x-www-form-urlencoded. Defaults to 10 Megabytes.
    */
@@ -212,9 +211,8 @@ public class HTTPServerConfiguration implements Configurable<HTTPServerConfigura
   /**
    * The maximum size in bytes of the HTTP request body. This configuration excludes the size of the HTTP request header.
    * <p>
-   * This configuration will affect all requests regardless of Content-Type. Practically this means this value must be greater than or equal
-   * to the larger of the two values configured by {@link #getMaxFormDataSize()} or {@link MultipartConfiguration#getMaxRequestSize()}. This
-   * configuration is intended to be a fail-safe for unexpected large requests.
+   * This configuration will affect all requests regardless of Content-Type and is intended to be a fail-safe for unexpected large
+   * requests.
    *
    * @return the maximum size in bytes of the HTTP request body.  Defaults to 128 Megabytes.
    */
@@ -594,6 +592,8 @@ public class HTTPServerConfiguration implements Configurable<HTTPServerConfigura
     this.multipartBufferSize = multipartBufferSize;
     return this;
   }
+
+  // TODO : Review coments for constraints for multi-part, etc.
 
   @Override
   public HTTPServerConfiguration withMultipartConfiguration(MultipartConfiguration multipartStreamConfiguration) {
