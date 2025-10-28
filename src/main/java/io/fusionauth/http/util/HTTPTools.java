@@ -296,14 +296,9 @@ public final class HTTPTools {
 
     int read = 0;
     int index = 0;
-    int bytesRead = 0;
-    boolean readExceeded = false;
+    int premableLength = 0;
 
     while (state != RequestPreambleState.Complete) {
-      if (readExceeded) {
-        throw new RequestHeadersTooLargeException(maxRequestHeaderSize, "The maximum size of the request header has been exceeded. The maximum size is [" + maxRequestHeaderSize + "] bytes.");
-      }
-
       long start = System.currentTimeMillis();
       read = inputStream.read(requestBuffer);
 
@@ -316,16 +311,9 @@ public final class HTTPTools {
       logger.trace("Read [{}] from client for preamble.", read);
 
       // Tell the callback that we've read at least one byte
-      if (bytesRead == 0) {
+      if (premableLength == 0) {
         readObserver.run();
       }
-
-      // bytesRead will include bytes that are read past the end of the preamble. This should be ok because we will only throw an exception
-      // for readExceeded once we have reached this state AND we are not yet in a complete state.
-      // - If we exceed the max header size from this read, as long as this buffer includes the entire preamble we will not throw
-      //   an exception.
-      bytesRead += read;
-      readExceeded = maxRequestHeaderSize != -1 && bytesRead >= maxRequestHeaderSize;
 
       for (index = 0; index < read && state != RequestPreambleState.Complete; index++) {
         // If there is a state transition, store the value properly and reset the builder (if needed)
@@ -351,6 +339,12 @@ public final class HTTPTools {
         }
 
         state = nextState;
+      }
+
+      // index is the number of bytes we processed as part of the preamble
+      premableLength += index;
+      if (premableLength > maxRequestHeaderSize) {
+        throw new RequestHeadersTooLargeException(maxRequestHeaderSize, "The maximum size of the request header has been exceeded. The maximum size is [" + maxRequestHeaderSize + "] bytes.");
       }
     }
 

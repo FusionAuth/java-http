@@ -162,9 +162,7 @@ public class HTTPInputStream extends InputStream {
         reportBytesRead -= extraBytes;
         pushbackInputStream.push(b, (int) bytesRemaining, extraBytes);
       }
-    }
 
-    if (read > 0 && fixedLength) {
       bytesRemaining -= reportBytesRead;
     }
 
@@ -172,11 +170,9 @@ public class HTTPInputStream extends InputStream {
 
     // Note that when the request is fixed length, we will have failed early during commit().
     // - This will handle all requests that are not fixed length.
-    if (maximumContentLength != -1) {
-      if (bytesRead > maximumContentLength) {
-        String detailedMessage = "The maximum request size has been exceeded. The maximum request size is [" + maximumContentLength + "] bytes.";
-        throw new ContentTooLargeException(maximumContentLength, detailedMessage);
-      }
+    if (maximumContentLength != -1 && bytesRead > maximumContentLength) {
+      String detailedMessage = "The maximum request size has been exceeded. The maximum request size is [" + maximumContentLength + "] bytes.";
+      throw new ContentTooLargeException(maximumContentLength, detailedMessage);
     }
 
     return reportBytesRead;
@@ -207,11 +203,9 @@ public class HTTPInputStream extends InputStream {
     // If we have a maximumContentLength, and this is a fixed content length request, before we read any bytes, fail early.
     // For good measure do this last so if anyone downstream wants to read from the InputStream they could in theory because
     // we will have set up the InputStream.
-    if (contentLength != null && maximumContentLength != -1) {
-      if (contentLength > maximumContentLength) {
-        String detailedMessage = "The maximum request size has been exceeded. The reported Content-Length is [" + contentLength + "] and the maximum request size is [" + maximumContentLength + "] bytes.";
-        throw new ContentTooLargeException(maximumContentLength, detailedMessage);
-      }
+    if (contentLength != null && maximumContentLength != -1 && contentLength > maximumContentLength) {
+      String detailedMessage = "The maximum request size has been exceeded. The reported Content-Length is [" + contentLength + "] and the maximum request size is [" + maximumContentLength + "] bytes.";
+      throw new ContentTooLargeException(maximumContentLength, detailedMessage);
     }
   }
 }
