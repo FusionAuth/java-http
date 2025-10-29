@@ -150,6 +150,14 @@ public class HTTPRequest implements Buildable<HTTPRequest> {
     this.acceptEncodings.addAll(encodings);
   }
 
+  public void addContentEncoding(String encoding) {
+    this.contentEncodings.add(encoding);
+  }
+
+  public void addContentEncodings(List<String> encodings) {
+    this.contentEncodings.addAll(encodings);
+  }
+
   public void addCookies(Cookie... cookies) {
     for (Cookie cookie : cookies) {
       this.cookies.put(cookie.name, cookie);
@@ -232,10 +240,7 @@ public class HTTPRequest implements Buildable<HTTPRequest> {
 
   public void setAcceptEncodings(List<String> encodings) {
     this.acceptEncodings.clear();
-    // TODO : ? Maybe not worth being defensive here since we likely have many methods on this object that are not null safe?
-    if (encodings != null) {
-      this.acceptEncodings.addAll(encodings);
-    }
+    this.acceptEncodings.addAll(encodings);
   }
 
   /**
@@ -306,13 +311,9 @@ public class HTTPRequest implements Buildable<HTTPRequest> {
     return contentEncodings;
   }
 
-  // TODO : Note : Should I add 'addContentEncodings' and 'addContentEncoding' to match 'accept*' ?
   public void setContentEncodings(List<String> encodings) {
     this.contentEncodings.clear();
-    // TODO : ? Maybe not worth being defensive here since we likely have many methods on this object that are not null safe?
-    if (encodings != null) {
-      this.contentEncodings.addAll(encodings);
-    }
+    this.contentEncodings.addAll(encodings);
   }
 
   public Long getContentLength() {
@@ -751,9 +752,7 @@ public class HTTPRequest implements Buildable<HTTPRequest> {
             weight = Double.parseDouble(weightText);
           }
 
-          // Content-Encoding values are not case-sensitive
-          // TODO : Ok to lc here? We are currently just always using equalsIgnoreCase
-          WeightedString ws = new WeightedString(parsed.value().toLowerCase(), weight, index);
+          WeightedString ws = new WeightedString(parsed.value(), weight, index);
           weightedStrings.add(ws);
           index++;
         }
@@ -778,15 +777,11 @@ public class HTTPRequest implements Buildable<HTTPRequest> {
         }
         break;
       case Headers.ContentEncodingLower:
-        // TODO : Note that we don't expect more than one Content-Encoding header. We could take the last one we find,
-        //        or try and combine the values. MDN and other places indicate combining may be preferred even though
-        //        it isn't ideal to send multiple headers like this. I tend to think we should just accept the last one.
         String[] encodings = value.split(",");
         List<String> contentEncodings = new ArrayList<>(1);
         int encodingIndex = 0;
         for (String encoding : encodings) {
-          // TODO : Ok to lc here? We are currently just always using equalsIgnoreCase
-          encoding = encoding.trim().toLowerCase();
+          encoding = encoding.trim();
           if (encoding.isEmpty()) {
             continue;
           }

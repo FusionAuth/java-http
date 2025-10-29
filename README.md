@@ -231,6 +231,8 @@ The general requirements and roadmap are as follows:
 ### Server tasks
 
 * [x] Basic HTTP 1.1
+* [x] Support Accept-Encoding (gzip, deflate)
+* [x] Support Content-Encoding (gzip, deflate)
 * [x] Support Keep-Alive
 * [x] Support Expect-Continue 100
 * [x] Support chunked request

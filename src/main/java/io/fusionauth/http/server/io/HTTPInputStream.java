@@ -54,7 +54,7 @@ public class HTTPInputStream extends InputStream {
 
   private boolean closed;
 
-  private boolean committed;
+  private boolean initialized;
 
   private InputStream delegate;
 
@@ -141,8 +141,8 @@ public class HTTPInputStream extends InputStream {
       return -1;
     }
 
-    if (!committed) {
-      commit();
+    if (!initialized) {
+      initialize();
     }
 
     // When we have a fixed length request, read beyond the remainingBytes if possible.
@@ -164,8 +164,8 @@ public class HTTPInputStream extends InputStream {
     return read;
   }
 
-  private void commit() throws IOException {
-    committed = true;
+  private void initialize() throws IOException {
+    initialized = true;
 
     Long contentLength = request.getContentLength();
     boolean hasBody = (contentLength != null && contentLength > 0) || request.isChunked();
@@ -200,6 +200,17 @@ public class HTTPInputStream extends InputStream {
     } else {
       logger.trace("Client indicated it was NOT sending an entity-body in the request");
     }
+
+    // Those who push back:
+    // HTTPInputStream when fixed
+    // ChunkedInputStream when chunked
+    // Preamble parser
+
+    // HTTPInputStream (this) > Pushback (delegate) > Throughput > Socket
+    // HTTPInputStream (this) > Chunked (delegate) > Pushback > Throughput > Socket
+
+    // HTTPInputStream (this) > Pushback > Decompress > Throughput > Socket
+    // HTTPInputStream (this) > Pushback > Decompress > Chunked > Throughput > Socket
 
     // TODO : Note I could leave this alone, but when we parse the header we can lower case these values and then remove the equalsIgnoreCase here?
     //        Seems like ideally we would normalize them to lowercase earlier.

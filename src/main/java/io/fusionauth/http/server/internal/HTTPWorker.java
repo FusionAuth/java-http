@@ -145,13 +145,6 @@ public class HTTPWorker implements Runnable {
           instrumenter.acceptedRequest();
         }
 
-        // TODO : Content-Encoding, we are currently keeping the PushbackInputStream for the entire keep-alive session.
-        //        Ideally we'd set the InputStream for gzip, deflate, etc lower.
-        //        Also... with Pushback bytes... the bytes may be compressed for the next request. So we'll need to be able to
-        //        read handle this. So perhaps this should all be handled at a high level?
-
-        // HTTPInputStream > Pushback > Decompression > Throughput > Socket
-
         httpInputStream = new HTTPInputStream(configuration, request, inputStream);
         request.setInputStream(httpInputStream);
 
@@ -452,21 +445,19 @@ public class HTTPWorker implements Runnable {
       request.removeHeader(Headers.ContentLength);
     }
 
-    // TODO : Note that some indicate you can return a 415 based upon the Accept-Encoding header as well if you do not support the request.
-    //        But I don't know that I agree- to me that is just telling the server here are encoding values I support, and you can tell me what you did.
-    //        The spec even says you can ignore the Accept-Encoding header if you want based upon CPU load, or other reasons.
-    //        Not planning to add any validation for Accept-Encoding.
-
     // Content-Encoding
     var contentEncodings = request.getContentEncodings();
     // TODO : If provided, I think we can safely remove the Content-Length header if present?
     //        Although, I suppose as long as we decompress early, we should still be able to use the Content-Length header as long as
     //        it represents the un-compressed payload.
+    //        Maybe write a test to prove that we can compress with a fixed-length w/ a Content-Length header?
+    // Current support is for gzip and deflate.
     for (var encoding : contentEncodings) {
-      // We only support gzip and deflate.
-      // TODO : Ensure we use the same equals check here as other places, I think we should lowercase during parse, and then expect these to be lc.
-      if (!encoding.equals(ContentEncodings.Gzip) && !encoding.equals(ContentEncodings.Deflate)) {
-        // TODO : Add log statement
+      if (!encoding.equalsIgnoreCase(ContentEncodings.Gzip) && !encoding.equalsIgnoreCase(ContentEncodings.Deflate)) {
+        // Note that while we do not expect multiple Content-Encoding headers, the last one will be used. For good measure,
+        // use the last one in the debug message as well.
+        var contentEncodingHeader = request.getHeaders(Headers.ContentEncoding).getLast();
+        logger.debug("Invalid request. The Content-Type header contains an un-supported value. [{}]", contentEncodingHeader);
         return Status.UnsupportedMediaType;
       }
     }
@@ -489,10 +480,10 @@ public class HTTPWorker implements Runnable {
   private static class Status {
     public static final int BadRequest = 400;
 
-    public static final int UnsupportedMediaType = 415;
-
     public static final int HTTPVersionNotSupported = 505;
 
     public static final int InternalServerError = 500;
+
+    public static final int UnsupportedMediaType = 415;
   }
 }
