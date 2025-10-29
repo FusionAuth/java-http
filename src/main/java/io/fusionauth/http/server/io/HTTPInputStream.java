@@ -17,8 +17,8 @@ package io.fusionauth.http.server.io;
 
 import java.io.IOException;
 import java.io.InputStream;
-import java.util.zip.DeflaterInputStream;
 import java.util.zip.GZIPInputStream;
+import java.util.zip.InflaterInputStream;
 
 import io.fusionauth.http.HTTPValues.ContentEncodings;
 import io.fusionauth.http.io.ChunkedInputStream;
@@ -170,18 +170,20 @@ public class HTTPInputStream extends InputStream {
     Long contentLength = request.getContentLength();
     boolean hasBody = (contentLength != null && contentLength > 0) || request.isChunked();
 
-//    if (hasBody) {
-//      // The request may contain more than one value, apply in reverse order.
-//      for (String contentEncoding : request.getContentEncodings().reversed()) {
-//        if (contentEncoding.equalsIgnoreCase(ContentEncodings.Deflate)) {
-//          // Use the default buffer size of 512
-//          delegate = new DeflaterInputStream(delegate);
-//        } else if (contentEncoding.equalsIgnoreCase(ContentEncodings.Gzip)) {
-//          // Use the default buffer size of 512
-//          delegate = new GZIPInputStream(delegate);
-//        }
-//      }
-//    }
+    // Request order of operations:
+    //  - "hello world" -> compress -> chunked.
+
+    // Current:
+    //   Chunked:
+    //     HTTPInputStream > Chunked > Pushback > Throughput > Socket
+    //   Fixed:
+    //     HTTPInputStream > Pushback > Throughput > Socket
+
+    // New:
+    //   Chunked
+    //     HTTPInputStream > Chunked > Pushback > Decompress > Throughput > Socket
+    //   Fixed
+    //     HTTPInputStream > Pushback > Decompress > Throughput > Socket
 
     // Note that isChunked() should take precedence over the fact that we have a Content-Length.
     // - The client should not send both, but in the case they are both present we ignore Content-Length
@@ -197,6 +199,20 @@ public class HTTPInputStream extends InputStream {
       logger.trace("Client indicated it was sending an entity-body in the request. Handling body using Content-Length header {}.", contentLength);
     } else {
       logger.trace("Client indicated it was NOT sending an entity-body in the request");
+    }
+
+    // TODO : Note I could leave this alone, but when we parse the header we can lower case these values and then remove the equalsIgnoreCase here?
+    //        Seems like ideally we would normalize them to lowercase earlier.
+    if (hasBody) {
+      // The request may contain more than one value, apply in reverse order.
+      // - These are both using the default 512 buffer size.
+      for (String contentEncoding : request.getContentEncodings().reversed()) {
+        if (contentEncoding.equalsIgnoreCase(ContentEncodings.Deflate)) {
+          delegate = new InflaterInputStream(delegate);
+        } else if (contentEncoding.equalsIgnoreCase(ContentEncodings.Gzip)) {
+          delegate = new GZIPInputStream(delegate);
+        }
+      }
     }
   }
 }

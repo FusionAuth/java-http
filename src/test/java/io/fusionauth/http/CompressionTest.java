@@ -16,7 +16,6 @@
 package io.fusionauth.http;
 
 import java.io.ByteArrayInputStream;
-import java.io.ByteArrayOutputStream;
 import java.io.IOException;
 import java.io.InputStream;
 import java.io.OutputStream;
@@ -31,9 +30,7 @@ import java.nio.file.Path;
 import java.nio.file.Paths;
 import java.text.DecimalFormat;
 import java.util.List;
-import java.util.zip.DeflaterOutputStream;
 import java.util.zip.GZIPInputStream;
-import java.util.zip.GZIPOutputStream;
 import java.util.zip.InflaterInputStream;
 
 import io.fusionauth.http.HTTPValues.ContentEncodings;
@@ -42,8 +39,8 @@ import io.fusionauth.http.server.CountingInstrumenter;
 import io.fusionauth.http.server.HTTPHandler;
 import org.testng.annotations.DataProvider;
 import org.testng.annotations.Test;
-import org.testng.internal.protocols.Input;
 import static org.testng.Assert.assertEquals;
+import static org.testng.Assert.assertNotNull;
 import static org.testng.Assert.assertNull;
 import static org.testng.AssertJUnit.fail;
 
@@ -66,7 +63,7 @@ public class CompressionTest extends BaseTest {
   }
 
   @Test(dataProvider = "compressedChunkedSchemes")
-  public void compress(String encoding, boolean chunked, String scheme) throws Exception {
+  public void compress(String contentEncoding, String acceptEncoding, boolean chunked, String scheme) throws Exception {
     HTTPHandler handler = (req, res) -> {
 
       // Ensure we can read the body regardless of the Content-Encoding
@@ -106,13 +103,30 @@ public class CompressionTest extends BaseTest {
     };
 
     // Compress the request using the encoding parameter
-    ByteArrayOutputStream baseOutputStream = new ByteArrayOutputStream();
-    DeflaterOutputStream out = encoding.equals(ContentEncodings.Deflate)
-        ? new DeflaterOutputStream(baseOutputStream, true)
-        : new GZIPOutputStream(baseOutputStream, true);
-    out.write("Hello world!".getBytes(StandardCharsets.UTF_8));
-    out.finish();
-    byte[] payload = baseOutputStream.toByteArray();
+    byte[] body = "Hello world!".getBytes(StandardCharsets.UTF_8);
+    byte[] compressedBody = body;
+
+    var requestEncodings = contentEncoding.toLowerCase().trim().split(",");
+    for (String part : requestEncodings) {
+      String encoding = part.trim();
+      compressedBody = encoding.equals(ContentEncodings.Deflate)
+          ? deflate(compressedBody)
+          : gzip(compressedBody);
+    }
+
+    var payload = compressedBody;
+    byte[] uncompressedBody = compressedBody;
+
+    // Sanity check on round trip compress/decompress
+    for (int i = requestEncodings.length - 1; i >= 0; i--) {
+      String encoding = requestEncodings[i].trim();
+      uncompressedBody = encoding.equals(ContentEncodings.Deflate)
+          ? inflate(uncompressedBody)
+          : ungzip(uncompressedBody);
+    }
+
+    assertEquals(uncompressedBody, body);
+    assertEquals(new String(body), "Hello world!");
 
     CountingInstrumenter instrumenter = new CountingInstrumenter();
     try (var client = makeClient(scheme, null); var ignore = makeServer(scheme, handler, instrumenter).start()) {
@@ -120,25 +134,34 @@ public class CompressionTest extends BaseTest {
       var response = client.send(
           HttpRequest.newBuilder()
                      // Request the response be compressed using the provided encodings
-                     .header(Headers.AcceptEncoding, encoding)
+                     .header(Headers.AcceptEncoding, acceptEncoding)
                      // Send the request using the same encoding
-                     .header(Headers.ContentEncoding, encoding)
+                     .header(Headers.ContentEncoding, contentEncoding)
                      .header(Headers.ContentType, "text/plain")
                      // Manually set the header since the body is small, the client not turn on chunked.
                      .header(Headers.TransferEncoding, "chunked")
+                     .uri(uri)
                      // A ByteArrayInputStream should cause the request to be chunk encoded
                      .POST(BodyPublishers.ofInputStream(() -> new ByteArrayInputStream(payload)))
-                     .uri(uri).GET().build(),
+                     .build(),
           r -> BodySubscribers.ofInputStream()
       );
 
+      assertEquals(response.statusCode(), 200);
+      String expectedResponseEncoding = null;
+      for (String part : acceptEncoding.toLowerCase().trim().split(",")) {
+        expectedResponseEncoding = part.trim();
+        break;
+      }
+
+      assertNotNull(expectedResponseEncoding);
+      assertEquals(response.headers().firstValue(Headers.ContentEncoding).orElse(null), expectedResponseEncoding);
+
       var result = new String(
-          encoding.equals(ContentEncodings.Deflate)
+          expectedResponseEncoding.equals(ContentEncodings.Deflate)
               ? new InflaterInputStream(response.body()).readAllBytes()
               : new GZIPInputStream(response.body()).readAllBytes(), StandardCharsets.UTF_8);
 
-      assertEquals(response.headers().firstValue(Headers.ContentEncoding).orElse(null), encoding);
-      assertEquals(response.statusCode(), 200);
       assertEquals(result, Files.readString(file));
     }
   }
@@ -270,23 +293,55 @@ public class CompressionTest extends BaseTest {
   @DataProvider(name = "compressedChunkedSchemes")
   public Object[][] compressedChunkedSchemes() {
     return new Object[][]{
-        // encoding, chunked, schema
+        // Content-Encoding, Accept-Encoding, chunked, schema
 
         // Chunked http
-        {ContentEncodings.Deflate, true, "http"},
-        {ContentEncodings.Gzip, true, "http"},
+        {"deflate", "deflate", true, "http"},
+        {"gzip", "gzip", true, "http"},
 
         // Chunked https
-        {ContentEncodings.Deflate, true, "https"},
-        {ContentEncodings.Gzip, true, "https"},
+        {"deflate", "deflate", true, "https"},
+        {"gzip", "gzip", true, "https"},
 
         // Non chunked http
-        {ContentEncodings.Deflate, false, "http"},
-        {ContentEncodings.Gzip, false, "http"},
+        {"deflate", "deflate", false, "http"},
+        {"gzip", "gzip", false, "http"},
 
         // Non chunked https
-        {ContentEncodings.Deflate, false, "https"},
-        {ContentEncodings.Gzip, false, "https"}
+        {"deflate", "deflate", false, "https"},
+        {"gzip", "gzip", false, "https"},
+
+        // UC, and mixed case, http
+        {"Deflate", "Deflate", true, "http"},
+        {"Gzip", "Gzip", true, "http"},
+
+        // UC, and mixed case, https
+        {"Deflate", "Deflate", true, "https"},
+        {"Gzip", "Gzip", true, "https"},
+
+        // Multiple accept values, expect to use the first, http
+        {"deflate", "deflate, gzip", true, "http"},
+        {"gzip", "gzip, deflate", true, "http"},
+
+        // Multiple accept values, expect to use the first, https
+        {"deflate", "deflate, gzip", true, "https"},
+        {"gzip", "gzip, deflate", true, "https"},
+
+        // Multiple request values, this means we will use multiple passes of compression, http
+        {"deflate", "deflate, gzip", true, "https"},
+        {"gzip", "gzip, deflate", true, "https"},
+
+        // Multiple request values, this means we will use multiple passes of compression, https
+        {"deflate, gzip", "deflate, gzip", true, "https"},
+        {"gzip, deflate", "gzip, deflate", true, "https"},
+
+        // x-gzip alias, http
+        {"deflate, gzip", "deflate, gzip", true, "https"},
+        {"gzip, deflate", "gzip, deflate", true, "https"},
+
+        // x-gzip alias, https
+        {"x-gzip", "deflate, gzip", true, "https"},
+        {"x-gzip", "gzip, deflate", true, "https"},
     };
   }
 

@@ -128,6 +128,9 @@ public class HTTPOutputStream extends OutputStream {
    */
   public boolean willCompress() {
     if (compress) {
+      // TODO : Note I could leave this alone, but when we parse the header we can lower case these values and then remove the equalsIgnoreCase here?
+      //        Seems like ideally we would normalize them to lowercase earlier.
+      //        Hmm.. sems like we have to in theory since someone could call setAcceptEncodings later, or addAcceptEncodings?
       for (String encoding : acceptEncodings) {
         if (encoding.equalsIgnoreCase(ContentEncodings.Gzip)) {
           return true;
@@ -191,7 +194,11 @@ public class HTTPOutputStream extends OutputStream {
       response.setContentLength(0L);
     } else {
       // 204 status is specifically "No Content" so we shouldn't write the content-encoding and vary headers if the status is 204
+      // TODO : Compress by default is on by default. But it looks like we don't actually compress unless you also send in an Accept-Encoding header?
       if (compress && !twoOhFour) {
+        // TODO : Note I could leave this alone, but when we parse the header we can lower case these values and then remove the equalsIgnoreCase here?
+        //        Seems like ideally we would normalize them to lowercase earlier.
+        //        Hmm.. sems like we have to in theory since someone could call setAcceptEncodings later, or addAcceptEncodings?
         for (String encoding : acceptEncodings) {
           if (encoding.equalsIgnoreCase(ContentEncodings.Gzip)) {
             response.setHeader(Headers.ContentEncoding, ContentEncodings.Gzip);

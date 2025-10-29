@@ -15,6 +15,8 @@
  */
 package io.fusionauth.http;
 
+import java.io.ByteArrayInputStream;
+import java.io.ByteArrayOutputStream;
 import java.io.IOException;
 import java.io.InputStream;
 import java.io.OutputStream;
@@ -51,6 +53,10 @@ import java.util.Date;
 import java.util.Map;
 import java.util.UUID;
 import java.util.stream.Collectors;
+import java.util.zip.DeflaterOutputStream;
+import java.util.zip.GZIPInputStream;
+import java.util.zip.GZIPOutputStream;
+import java.util.zip.InflaterInputStream;
 
 import io.fusionauth.http.HTTPValues.Connections;
 import io.fusionauth.http.log.FileLogger;
@@ -407,6 +413,33 @@ public abstract class BaseTest {
     }
   }
 
+  protected byte[] deflate(byte[] bytes) throws Exception {
+    ByteArrayOutputStream baseOutputStream = new ByteArrayOutputStream();
+    try (DeflaterOutputStream out = new DeflaterOutputStream(baseOutputStream, true)) {
+      out.write(bytes);
+      out.flush();
+      out.finish();
+      return baseOutputStream.toByteArray();
+    }
+  }
+
+  protected byte[] gzip(byte[] bytes) throws Exception {
+    ByteArrayOutputStream baseOutputStream = new ByteArrayOutputStream();
+    try (DeflaterOutputStream out = new GZIPOutputStream(baseOutputStream, true)) {
+      out.write(bytes);
+      out.flush();
+      out.finish();
+      return baseOutputStream.toByteArray();
+    }
+  }
+
+  protected byte[] inflate(byte[] bytes) throws Exception {
+    ByteArrayInputStream baseInputStream = new ByteArrayInputStream(bytes);
+    try (InflaterInputStream in = new InflaterInputStream(baseInputStream)) {
+      return in.readAllBytes();
+    }
+  }
+
   protected void printf(String format, Object... args) {
     if (verbose) {
       System.out.printf(SystemOutPrefix + format, args);
@@ -423,6 +456,13 @@ public abstract class BaseTest {
     try {
       Thread.sleep(millis);
     } catch (InterruptedException ignore) {
+    }
+  }
+
+  protected byte[] ungzip(byte[] bytes) throws Exception {
+    ByteArrayInputStream baseInputStream = new ByteArrayInputStream(bytes);
+    try (InflaterInputStream in = new GZIPInputStream(baseInputStream)) {
+      return in.readAllBytes();
     }
   }
 

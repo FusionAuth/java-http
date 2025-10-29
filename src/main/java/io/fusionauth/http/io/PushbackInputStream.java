@@ -38,7 +38,6 @@ public class PushbackInputStream extends InputStream {
 
   private int bufferPosition;
 
-
   public PushbackInputStream(InputStream delegate, Instrumenter instrumenter) {
     this.delegate = delegate;
     this.instrumenter = instrumenter;

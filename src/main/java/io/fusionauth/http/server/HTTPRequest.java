@@ -44,6 +44,7 @@ import io.fusionauth.http.Cookie;
 import io.fusionauth.http.FileInfo;
 import io.fusionauth.http.HTTPMethod;
 import io.fusionauth.http.HTTPValues.Connections;
+import io.fusionauth.http.HTTPValues.ContentEncodings;
 import io.fusionauth.http.HTTPValues.ContentTypes;
 import io.fusionauth.http.HTTPValues.Headers;
 import io.fusionauth.http.HTTPValues.Protocols;
@@ -231,7 +232,10 @@ public class HTTPRequest implements Buildable<HTTPRequest> {
 
   public void setAcceptEncodings(List<String> encodings) {
     this.acceptEncodings.clear();
-    this.acceptEncodings.addAll(encodings);
+    // TODO : ? Maybe not worth being defensive here since we likely have many methods on this object that are not null safe?
+    if (encodings != null) {
+      this.acceptEncodings.addAll(encodings);
+    }
   }
 
   /**
@@ -302,9 +306,13 @@ public class HTTPRequest implements Buildable<HTTPRequest> {
     return contentEncodings;
   }
 
+  // TODO : Note : Should I add 'addContentEncodings' and 'addContentEncoding' to match 'accept*' ?
   public void setContentEncodings(List<String> encodings) {
     this.contentEncodings.clear();
-    this.contentEncodings.addAll(encodings);
+    // TODO : ? Maybe not worth being defensive here since we likely have many methods on this object that are not null safe?
+    if (encodings != null) {
+      this.contentEncodings.addAll(encodings);
+    }
   }
 
   public Long getContentLength() {
@@ -726,7 +734,7 @@ public class HTTPRequest implements Buildable<HTTPRequest> {
 
   private void decodeHeader(String name, String value) {
     switch (name) {
-      case Headers.AcceptEncodingLower, Headers.ContentEncodingLower:
+      case Headers.AcceptEncodingLower:
         SortedSet<WeightedString> weightedStrings = new TreeSet<>();
         String[] parts = value.split(",");
         int index = 0;
@@ -743,21 +751,19 @@ public class HTTPRequest implements Buildable<HTTPRequest> {
             weight = Double.parseDouble(weightText);
           }
 
-          WeightedString ws = new WeightedString(parsed.value(), weight, index);
+          // Content-Encoding values are not case-sensitive
+          // TODO : Ok to lc here? We are currently just always using equalsIgnoreCase
+          WeightedString ws = new WeightedString(parsed.value().toLowerCase(), weight, index);
           weightedStrings.add(ws);
           index++;
         }
 
         // Transfer the Strings in weighted-position order
-        var result = weightedStrings.stream()
-                                    .map(WeightedString::value)
-                                    .toList();
-
-        if (name.equals(Headers.AcceptEncodingLower)) {
-          setAcceptEncodings(result);
-        } else {
-          setContentEncodings(result);
-        }
+        setAcceptEncodings(
+            weightedStrings.stream()
+                           .map(WeightedString::value)
+                           .toList()
+        );
         break;
       case Headers.AcceptLanguageLower:
         try {
@@ -770,6 +776,31 @@ public class HTTPRequest implements Buildable<HTTPRequest> {
         } catch (Exception e) {
           // Ignore the exception and keep the value null
         }
+        break;
+      case Headers.ContentEncodingLower:
+        // TODO : Note that we don't expect more than one Content-Encoding header. We could take the last one we find,
+        //        or try and combine the values. MDN and other places indicate combining may be preferred even though
+        //        it isn't ideal to send multiple headers like this. I tend to think we should just accept the last one.
+        String[] encodings = value.split(",");
+        List<String> contentEncodings = new ArrayList<>(1);
+        int encodingIndex = 0;
+        for (String encoding : encodings) {
+          // TODO : Ok to lc here? We are currently just always using equalsIgnoreCase
+          encoding = encoding.trim().toLowerCase();
+          if (encoding.isEmpty()) {
+            continue;
+          }
+
+          // The HTTP/1.1 standard recommends that the servers supporting gzip also recognize x-gzip as an alias, for compatibility purposes.
+          if (encoding.equals(ContentEncodings.XGzip)) {
+            encoding = ContentEncodings.Gzip;
+          }
+
+          contentEncodings.add(encoding);
+          encodingIndex++;
+        }
+
+        setContentEncodings(contentEncodings);
         break;
       case Headers.ContentTypeLower:
         this.encoding = null;

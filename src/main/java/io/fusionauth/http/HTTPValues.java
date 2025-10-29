@@ -51,6 +51,8 @@ public final class HTTPValues {
 
     public static final String Gzip = "gzip";
 
+    public static final String XGzip = "x-gzip";
+
     private ContentEncodings() {
     }
   }
