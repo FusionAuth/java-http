@@ -187,9 +187,24 @@ public interface Configurable<T extends Configurable<T>> {
 
   /**
    * Sets the maximum size of the HTTP request body by optionally per Content-Type. If this limit is exceeded, the connection will be closed.
-   * Defaults to 128 Megabytes.
    * <p>
-   * Set this to -1 to disable this limitation.
+   * A key of "*" will be the default value if a key doesn't exist for the specific Content-Type. Additionally, you can specify wildcards
+   * for subtypes of Content-Types such as "application/*". This will be used if the exact Content-Type key is not in the Map.
+   * <p>
+   * An example lookup for the Content-Type "application/x-www-form-urlencoded" is:
+   * <ol>
+   *   <li>application/x-www-form-urlencoded</li>
+   *   <li>application/*</li>
+   *   <li>*</li>
+   * </ol>
+   * <p>
+   * If you pass in a Map that does not contain a default size using the String "*", this will retain the default value set by java-http.
+   * Similarly, the default value for "application/x-www-form-urlencoded" is also retained if the Mapp you provide does not contain that
+   * key.
+   * <p>
+   * Set any value to -1 to disable this limitation.
+   * <p>
+   * Defaults to 128 Megabytes for the wildcard "*" and 10 Megabytes for "application/x-www-form-urlencoded".
    *
    * @param maxRequestBodySize a map specifying the maximum size in bytes for the HTTP request body by Content-Type
    * @return This.

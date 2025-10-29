@@ -33,7 +33,14 @@ import io.fusionauth.http.log.SystemOutLoggerFactory;
  * @author Brian Pontarelli
  */
 public class HTTPServerConfiguration implements Configurable<HTTPServerConfiguration> {
+  public static final Map<String, Integer> DefaultMaxSizes = Map.of(
+      "*", 128 * 1024 * 1024,                                   // 128 Megabytes
+      "application/x-www-form-urlencoded", 10 * 1024 * 1024     // 10 Megabytes
+  );
+
   private final List<HTTPListenerConfiguration> listeners = new ArrayList<>();
+
+  private final Map<String, Integer> maxRequestBodySize = new HashMap<>(DefaultMaxSizes);
 
   private Path baseDir = Path.of("");
 
@@ -58,10 +65,6 @@ public class HTTPServerConfiguration implements Configurable<HTTPServerConfigura
   private int maxBytesToDrain = 256 * 1024; // 256 Kilobytes
 
   private int maxPendingSocketConnections = 250;
-
-  private Map<String, Integer> maxRequestBodySize = Map.of(
-      "*", 128 * 1024 * 1024,                                   // 128 Megabytes
-      "application/x-www-form-urlencoded", 10 * 1024 * 1024);   // 10 Megabytes
 
   private int maxRequestHeaderSize = 128 * 1024; // 128 Kilobytes
 
@@ -487,14 +490,10 @@ public class HTTPServerConfiguration implements Configurable<HTTPServerConfigura
       }
     }
 
-    // Keep existing default if one was not provided.
-    if (!maxRequestBodySize.containsKey("*")) {
-      Map<String, Integer> copy = new HashMap<>(maxRequestBodySize);
-      copy.put("*", maxRequestBodySize.get("*"));
-      maxRequestBodySize = copy;
-    }
-
-    this.maxRequestBodySize = maxRequestBodySize;
+    // This preserves the default values in the field definition if the incoming Map does not contain them. Otherwise, they are overridden
+    this.maxRequestBodySize.clear();
+    this.maxRequestBodySize.putAll(DefaultMaxSizes);
+    this.maxRequestBodySize.putAll(maxRequestBodySize);
     return this;
   }
 
