@@ -164,13 +164,13 @@ public class HTTPRequest implements Buildable<HTTPRequest> {
   }
 
   public void addHeader(String name, String value) {
-    name = name.toLowerCase();
+    name = name.toLowerCase(Locale.ROOT);
     headers.computeIfAbsent(name, key -> new ArrayList<>()).add(value);
     decodeHeader(name, value);
   }
 
   public void addHeaders(String name, String... values) {
-    name = name.toLowerCase();
+    name = name.toLowerCase(Locale.ROOT);
     headers.computeIfAbsent(name, key -> new ArrayList<>()).addAll(List.of(values));
 
     for (String value : values) {
@@ -179,7 +179,7 @@ public class HTTPRequest implements Buildable<HTTPRequest> {
   }
 
   public void addHeaders(String name, Collection<String> values) {
-    name = name.toLowerCase();
+    name = name.toLowerCase(Locale.ROOT);
     headers.computeIfAbsent(name, key -> new ArrayList<>()).addAll(values);
 
     for (String value : values) {
@@ -254,12 +254,12 @@ public class HTTPRequest implements Buildable<HTTPRequest> {
   public String getBaseURL() {
     // Setting the wrong value in the X-Forwarded-Proto header seems to be a common issue that causes an exception during URI.create.
     // Assuming request.getScheme() is not the problem, and it is related to the proxy configuration.
-    String scheme = getScheme().toLowerCase();
+    String scheme = getScheme().toLowerCase(Locale.ROOT);
     if (!scheme.equalsIgnoreCase("http") && !scheme.equalsIgnoreCase("https")) {
       throw new IllegalArgumentException("The request scheme is invalid. Only http or https are valid schemes. The X-Forwarded-Proto header has a value of [" + getHeader(Headers.XForwardedProto) + "], this is likely an issue in your proxy configuration.");
     }
 
-    String serverName = getHost().toLowerCase();
+    String serverName = getHost().toLowerCase(Locale.ROOT);
     int serverPort = getBaseURLServerPort();
 
     String uri = scheme + "://" + serverName;
@@ -381,7 +381,7 @@ public class HTTPRequest implements Buildable<HTTPRequest> {
   }
 
   public List<String> getHeaders(String name) {
-    return headers.get(name.toLowerCase());
+    return headers.get(name.toLowerCase(Locale.ROOT));
   }
 
   public Map<String, List<String>> getHeaders() {
@@ -650,11 +650,11 @@ public class HTTPRequest implements Buildable<HTTPRequest> {
   }
 
   public void removeHeader(String name) {
-    headers.remove(name.toLowerCase());
+    headers.remove(name.toLowerCase(Locale.ROOT));
   }
 
   public void removeHeader(String name, String... values) {
-    List<String> actual = headers.get(name.toLowerCase());
+    List<String> actual = headers.get(name.toLowerCase(Locale.ROOT));
     if (actual != null) {
       actual.removeAll(List.of(values));
     }
@@ -671,13 +671,13 @@ public class HTTPRequest implements Buildable<HTTPRequest> {
   }
 
   public void setHeader(String name, String value) {
-    name = name.toLowerCase();
+    name = name.toLowerCase(Locale.ROOT);
     this.headers.put(name, new ArrayList<>(List.of(value)));
     decodeHeader(name, value);
   }
 
   public void setHeaders(String name, String... values) {
-    name = name.toLowerCase();
+    name = name.toLowerCase(Locale.ROOT);
     this.headers.put(name, new ArrayList<>(List.of(values)));
 
     for (String value : values) {
@@ -686,7 +686,7 @@ public class HTTPRequest implements Buildable<HTTPRequest> {
   }
 
   public void setHeaders(String name, Collection<String> values) {
-    name = name.toLowerCase();
+    name = name.toLowerCase(Locale.ROOT);
     this.headers.put(name, new ArrayList<>(values));
 
     for (String value : values) {

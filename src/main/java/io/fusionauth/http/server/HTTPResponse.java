@@ -27,6 +27,7 @@ import java.util.ArrayList;
 import java.util.HashMap;
 import java.util.LinkedHashMap;
 import java.util.List;
+import java.util.Locale;
 import java.util.Map;
 import java.util.stream.Collectors;
 
@@ -82,7 +83,7 @@ public class HTTPResponse {
       return;
     }
 
-    headers.computeIfAbsent(name.toLowerCase(), key -> new ArrayList<>()).add(value);
+    headers.computeIfAbsent(name.toLowerCase(Locale.ROOT), key -> new ArrayList<>()).add(value);
   }
 
   public void clearHeaders() {
@@ -102,7 +103,7 @@ public class HTTPResponse {
   }
 
   public boolean containsHeader(String name) {
-    String key = name.toLowerCase();
+    String key = name.toLowerCase(Locale.ROOT);
     return headers.containsKey(key) && !headers.get(key).isEmpty();
   }
 
@@ -174,12 +175,12 @@ public class HTTPResponse {
   }
 
   public String getHeader(String name) {
-    String key = name.toLowerCase();
+    String key = name.toLowerCase(Locale.ROOT);
     return headers.containsKey(key) && !headers.get(key).isEmpty() ? headers.get(key).getFirst() : null;
   }
 
   public List<String> getHeaders(String key) {
-    return headers.get(key.toLowerCase());
+    return headers.get(key.toLowerCase(Locale.ROOT));
   }
 
   public Map<String, List<String>> getHeadersMap() {
@@ -260,7 +261,7 @@ public class HTTPResponse {
    */
   public void removeHeader(String name) {
     if (name != null) {
-      headers.remove(name.toLowerCase());
+      headers.remove(name.toLowerCase(Locale.ROOT));
     }
   }
 
@@ -304,7 +305,7 @@ public class HTTPResponse {
       return;
     }
 
-    headers.put(name.toLowerCase(), new ArrayList<>(List.of(value)));
+    headers.put(name.toLowerCase(Locale.ROOT), new ArrayList<>(List.of(value)));
   }
 
   /**

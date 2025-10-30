@@ -19,6 +19,7 @@ import java.time.ZonedDateTime;
 import java.util.ArrayList;
 import java.util.HashMap;
 import java.util.List;
+import java.util.Locale;
 import java.util.Map;
 import java.util.Objects;
 
@@ -245,7 +246,7 @@ public class Cookie implements Buildable<Cookie> {
       return;
     }
 
-    switch (name.toLowerCase()) {
+    switch (name.toLowerCase(Locale.ROOT)) {
       case HTTPValues.CookieAttributes.DomainLower:
         domain = value;
         break;
