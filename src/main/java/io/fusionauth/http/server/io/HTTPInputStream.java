@@ -31,9 +31,9 @@ import io.fusionauth.http.server.HTTPServerConfiguration;
 import io.fusionauth.http.server.Instrumenter;
 
 /**
- * An InputStream that handles the HTTP body, including body bytes that were read while the preamble was processed. This class also handles
- * chunked bodies by using a delegate InputStream that wraps the original source of the body bytes. The {@link ChunkedInputStream} is the
- * delegate that this class leverages for chunking.
+ * An InputStream intended to be read the HTTP request body.
+ * <p>
+ * This will handle fixed length requests, chunked requests as well as decompression if necessary.
  *
  * @author Brian Pontarelli
  */
@@ -140,17 +140,14 @@ public class HTTPInputStream extends InputStream {
       initialize();
     }
 
-    // When we have a fixed length request, read beyond the remainingBytes if possible.
-    // - If we have read past the end of the current request, push those bytes back onto the InputStream.
-    // - When a maximum content length has been specified, read at most one byte past the maximum.
+    // When a maximum content length has been specified, read at most one byte past the maximum.
     int maxReadLen = maximumContentLength == -1 ? len : Math.min(len, maximumContentLength - bytesRead + 1);
     int read = delegate.read(b, off, maxReadLen);
     if (read > 0) {
       bytesRead += read;
     }
 
-    // Note that when the request is fixed length, we will have failed early during commit().
-    // - This will handle all requests that are not fixed length.
+    // Throw an exception once we have read past the maximum configured content length,
     if (maximumContentLength != -1 && bytesRead > maximumContentLength) {
       String detailedMessage = "The maximum request size has been exceeded. The maximum request size is [" + maximumContentLength + "] bytes.";
       throw new ContentTooLargeException(maximumContentLength, detailedMessage);
@@ -167,9 +164,6 @@ public class HTTPInputStream extends InputStream {
     //   In practice, we will remove the Content-Length header when sent in addition to Transfer-Encoding. See HTTPWorker.validatePreamble.
     Long contentLength = request.getContentLength();
     boolean hasBody = (contentLength != null && contentLength > 0) || request.isChunked();
-
-    // Note that isChunked() should take precedence over the fact that we have a Content-Length.
-    // - The client should not send both, but in the case they are both present we ignore Content-Length
     if (!hasBody) {
       delegate = InputStream.nullInputStream();
     } else if (request.isChunked()) {
@@ -185,26 +179,7 @@ public class HTTPInputStream extends InputStream {
       logger.trace("Client indicated it was NOT sending an entity-body in the request");
     }
 
-    // If we have a maximumContentLength, and this is a fixed content length request, before we read any bytes, fail early.
-    // For good measure do this last so if anyone downstream wants to read from the InputStream they could in theory because
-    // we will have set up the InputStream.
-    // TODO : Compression : we may have to delete this code, or only enforce it when compression was not used.
-    //        Content-Length represents the compressed size, not the uncompressed bytes.
-    if (contentLength != null && maximumContentLength != -1 && contentLength > maximumContentLength) {
-      String detailedMessage = "The maximum request size has been exceeded. The reported Content-Length is [" + contentLength + "] and the maximum request size is [" + maximumContentLength + "] bytes.";
-      throw new ContentTooLargeException(maximumContentLength, detailedMessage);
-    }
-
-    // Current state
-    // Chunked       HTTPInputStream (this) > Chunked > Pushback > Throughput > Socket
-    // Fixed length  HTTPInputStream (this) > Fixed   > Pushback > Throughput > Socket
-
-    // When decompressing, the result will be something like this:
-    // Chunked       HTTPInputStream (this) > Decompress > Chunked > Pushback > Throughput > Socket
-    // Fixed length  HTTPInputStream (this) > Decompress> Fixed   > Pushback > Throughput > Socket
-    //
-    // You may have one or more Decompress InputStreams in the above diagram.
-
+    // Now that we have the InputStream set up to read the body, handle decompression.
     if (hasBody) {
       // The request may contain more than one value, apply in reverse order.
       // - These are both using the default 512 buffer size.
@@ -215,6 +190,15 @@ public class HTTPInputStream extends InputStream {
           delegate = new GZIPInputStream(delegate);
         }
       }
+    }
+
+    // If we have a fixed length request that is reporting a contentLength larger than the configured maximum, fail earl.
+    // - Do this last so if anyone downstream wants to read from the InputStream it would work.
+    // - Note that it is possible that the body is compressed which would mean the contentLength represents the compressed value.
+    //   But when we decompress the bytes the result will be larger than the reported contentLength, so we can safely throw this exception.
+    if (contentLength != null && maximumContentLength != -1 && contentLength > maximumContentLength) {
+      String detailedMessage = "The maximum request size has been exceeded. The reported Content-Length is [" + contentLength + "] and the maximum request size is [" + maximumContentLength + "] bytes.";
+      throw new ContentTooLargeException(maximumContentLength, detailedMessage);
     }
   }
 }
