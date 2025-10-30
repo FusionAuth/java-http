@@ -490,9 +490,9 @@ public class HTTPServerConfiguration implements Configurable<HTTPServerConfigura
       }
     }
 
-    // This preserves the default values in the field definition if the incoming Map does not contain them. Otherwise, they are overridden
     this.maxRequestBodySize.clear();
-    this.maxRequestBodySize.putAll(DefaultMaxRequestSizes);
+    // Add back a default to ensure we always have a fallback, can still be modified by the incoming configuration.
+    this.maxRequestBodySize.put("*", DefaultMaxRequestSizes.get("*"));
     this.maxRequestBodySize.putAll(maxRequestBodySize);
     return this;
   }

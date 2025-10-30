@@ -201,8 +201,7 @@ public interface Configurable<T extends Configurable<T>> {
    *   <li>*</li>
    * </ol>
    * <p>
-   * If the provided configuration does not contain the initial default values for "*" and "application/x-www-form-urlencoded", the
-   * server default values will be retained.
+   * If the provided configuration does not contain the initial default identified by the "*" key, the server default value will be retained.
    * key.
    * <p>
    * Set any value to -1 to disable this limitation.
