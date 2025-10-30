@@ -23,6 +23,7 @@ import java.util.zip.InflaterInputStream;
 import io.fusionauth.http.ContentTooLargeException;
 import io.fusionauth.http.HTTPValues.ContentEncodings;
 import io.fusionauth.http.io.ChunkedInputStream;
+import io.fusionauth.http.io.FixedLengthInputStream;
 import io.fusionauth.http.io.PushbackInputStream;
 import io.fusionauth.http.log.Logger;
 import io.fusionauth.http.server.HTTPRequest;
@@ -55,8 +56,6 @@ public class HTTPInputStream extends InputStream {
 
   private int bytesRead;
 
-  private long bytesRemaining;
-
   private boolean closed;
 
   private InputStream delegate;
@@ -75,11 +74,6 @@ public class HTTPInputStream extends InputStream {
     this.chunkedBufferSize = configuration.getChunkedBufferSize();
     this.maximumBytesToDrain = configuration.getMaxBytesToDrain();
     this.maximumContentLength = maximumContentLength;
-
-    // Start the countdown
-    if (request.getContentLength() != null) {
-      this.bytesRemaining = request.getContentLength();
-    }
   }
 
   @Override
@@ -142,23 +136,6 @@ public class HTTPInputStream extends InputStream {
       return 0;
     }
 
-    // TODO : Re: Compression - fixedLength and Content-Length needs to account for the Content-Length referring to the compressed body.
-
-    // Preamble, this could push back compressed bytes.
-    //   Pushback > Throughput > Socket
-    //
-    // HTTPInputStream (this) -> Decompress > Pushback > Throughput > Socket
-    // HTTPInputStream (this) -> Decompress > Chunked > Pushback > Throughput > Socket
-    //
-    // Pushback doesn't care if the bytes are compressed or not, it is up to the caller?
-    //
-
-    // If this is a fixed length request, and we have less than or equal to 0 bytes remaining, return -1
-    boolean fixedLength = !request.isChunked();
-    if (fixedLength && bytesRemaining <= 0) {
-      return -1;
-    }
-
     if (!initialized) {
       initialize();
     }
@@ -167,40 +144,10 @@ public class HTTPInputStream extends InputStream {
     // - If we have read past the end of the current request, push those bytes back onto the InputStream.
     // - When a maximum content length has been specified, read at most one byte past the maximum.
     int maxReadLen = maximumContentLength == -1 ? len : Math.min(len, maximumContentLength - bytesRead + 1);
-
-    // TODO : Hack - This makes compression work with fixed length requests
-    if (fixedLength) {
-      // TODO : Note : The len arg for an inflater stream is the number of un-compressed bytes.
-      //               The returned number of bytes is the un-compressed bytes. So the problem here
-      //               is that the bytesRemaining value we have is the compressed size of the payload so we can't
-      //               us it to ensure we do not read past the current fixed length request. Sad.
-//      maxReadLen = Math.min(maxReadLen, (int) bytesRemaining);
-    }
-
     int read = delegate.read(b, off, maxReadLen);
-
-    // TODO : Can I optionally never override here? If I am fixed length, I could change len -> maxLen., and then never pushback.
-    //        Would this help with compression?
-//    int maxLen = (int) Math.min(len, bytesRemaining);
-//    int maxLen = len;
-//    int read = delegate.read(b, off, maxLen);
-
-    // TODO : This is busted with compression.
-    //        bytesRemaining is calculated based upon the Content-Length.
-    //        But the bytes read from the InputStream will be the bytes read that are un-compressed.
-    //        So we can't use the bytes read to calculate pushback. This has to go below the Decompression in the chain.
-    int reportBytesRead = read;
-    if (fixedLength && read > 0) {
-      int extraBytes = (int) (read - bytesRemaining);
-      if (extraBytes > 0) {
-        reportBytesRead -= extraBytes;
-        pushbackInputStream.push(b, (int) bytesRemaining, extraBytes);
-      }
-
-      bytesRemaining -= reportBytesRead;
+    if (read > 0) {
+      bytesRead += read;
     }
-
-    bytesRead += reportBytesRead;
 
     // Note that when the request is fixed length, we will have failed early during commit().
     // - This will handle all requests that are not fixed length.
@@ -209,7 +156,7 @@ public class HTTPInputStream extends InputStream {
       throw new ContentTooLargeException(maximumContentLength, detailedMessage);
     }
 
-    return reportBytesRead;
+    return read;
   }
 
   private void initialize() throws IOException {
@@ -248,6 +195,7 @@ public class HTTPInputStream extends InputStream {
       }
     } else if (contentLength != null) {
       logger.trace("Client indicated it was sending an entity-body in the request. Handling body using Content-Length header {}.", contentLength);
+      delegate = new FixedLengthInputStream(pushbackInputStream, contentLength);
     } else {
       logger.trace("Client indicated it was NOT sending an entity-body in the request");
     }
@@ -255,22 +203,18 @@ public class HTTPInputStream extends InputStream {
     // If we have a maximumContentLength, and this is a fixed content length request, before we read any bytes, fail early.
     // For good measure do this last so if anyone downstream wants to read from the InputStream they could in theory because
     // we will have set up the InputStream.
+    // TODO : Compression : we may have to delete this code, or only enforce it when compression was not used.
+    //        Content-Length represents the compressed size, not the uncompressed bytes.
     if (contentLength != null && maximumContentLength != -1 && contentLength > maximumContentLength) {
       String detailedMessage = "The maximum request size has been exceeded. The reported Content-Length is [" + contentLength + "] and the maximum request size is [" + maximumContentLength + "] bytes.";
       throw new ContentTooLargeException(maximumContentLength, detailedMessage);
     }
 
-    // Those who push back:
-    // HTTPInputStream when fixed
-    // ChunkedInputStream when chunked
-    // Preamble parser
-
-    // HTTPInputStream (this) > Pushback (delegate) > Throughput > Socket
-    // HTTPInputStream (this) > Chunked (delegate) > Pushback > Throughput > Socket
-
     // The way it is currently coded
-    // HTTPInputStream (this) > Decompress > Pushback > Throughput > Socket
-    // HTTPInputStream (this) > Decompress > Chunked > Pushback > Throughput > Socket
+    // HTTPInputStream (this) > Decompress > Fixed   > Pushback > Throughput > Socket
+
+    // HTTPInputStream (this) > Chunked > Pushback > Throughput > Socket
+    //    > HTTPInputStream (this) > Decompress > Chunked > Pushback > Throughput > Socket
 
     // TODO : Note I could leave this alone, but when we parse the header we can lower case these values and then remove the equalsIgnoreCase here?
     //        Seems like ideally we would normalize them to lowercase earlier.

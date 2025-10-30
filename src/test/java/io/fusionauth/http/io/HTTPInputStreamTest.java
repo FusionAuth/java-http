@@ -50,11 +50,8 @@ public class HTTPInputStreamTest extends BaseTest {
     // we read past the end of the current request and use the PushbackInputStream.
 
     String content = "These pretzels are making me thirsty. These pretzels are making me thirsty. These pretzels are making me thirsty.";
-    int contentLength = content.getBytes(StandardCharsets.UTF_8).length;
-
-    // Chunk the content, add part of the next request
-    String chunked = chunkItUp(content, 38, null);
-    byte[] payload = chunked.getBytes(StandardCharsets.UTF_8);
+    byte[] payload = content.getBytes(StandardCharsets.UTF_8);
+    int contentLength = payload.length;
 
     // Optionally compress the payload
     if (!contentEncoding.isEmpty()) {
@@ -68,6 +65,14 @@ public class HTTPInputStreamTest extends BaseTest {
         }
       }
     }
+
+    // Chunk the content, add part of the next request
+    var temp1 = payload;
+    var temp2 = new String(payload, StandardCharsets.UTF_8).getBytes(StandardCharsets.UTF_8);
+    assertEquals(temp1, temp2);
+
+    String chunked = chunkItUp(new String(payload, StandardCharsets.UTF_8), 38, null);
+    payload = chunked.getBytes(StandardCharsets.UTF_8);
 
     ByteArrayOutputStream out = new ByteArrayOutputStream();
     out.write(payload);
