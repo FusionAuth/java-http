@@ -22,6 +22,7 @@ import java.nio.charset.StandardCharsets;
 import java.util.ArrayList;
 import java.util.HashMap;
 import java.util.List;
+import java.util.Locale;
 import java.util.Map;
 
 import com.inversoft.json.ToString;
@@ -63,6 +64,9 @@ public class HTTPToolsTest {
     assertMaxConfiguredSize("multipart/form-data", 5, configuration);
     assertMaxConfiguredSize("text/css", 6, configuration);
     assertMaxConfiguredSize("text/html", 7, configuration);
+
+    // Mixed case
+    assertMaxConfiguredSize("Application/JSON", 3, configuration);
 
     // We don't expect this at runtime, but ideally we won't explode. These would be invalid values.
     // - Some of these are legit Content-Type headers, but at runtime we will have already parsed the header so we do
@@ -283,7 +287,7 @@ public class HTTPToolsTest {
     List<String> result = new ArrayList<>();
     for (byte b : bytes) {
 
-      result.add(Integer.toHexString(0xFF & b).toUpperCase());
+      result.add(Integer.toHexString(0xFF & b).toUpperCase(Locale.ROOT));
     }
     return String.join(" ", result);
   }
@@ -291,7 +295,7 @@ public class HTTPToolsTest {
   private String hex(String s) {
     List<String> result = new ArrayList<>();
     for (char ch : s.toCharArray()) {
-      result.add(Integer.toHexString(ch).toUpperCase());
+      result.add(Integer.toHexString(ch).toUpperCase(Locale.ROOT));
     }
     return String.join(" ", result);
   }

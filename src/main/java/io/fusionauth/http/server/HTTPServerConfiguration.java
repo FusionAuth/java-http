@@ -20,6 +20,7 @@ import java.time.Duration;
 import java.util.ArrayList;
 import java.util.HashMap;
 import java.util.List;
+import java.util.Locale;
 import java.util.Map;
 import java.util.Objects;
 
@@ -493,7 +494,8 @@ public class HTTPServerConfiguration implements Configurable<HTTPServerConfigura
     this.maxRequestBodySize.clear();
     // Add back a default to ensure we always have a fallback, can still be modified by the incoming configuration.
     this.maxRequestBodySize.put("*", DefaultMaxRequestSizes.get("*"));
-    this.maxRequestBodySize.putAll(maxRequestBodySize);
+    // Store lower case keys
+    maxRequestBodySize.forEach((k, v) -> this.maxRequestBodySize.put(k.toLowerCase(Locale.ROOT), v));
     return this;
   }
 
