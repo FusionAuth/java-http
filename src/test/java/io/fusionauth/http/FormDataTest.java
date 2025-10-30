@@ -33,7 +33,6 @@ import io.fusionauth.http.server.HTTPServer;
 import io.fusionauth.http.server.HTTPServerConfiguration;
 import org.testng.annotations.Test;
 import static org.testng.Assert.assertEquals;
-import static org.testng.Assert.assertNotNull;
 import static org.testng.Assert.assertNull;
 
 /**
@@ -84,7 +83,7 @@ public class FormDataTest extends BaseTest {
             content-length: 0\r
             \r
             """)
-        .expectExceptionOnWrite(SocketException.class);
+        .assertOptionalExceptionOnWrite(SocketException.class);
 
     // Large, but max size has been disabled
     withScheme(scheme)
@@ -115,7 +114,7 @@ public class FormDataTest extends BaseTest {
             content-length: 0\r
             \r
             """)
-        .expectExceptionOnWrite(SocketException.class);
+        .assertOptionalExceptionOnWrite(SocketException.class);
   }
 
   @Test(dataProvider = "schemes")
@@ -154,7 +153,7 @@ public class FormDataTest extends BaseTest {
             content-length: 0\r
             \r
             """)
-        .expectExceptionOnWrite(SocketException.class);
+        .assertOptionalExceptionOnWrite(SocketException.class);
 
     // Same big size, but disable header size limit.
     withScheme(scheme)
@@ -196,12 +195,6 @@ public class FormDataTest extends BaseTest {
 
     public Builder(String scheme) {
       this.scheme = scheme;
-    }
-
-    public Builder expectExceptionOnWrite(Class<? extends Exception> clazz) {
-      assertNotNull(thrownOnWrite);
-      assertEquals(thrownOnWrite.getClass(), clazz);
-      return this;
     }
 
     public Builder expectNoExceptionOnWrite() {
@@ -309,6 +302,18 @@ public class FormDataTest extends BaseTest {
         }
 
         assertHTTPResponseEquals(socket, response);
+      }
+
+      return this;
+    }
+
+    public Builder assertOptionalExceptionOnWrite(Class<? extends Exception> clazz) {
+      // Note that this assertion really depends upon the system the test is run on, the size of the request, and the amount of data that can be cached.
+      // - So this is an optional assertion - if exception is not null, then we should be able to assert some attributes.
+      // - With the larger sizes this exception is mostly always thrown when running tests locally, but in GHA, it doesn't always occur.
+      if (thrownOnWrite != null) {
+        assertEquals(thrownOnWrite.getClass(), clazz);
+        assertEquals(thrownOnWrite.getMessage(), "Broken pipe");
       }
 
       return this;
