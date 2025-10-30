@@ -167,6 +167,16 @@ public class HTTPInputStream extends InputStream {
     // - If we have read past the end of the current request, push those bytes back onto the InputStream.
     // - When a maximum content length has been specified, read at most one byte past the maximum.
     int maxReadLen = maximumContentLength == -1 ? len : Math.min(len, maximumContentLength - bytesRead + 1);
+
+    // TODO : Hack - This makes compression work with fixed length requests
+    if (fixedLength) {
+      // TODO : Note : The len arg for an inflater stream is the number of un-compressed bytes.
+      //               The returned number of bytes is the un-compressed bytes. So the problem here
+      //               is that the bytesRemaining value we have is the compressed size of the payload so we can't
+      //               us it to ensure we do not read past the current fixed length request. Sad.
+//      maxReadLen = Math.min(maxReadLen, (int) bytesRemaining);
+    }
+
     int read = delegate.read(b, off, maxReadLen);
 
     // TODO : Can I optionally never override here? If I am fixed length, I could change len -> maxLen., and then never pushback.
@@ -175,6 +185,10 @@ public class HTTPInputStream extends InputStream {
 //    int maxLen = len;
 //    int read = delegate.read(b, off, maxLen);
 
+    // TODO : This is busted with compression.
+    //        bytesRemaining is calculated based upon the Content-Length.
+    //        But the bytes read from the InputStream will be the bytes read that are un-compressed.
+    //        So we can't use the bytes read to calculate pushback. This has to go below the Decompression in the chain.
     int reportBytesRead = read;
     if (fixedLength && read > 0) {
       int extraBytes = (int) (read - bytesRemaining);
@@ -254,8 +268,9 @@ public class HTTPInputStream extends InputStream {
     // HTTPInputStream (this) > Pushback (delegate) > Throughput > Socket
     // HTTPInputStream (this) > Chunked (delegate) > Pushback > Throughput > Socket
 
-    // HTTPInputStream (this) > Pushback > Decompress > Throughput > Socket
-    // HTTPInputStream (this) > Pushback > Decompress > Chunked > Throughput > Socket
+    // The way it is currently coded
+    // HTTPInputStream (this) > Decompress > Pushback > Throughput > Socket
+    // HTTPInputStream (this) > Decompress > Chunked > Pushback > Throughput > Socket
 
     // TODO : Note I could leave this alone, but when we parse the header we can lower case these values and then remove the equalsIgnoreCase here?
     //        Seems like ideally we would normalize them to lowercase earlier.

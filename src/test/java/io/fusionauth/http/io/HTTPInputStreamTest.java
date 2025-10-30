@@ -16,63 +16,117 @@
 package io.fusionauth.http.io;
 
 import java.io.ByteArrayInputStream;
+import java.io.ByteArrayOutputStream;
 import java.nio.charset.StandardCharsets;
 
+import io.fusionauth.http.BaseTest;
+import io.fusionauth.http.HTTPValues.ContentEncodings;
+import io.fusionauth.http.HTTPValues.Headers;
 import io.fusionauth.http.server.HTTPRequest;
 import io.fusionauth.http.server.HTTPServerConfiguration;
 import io.fusionauth.http.server.io.HTTPInputStream;
+import org.testng.annotations.DataProvider;
 import org.testng.annotations.Test;
 import static org.testng.Assert.assertEquals;
 
 /**
  * @author Daniel DeGroff
  */
-public class HTTPInputStreamTest {
-  @Test
-  public void read_chunked_withPushback() throws Exception {
+public class HTTPInputStreamTest extends BaseTest {
+  @DataProvider(name = "contentEncoding")
+  public Object[][] contentEncoding() {
+    return new Object[][]{
+        {""},
+        {"gzip"},
+        {"deflate"},
+        {"gzip, deflate"},
+        {"deflate, gzip"}
+    };
+  }
+
+  @Test(dataProvider = "contentEncoding")
+  public void read_chunked_withPushback(String contentEncoding) throws Exception {
     // Ensure that when we read a chunked encoded body that the InputStream returns the correct number of bytes read even when
     // we read past the end of the current request and use the PushbackInputStream.
 
     String content = "These pretzels are making me thirsty. These pretzels are making me thirsty. These pretzels are making me thirsty.";
     int contentLength = content.getBytes(StandardCharsets.UTF_8).length;
 
-    // Chunk the content
-    byte[] bytes = """
-        26\r
-        These pretzels are making me thirsty. \r
-        26\r
-        These pretzels are making me thirsty. \r
-        25\r
-        These pretzels are making me thirsty.\r
-        0\r
-        \r
-        GET / HTTP/1.1\r
-        """.getBytes();
+    // Chunk the content, add part of the next request
+    String chunked = chunkItUp(content, 38, null);
+    byte[] payload = chunked.getBytes(StandardCharsets.UTF_8);
+
+    // Optionally compress the payload
+    if (!contentEncoding.isEmpty()) {
+      var requestEncodings = contentEncoding.toLowerCase().trim().split(",");
+      for (String part : requestEncodings) {
+        String encoding = part.trim();
+        if (encoding.equals(ContentEncodings.Deflate)) {
+          payload = deflate(payload);
+        } else if (encoding.equals(ContentEncodings.Gzip)) {
+          payload = gzip(payload);
+        }
+      }
+    }
+
+    ByteArrayOutputStream out = new ByteArrayOutputStream();
+    out.write(payload);
+
+    // Add part of the next request
+    out.write("GET / HTTP/1.1\r\n".getBytes(StandardCharsets.UTF_8));
 
     HTTPRequest request = new HTTPRequest();
-    request.setHeader("Transfer-Encoding", "chunked");
+    request.setHeader(Headers.ContentEncoding, contentEncoding);
+    request.setHeader(Headers.TransferEncoding, "chunked");
 
-    assertReadWithPushback(bytes, content, contentLength, request);
+    byte[] bytes = out.toByteArray();
+    assertReadWithPushback(bytes, content, contentLength, 16, request);
   }
 
-  @Test
-  public void read_fixedLength_withPushback() throws Exception {
+  @Test(dataProvider = "contentEncoding")
+  public void read_fixedLength_withPushback(String contentEncoding) throws Exception {
     // Ensure that when we read a fixed length body that the InputStream returns the correct number of bytes read even when
     // we read past the end of the current request and use the PushbackInputStream.
 
-    String content = "These pretzels are making me thirsty. These pretzels are making me thirsty. These pretzels are making me thirsty.";
-    int contentLength = content.getBytes(StandardCharsets.UTF_8).length;
-
     // Fixed length body with the start of the next request in the buffer
-    byte[] bytes = (content + "GET / HTTP/1.1\r\n").getBytes(StandardCharsets.UTF_8);
+    String content = "These pretzels are making me thirsty. These pretzels are making me thirsty. These pretzels are making me thirsty.";
+    byte[] payload = content.getBytes(StandardCharsets.UTF_8);
+    int contentLength = payload.length;
+
+    // Optionally compress the payload
+    if (!contentEncoding.isEmpty()) {
+      var requestEncodings = contentEncoding.toLowerCase().trim().split(",");
+      for (String part : requestEncodings) {
+        String encoding = part.trim();
+        if (encoding.equals(ContentEncodings.Deflate)) {
+          payload = deflate(payload);
+        } else if (encoding.equals(ContentEncodings.Gzip)) {
+          payload = gzip(payload);
+        }
+      }
+    }
+
+    // Content-Length must be the compressed length
+    int compressedLength = payload.length;
+
+    ByteArrayOutputStream out = new ByteArrayOutputStream();
+    out.write(payload);
+
+    // Add part of the next request
+    out.write("GET / HTTP/1.1\r\n".getBytes(StandardCharsets.UTF_8));
 
     HTTPRequest request = new HTTPRequest();
-    request.setHeader("Content-Length", contentLength + "");
+    request.setHeader(Headers.ContentEncoding, contentEncoding);
+    request.setHeader(Headers.ContentLength, compressedLength + "");
 
-    assertReadWithPushback(bytes, content, contentLength, request);
+    // body length is 113, when compressed it is 68 (gzip) or 78 (deflate)
+    // The number of bytes available is 129.
+    byte[] bytes = out.toByteArray();
+    assertReadWithPushback(bytes, content, contentLength, 16, request);
   }
 
-  private void assertReadWithPushback(byte[] bytes, String content, int contentLength, HTTPRequest request) throws Exception {
+  private void assertReadWithPushback(byte[] bytes, String content, int contentLength, int pushedBack, HTTPRequest request)
+      throws Exception {
     int bytesAvailable = bytes.length;
     HTTPServerConfiguration configuration = new HTTPServerConfiguration().withRequestBufferSize(bytesAvailable + 100);
 
@@ -83,6 +137,7 @@ public class HTTPInputStreamTest {
     byte[] buffer = new byte[configuration.getRequestBufferSize()];
     int read = httpInputStream.read(buffer);
 
+    // TODO : Hmm.. with compression, this is returning the compressed bytes read instead of the un-compressed bytes read. WTF?
     assertEquals(read, contentLength);
     assertEquals(new String(buffer, 0, read), content);
 
@@ -91,12 +146,12 @@ public class HTTPInputStreamTest {
     assertEquals(secondRead, -1);
 
     // We have 16 bytes left over
-    assertEquals(pushbackInputStream.getAvailableBufferedBytesRemaining(), 16);
+    assertEquals(pushbackInputStream.getAvailableBufferedBytesRemaining(), pushedBack);
 
     // Next read should start at the next request
     byte[] leftOverBuffer = new byte[100];
     int leftOverRead = pushbackInputStream.read(leftOverBuffer);
-    assertEquals(leftOverRead, 16);
+    assertEquals(leftOverRead, pushedBack);
     assertEquals(new String(leftOverBuffer, 0, leftOverRead), "GET / HTTP/1.1\r\n");
   }
 }

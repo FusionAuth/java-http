@@ -66,7 +66,8 @@ public abstract class BaseSocketTest extends BaseTest {
       var body = bodyString.repeat(((requestBufferSize / bodyString.length())) * 2);
 
       if (request.contains("Transfer-Encoding: chunked")) {
-        body = chunkItUp(body, chunkedExtension);
+        // Chunk in 100 byte increments. Using a smaller chunk size to ensure we don't end up with a single chunk.
+        body = chunkItUp(body, 100, chunkedExtension);
       }
 
       request = request.replace("{body}", body);

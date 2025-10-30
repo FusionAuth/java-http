@@ -92,9 +92,11 @@ public class CompressionTest extends BaseTest {
       var requestEncodings = contentEncoding.toLowerCase().trim().split(",");
       for (String part : requestEncodings) {
         String encoding = part.trim();
-        payload = encoding.equals(ContentEncodings.Deflate)
-            ? deflate(payload)
-            : gzip(payload);
+        if (encoding.equals(ContentEncodings.Deflate)) {
+          payload = deflate(payload);
+        } else if (encoding.equals(ContentEncodings.Gzip) || encoding.equals(ContentEncodings.XGzip)) {
+          payload = gzip(payload);
+        }
       }
 
       byte[] uncompressedBody = payload;
@@ -102,9 +104,11 @@ public class CompressionTest extends BaseTest {
       // Sanity check on round trip compress/decompress
       for (int i = requestEncodings.length - 1; i >= 0; i--) {
         String encoding = requestEncodings[i].trim();
-        uncompressedBody = encoding.equals(ContentEncodings.Deflate)
-            ? inflate(uncompressedBody)
-            : ungzip(uncompressedBody);
+        if (encoding.equals(ContentEncodings.Deflate)) {
+          uncompressedBody = inflate(uncompressedBody);
+        } else if (encoding.equals(ContentEncodings.Gzip) || encoding.equals(ContentEncodings.XGzip)) {
+          uncompressedBody = ungzip(uncompressedBody);
+        }
       }
 
       assertEquals(uncompressedBody, bodyBytes);
@@ -140,17 +144,18 @@ public class CompressionTest extends BaseTest {
 
       assertNotNull(expectedResponseEncoding);
 
-      String result;
+      String result = null;
       InputStream responseInputStream = response.body();
 
       if (expectedResponseEncoding.isEmpty()) {
         result = new String(responseInputStream.readAllBytes());
       } else {
         assertEquals(response.headers().firstValue(Headers.ContentEncoding).orElse(null), expectedResponseEncoding);
-        result = new String(
-            expectedResponseEncoding.equals(ContentEncodings.Deflate)
-                ? new InflaterInputStream(responseInputStream).readAllBytes()
-                : new GZIPInputStream(responseInputStream).readAllBytes(), StandardCharsets.UTF_8);
+        if (expectedResponseEncoding.equals(ContentEncodings.Deflate)) {
+          result = new String(new InflaterInputStream(responseInputStream).readAllBytes());
+        } else if (expectedResponseEncoding.equals(ContentEncodings.Gzip) || expectedResponseEncoding.equals(ContentEncodings.XGzip)) {
+          result = new String(new GZIPInputStream(responseInputStream).readAllBytes(), StandardCharsets.UTF_8);
+        }
       }
 
       assertEquals(result, Files.readString(file));

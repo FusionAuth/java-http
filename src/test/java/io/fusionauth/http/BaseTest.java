@@ -436,10 +436,8 @@ public abstract class BaseTest {
     }
   }
 
-  protected String chunkItUp(String body, String chunkedExtension) {
+  protected String chunkItUp(String body, int chunkSize, String chunkedExtension) {
     List<String> result = new ArrayList<>();
-    // Chunk in 100 byte increments. Using a smaller chunk size to ensure we don't end up with a single chunk.
-    int chunkSize = 100;
     for (var i = 0; i < body.length(); i += chunkSize) {
       var endIndex = Math.min(i + chunkSize, body.length());
       var chunk = body.substring(i, endIndex);
