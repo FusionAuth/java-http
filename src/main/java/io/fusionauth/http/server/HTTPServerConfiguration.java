@@ -33,14 +33,14 @@ import io.fusionauth.http.log.SystemOutLoggerFactory;
  * @author Brian Pontarelli
  */
 public class HTTPServerConfiguration implements Configurable<HTTPServerConfiguration> {
-  public static final Map<String, Integer> DefaultMaxSizes = Map.of(
+  public static final Map<String, Integer> DefaultMaxRequestSizes = Map.of(
       "*", 128 * 1024 * 1024,                                   // 128 Megabytes
       "application/x-www-form-urlencoded", 10 * 1024 * 1024     // 10 Megabytes
   );
 
   private final List<HTTPListenerConfiguration> listeners = new ArrayList<>();
 
-  private final Map<String, Integer> maxRequestBodySize = new HashMap<>(DefaultMaxSizes);
+  private final Map<String, Integer> maxRequestBodySize = new HashMap<>(DefaultMaxRequestSizes);
 
   private Path baseDir = Path.of("");
 
@@ -492,7 +492,7 @@ public class HTTPServerConfiguration implements Configurable<HTTPServerConfigura
 
     // This preserves the default values in the field definition if the incoming Map does not contain them. Otherwise, they are overridden
     this.maxRequestBodySize.clear();
-    this.maxRequestBodySize.putAll(DefaultMaxSizes);
+    this.maxRequestBodySize.putAll(DefaultMaxRequestSizes);
     this.maxRequestBodySize.putAll(maxRequestBodySize);
     return this;
   }

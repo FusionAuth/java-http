@@ -186,10 +186,13 @@ public interface Configurable<T extends Configurable<T>> {
   }
 
   /**
-   * Sets the maximum size of the HTTP request body by optionally per Content-Type. If this limit is exceeded, the connection will be closed.
+   * Sets the maximum size of the HTTP request body by Content-Type. If this limit is exceeded, the connection will be closed.
    * <p>
-   * A key of "*" will be the default value if a key doesn't exist for the specific Content-Type. Additionally, you can specify wildcards
-   * for subtypes of Content-Types such as "application/*". This will be used if the exact Content-Type key is not in the Map.
+   * The default size is identified by the "*" key. This default value will be used if a more specific value has not been configured for the
+   * requested Content-Type.
+   * <p>
+   * You may also use wildcards to match one to many subtypes. For example, "application/*" will provide a max size for all content types
+   * beginning with application/ when an exact match has not been configured.
    * <p>
    * An example lookup for the Content-Type "application/x-www-form-urlencoded" is:
    * <ol>
@@ -198,13 +201,13 @@ public interface Configurable<T extends Configurable<T>> {
    *   <li>*</li>
    * </ol>
    * <p>
-   * If you pass in a Map that does not contain a default size using the String "*", this will retain the default value set by java-http.
-   * Similarly, the default value for "application/x-www-form-urlencoded" is also retained if the Mapp you provide does not contain that
+   * If the provided configuration does not contain the initial default values for "*" and "application/x-www-form-urlencoded", the
+   * server default values will be retained.
    * key.
    * <p>
    * Set any value to -1 to disable this limitation.
    * <p>
-   * Defaults to 128 Megabytes for the wildcard "*" and 10 Megabytes for "application/x-www-form-urlencoded".
+   * Defaults to 128 Megabytes for the default "*" and 10 Megabytes for "application/x-www-form-urlencoded".
    *
    * @param maxRequestBodySize a map specifying the maximum size in bytes for the HTTP request body by Content-Type
    * @return This.
