@@ -78,9 +78,10 @@ public class ParameterTest extends BaseTest {
     };
 
     CountingInstrumenter instrumenter = new CountingInstrumenter();
-    try (HTTPServer ignore = makeServer(scheme, handler, instrumenter).start()) {
+    try (HTTPServer ignore = makeServer(scheme, handler, instrumenter).start();
+         var client = makeClient(scheme, null)) {
+
       URI uri = makeURI(scheme, "?one=two&three=four");
-      var client = makeClient(scheme, null);
       var response = client.send(
           HttpRequest.newBuilder().uri(uri).GET().build(),
           r -> BodySubscribers.ofString(StandardCharsets.UTF_8)

@@ -24,6 +24,7 @@ import java.math.BigInteger;
 import java.net.CookieHandler;
 import java.net.Socket;
 import java.net.SocketException;
+import java.net.SocketTimeoutException;
 import java.net.URI;
 import java.net.http.HttpClient;
 import java.nio.charset.StandardCharsets;
@@ -48,8 +49,10 @@ import java.time.Duration;
 import java.time.Instant;
 import java.time.ZonedDateTime;
 import java.time.format.DateTimeFormatter;
+import java.util.ArrayList;
 import java.util.Arrays;
 import java.util.Date;
+import java.util.List;
 import java.util.Map;
 import java.util.UUID;
 import java.util.stream.Collectors;
@@ -334,6 +337,19 @@ public abstract class BaseTest {
   }
 
   /**
+   * @return The possible schemes - {@code http} and {@code https} and chunked.
+   */
+  @DataProvider
+  public Object[][] schemesAndChunked() {
+    return new Object[][]{
+        {"http", true},
+        {"http", false},
+        {"https", true},
+        {"https", false}
+    };
+  }
+
+  /**
    * @return The possible response buffer lengths and schemes.
    */
   @DataProvider
@@ -391,7 +407,10 @@ public abstract class BaseTest {
   protected void assertHTTPResponseEquals(Socket socket, String expectedResponse) throws Exception {
     var is = socket.getInputStream();
     var expectedResponseLength = expectedResponse.getBytes(StandardCharsets.UTF_8).length;
-    var actualResponse = new String(is.readNBytes(expectedResponseLength), StandardCharsets.UTF_8);
+
+    byte[] buffer = new byte[expectedResponseLength * 2];
+    int read = is.read(buffer);
+    var actualResponse = new String(buffer, 0, read, StandardCharsets.UTF_8);
 
     // Perform an initial equality check, this is fast. If it fails, it may because there are remaining bytes left to read. This is slower.
     if (!actualResponse.equals(expectedResponse)) {
@@ -406,11 +425,38 @@ public abstract class BaseTest {
         if (se.getMessage().equals("Connection reset")) {
           var addr = socket.getRemoteSocketAddress();
           socket.close();
-          socket.connect(addr);
-          assertResponseEquals(socket.getInputStream(), actualResponse, expectedResponse);
+          try {
+            socket.connect(addr);
+            assertResponseEquals(socket.getInputStream(), actualResponse, expectedResponse);
+          } catch (Exception e) {
+            assertEquals(actualResponse, expectedResponse, "[" + e.getClass().getSimpleName() + "] was thrown trying to read. We are going to assert on what we have.\n");
+          }
         }
       }
     }
+  }
+
+  protected String chunkItUp(String body, String chunkedExtension) {
+    List<String> result = new ArrayList<>();
+    // Chunk in 100 byte increments. Using a smaller chunk size to ensure we don't end up with a single chunk.
+    int chunkSize = 100;
+    for (var i = 0; i < body.length(); i += chunkSize) {
+      var endIndex = Math.min(i + chunkSize, body.length());
+      var chunk = body.substring(i, endIndex);
+      var chunkLength = chunk.getBytes(StandardCharsets.UTF_8).length;
+
+      String hex = Integer.toHexString(chunkLength);
+      result.add(hex);
+
+      if (chunkedExtension != null) {
+        result.add(chunkedExtension);
+      }
+
+      result.add(("\r\n" + chunk + "\r\n"));
+    }
+
+    result.add(("0\r\n\r\n"));
+    return String.join("", result);
   }
 
   protected byte[] deflate(byte[] bytes) throws Exception {
@@ -497,10 +543,14 @@ public abstract class BaseTest {
   }
 
   private void assertResponseEquals(InputStream is, String actualResponse, String expectedResponse) throws IOException {
-    var remainingBytes = is.readAllBytes();
-    String fullResponse = actualResponse + new String(remainingBytes, StandardCharsets.UTF_8);
-    // Use assertEquals so we can get Eclipse error formatting
-    assertEquals(fullResponse, expectedResponse);
+    try {
+      var remainingBytes = is.readAllBytes();
+      String fullResponse = actualResponse + new String(remainingBytes, StandardCharsets.UTF_8);
+      // Use assertEquals so we can get Eclipse error formatting
+      assertEquals(fullResponse, expectedResponse, "An additional [" + remainingBytes.length + "] was read from the InputStream to complete the message.\nInitial expected response\n[" + expectedResponse + "]\nInitial actual response\n[" + actualResponse + "]\n");
+    } catch (SocketTimeoutException e) {
+      assertEquals(actualResponse, expectedResponse, "[SocketTimeoutException] was thrown trying to read. We are going to assert on what we have.\n");
+    }
   }
 
   @SuppressWarnings("unused")

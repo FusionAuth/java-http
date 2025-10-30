@@ -24,14 +24,13 @@ import org.testng.annotations.Test;
  * @author Daniel DeGroff
  */
 public class HTTP11SocketTest extends BaseSocketTest {
-  @Test
+  @Test(invocationCount = 100)
   public void bad_request() throws Exception {
     // Invalid HTTP header
     withRequest("""
         cat /etc/password\r
         \r
-        {body}
-        """
+        {body}"""
     ).expectResponse("""
         HTTP/1.1 400 \r
         connection: close\r
@@ -52,7 +51,7 @@ public class HTTP11SocketTest extends BaseSocketTest {
     };
   }
 
-  @Test
+  @Test(invocationCount = 100)
   public void duplicate_host_header() throws Exception {
     // Duplicate Host header
     withRequest("""
@@ -62,8 +61,7 @@ public class HTTP11SocketTest extends BaseSocketTest {
         Content-Type: plain/text\r
         Content-Length: {contentLength}\r
         \r
-        {body}
-        """
+        {body}"""
     ).expectResponse("""
         HTTP/1.1 400 \r
         connection: close\r
@@ -72,7 +70,7 @@ public class HTTP11SocketTest extends BaseSocketTest {
         """);
   }
 
-  @Test
+  @Test(invocationCount = 100)
   public void duplicate_host_header_withTransferEncoding() throws Exception {
     // Duplicate Host header w/ Transfer-Encoding instead of Content-Length
     // - In this case the Transfer-Encoding is only to ensure we can correctly drain the InputStream so the client can read the response.
@@ -84,8 +82,7 @@ public class HTTP11SocketTest extends BaseSocketTest {
         Transfer-Encoding: chunked\r
         Content-Length: {contentLength}\r
         \r
-        {body}
-        """
+        {body}"""
     ).expectResponse("""
         HTTP/1.1 400 \r
         connection: close\r
@@ -106,7 +103,7 @@ public class HTTP11SocketTest extends BaseSocketTest {
    *    Host header field with an invalid field-value.
    * </pre>
    */
-  @Test
+  @Test(invocationCount = 100)
   public void host_header_required() throws Exception {
     // Host header is required, return 400 if not provided
     withRequest("""
@@ -114,8 +111,7 @@ public class HTTP11SocketTest extends BaseSocketTest {
         Content-Type: plain/text\r
         Content-Length: {contentLength}\r
         \r
-        {body}
-        """
+        {body}"""
     ).expectResponse("""
         HTTP/1.1 400 \r
         connection: close\r
@@ -124,7 +120,7 @@ public class HTTP11SocketTest extends BaseSocketTest {
         """);
   }
 
-  @Test
+  @Test(invocationCount = 100)
   public void host_header_required_with_X_Forwarded_Host() throws Exception {
     // Ensure that X-Forwarded-Host doesn't count for the Host header
     withRequest("""
@@ -133,8 +129,7 @@ public class HTTP11SocketTest extends BaseSocketTest {
         Content-Type: plain/text\r
         Content-Length: {contentLength}\r
         \r
-        {body}
-        """
+        {body}"""
     ).expectResponse("""
         HTTP/1.1 400 \r
         connection: close\r
@@ -156,7 +151,7 @@ public class HTTP11SocketTest extends BaseSocketTest {
    *    overflows (Section 9.3).
    * </pre>
    */
-  @Test
+  @Test(invocationCount = 100)
   public void invalid_content_length() throws Exception {
     // In this implementation the Content-Length is stored as a long, and as such we will take a Number Format Exception if the number exceeds Long.MAX_VALUE.
     // - The above-mentioned RFC does indicate we should account for this - Long.MAX_VALUE is 2^63 - 1 which seems like a reasonable limit.
@@ -169,8 +164,7 @@ public class HTTP11SocketTest extends BaseSocketTest {
         Content-Type: plain/text\r
         Content-Length: 9223372036854775808\r
         \r
-        {body}
-        """)
+        {body}""")
     ).expectResponse("""
         HTTP/1.1 400 \r
         connection: close\r
@@ -185,8 +179,7 @@ public class HTTP11SocketTest extends BaseSocketTest {
         Content-Type: plain/text\r
         Content-Length: -1\r
         \r
-        {body}
-        """)
+        {body}""")
     ).expectResponse("""
         HTTP/1.1 400 \r
         connection: close\r
@@ -201,8 +194,7 @@ public class HTTP11SocketTest extends BaseSocketTest {
         Content-Type: plain/text\r
         Content-Length: -9223372036854775807\r
         \r
-        {body}
-        """
+        {body}"""
     ).expectResponse("""
         HTTP/1.1 400 \r
         connection: close\r
@@ -217,7 +209,7 @@ public class HTTP11SocketTest extends BaseSocketTest {
    * See <a href="https://www.rfc-editor.org/rfc/rfc7230#section-2.6">RFC 7230 Section 2.6</a>
    * </p>
    */
-  @Test
+  @Test(invocationCount = 100)
   public void invalid_version() throws Exception {
     // Invalid: HTTP/1
     // - missing the '.' (dot) and the second digit.
@@ -227,8 +219,7 @@ public class HTTP11SocketTest extends BaseSocketTest {
         Content-Type: plain/text\r
         Content-Length: {contentLength}\r
         \r
-        {body}
-        """
+        {body}"""
     ).expectResponse(
         """
             HTTP/1.1 505 \r
@@ -245,8 +236,7 @@ public class HTTP11SocketTest extends BaseSocketTest {
         Content-Type: plain/text\r
         Content-Length: {contentLength}\r
         \r
-        {body}
-        """
+        {body}"""
     ).expectResponse("""
         HTTP/1.1 505 \r
         connection: close\r
@@ -261,8 +251,7 @@ public class HTTP11SocketTest extends BaseSocketTest {
         Content-Type: plain/text\r
         Content-Length: {contentLength}\r
         \r
-        {body}
-        """
+        {body}"""
     ).expectResponse("""
         HTTP/1.1 505 \r
         connection: close\r
@@ -277,8 +266,7 @@ public class HTTP11SocketTest extends BaseSocketTest {
         Content-Type: plain/text\r
         Content-Length: {contentLength}\r
         \r
-        {body}
-        """
+        {body}"""
     ).expectResponse("""
         HTTP/1.1 505 \r
         connection: close\r
@@ -287,7 +275,7 @@ public class HTTP11SocketTest extends BaseSocketTest {
         """);
   }
 
-  @Test
+  @Test(invocationCount = 100)
   public void keepAlive_bodyNeverRead() throws Exception {
     // Use case: Using keep alive, and the request handler doesn't read the payload.
     // - Ensure the HTTP worker is able to drain the bytes so the next request starts with an empty byte array.
@@ -306,7 +294,7 @@ public class HTTP11SocketTest extends BaseSocketTest {
         """);
   }
 
-  @Test
+  @Test(invocationCount = 100)
   public void mangled_version() throws Exception {
     // HTTP reversed, does not begin with HTTP/
     // - This will fail during the preamble parsing so we are not returning a 505 in this case. My opinion is that
@@ -317,8 +305,7 @@ public class HTTP11SocketTest extends BaseSocketTest {
         Content-Type: plain/text\r
         Content-Length: {contentLength}\r
         \r
-        {body}
-        """
+        {body}"""
     ).expectResponse("""
         HTTP/1.1 400 \r
         connection: close\r
@@ -335,8 +322,7 @@ public class HTTP11SocketTest extends BaseSocketTest {
         Content-Type: plain/text\r
         Content-Length: {contentLength}\r
         \r
-        {body}
-        """
+        {body}"""
     ).expectResponse("""
         HTTP/1.1 400 \r
         connection: close\r
@@ -345,7 +331,7 @@ public class HTTP11SocketTest extends BaseSocketTest {
         """);
   }
 
-  @Test
+  @Test(invocationCount = 100)
   public void missing_protocol() throws Exception {
     // - This will fail during the preamble parsing so we are not returning a 505 in this case. My opinion is that
     //   this is not an invalid protocol version, it is simply a malformed request.
@@ -355,8 +341,7 @@ public class HTTP11SocketTest extends BaseSocketTest {
         Content-Type: plain/text\r
         Content-Length: {contentLength}\r
         \r
-        {body}
-        """
+        {body}"""
     ).expectResponse("""
         HTTP/1.1 400 \r
         connection: close\r
@@ -365,7 +350,7 @@ public class HTTP11SocketTest extends BaseSocketTest {
         """);
   }
 
-  @Test(dataProvider = "chunk-extensions")
+  @Test(dataProvider = "chunk-extensions", invocationCount = 100)
   public void transfer_encoding_chunked_extensions(String chunkExtension) throws Exception {
     // Ensure we can properly ignore chunked extensions
     withRequest("""
@@ -374,8 +359,7 @@ public class HTTP11SocketTest extends BaseSocketTest {
         Content-Type: plain/text\r
         Transfer-Encoding: chunked\r
         \r
-        {body}
-        """
+        {body}"""
     ).withChunkedExtension(chunkExtension)
      .expectResponse("""
          HTTP/1.1 200 \r
@@ -396,7 +380,7 @@ public class HTTP11SocketTest extends BaseSocketTest {
    *  that contains a Transfer-Encoding header field.
    * </pre>
    */
-  @Test
+  @Test(invocationCount = 250)
   public void transfer_encoding_content_length() throws Exception {
     // When Transfer-Encoding is provided, Content-Length should be omitted. If they are both present, Content-Length is ignored.
     withRequest("""
@@ -406,8 +390,7 @@ public class HTTP11SocketTest extends BaseSocketTest {
         Content-Length: {contentLength}\r
         Transfer-Encoding: chunked\r
         \r
-        {body}
-        """
+        {body}"""
     ).expectResponse("""
         HTTP/1.1 200 \r
         connection: keep-alive\r

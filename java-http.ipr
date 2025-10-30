@@ -9,6 +9,10 @@
       <option name="addBlankAfter" value="false" />
     </LanguageOptions>
   </component>
+  <component name="GitScope">
+    <option name="currentTabIndex" value="1" />
+    <option name="modelData" value="[{&quot;targetBranchMap&quot;:{&quot;value&quot;:{&quot;/Users/bpontarelli/dev/inversoft/fusionauth/java-http&quot;:&quot;HEAD~5&quot;}},&quot;customTabName&quot;:&quot;HEAD~5&quot;}]" />
+  </component>
   <component name="InspectionProjectProfileManager">
     <profile version="1.0">
       <option name="myName" value="Project Default" />

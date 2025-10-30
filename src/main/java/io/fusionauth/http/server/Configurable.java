@@ -17,6 +17,7 @@ package io.fusionauth.http.server;
 
 import java.nio.file.Path;
 import java.time.Duration;
+import java.util.Map;
 
 import io.fusionauth.http.io.MultipartConfiguration;
 import io.fusionauth.http.log.LoggerFactory;
@@ -48,7 +49,7 @@ public interface Configurable<T extends Configurable<T>> {
   }
 
   /**
-   * Sets the buffer size for the chunked input stream. Defaults to 4k.
+   * Sets the buffer size for the chunked input stream. Defaults to 4 Kilobytes.
    *
    * @param chunkedBufferSize the buffer size used to read a request body that was encoded using 'chunked' transfer-encoding.
    * @return This.
@@ -194,6 +195,52 @@ public interface Configurable<T extends Configurable<T>> {
   }
 
   /**
+   * Sets the maximum size of the HTTP request body by Content-Type. If this limit is exceeded, the connection will be closed.
+   * <p>
+   * The default size is identified by the "*" key. This default value will be used if a more specific value has not been configured for the
+   * requested Content-Type.
+   * <p>
+   * You may also use wildcards to match one to many subtypes. For example, "application/*" will provide a max size for all content types
+   * beginning with application/ when an exact match has not been configured.
+   * <p>
+   * An example lookup for the Content-Type "application/x-www-form-urlencoded" is:
+   * <ol>
+   *   <li>application/x-www-form-urlencoded</li>
+   *   <li>application/*</li>
+   *   <li>*</li>
+   * </ol>
+   * <p>
+   * If the provided configuration does not contain the initial default identified by the "*" key, the server default value will be retained.
+   * key.
+   * <p>
+   * Set any value to -1 to disable this limitation.
+   * <p>
+   * Defaults to 128 Megabytes for the default "*" and 10 Megabytes for "application/x-www-form-urlencoded".
+   *
+   * @param maxRequestBodySize a map specifying the maximum size in bytes for the HTTP request body by Content-Type
+   * @return This.
+   */
+  default T withMaxRequestBodySize(Map<String, Integer> maxRequestBodySize) {
+    configuration().withMaxRequestBodySize(maxRequestBodySize);
+    return (T) this;
+  }
+
+  /**
+   * Sets the maximum size of the HTTP request header. The request header includes the HTTP request line, and all HTTP request headers,
+   * essentially everything except the request body. If this maximum limit is exceeded, the connection will be closed. Defaults to 128
+   * Kilobytes.
+   * <p>
+   * Set this to -1 to disable this limitation.
+   *
+   * @param maxRequestHeaderSize the maximum size in bytes for the HTTP request header
+   * @return This.
+   */
+  default T withMaxRequestHeaderSize(int maxRequestHeaderSize) {
+    configuration().withMaxRequestHeaderSize(maxRequestHeaderSize);
+    return (T) this;
+  }
+
+  /**
    * Sets the base directory for this server. This is passed to the HTTPContext, which is available from this class. This defaults to the
    * current working directory of the process. Defaults to 100,000.
    *
@@ -206,7 +253,8 @@ public interface Configurable<T extends Configurable<T>> {
   }
 
   /**
-   * This configures the maximum size of a chunk in the response when the server is using chunked response encoding. Defaults to 16k.
+   * This configures the maximum size of a chunk in the response when the server is using chunked response encoding. Defaults to 16
+   * Kilobytes.
    *
    * @param size The size in bytes.
    * @return This.
@@ -218,7 +266,7 @@ public interface Configurable<T extends Configurable<T>> {
 
   /**
    * Sets the maximum number of bytes the server will allow worker threads to drain after calling the request handler. If the request
-   * handler does not read all the bytes, and this limit is exceeded the connection will be closed. Defaults to 128k bytes.
+   * handler does not read all the bytes, and this limit is exceeded the connection will be closed. Defaults to 128 Kilobytes bytes.
    *
    * @param maxBytesToDrain The maximum number of bytes to drain from the InputStream if the request handler did not read all the available
    *                        bytes.
@@ -254,7 +302,7 @@ public interface Configurable<T extends Configurable<T>> {
   }
 
   /**
-   * Sets the size of the buffer that is used to process the multipart request body. This defaults to 16k.
+   * Sets the size of the buffer that is used to process the multipart request body. This defaults to 16 Kilobytes.
    *
    * @param multipartBufferSize The size of the buffer.
    * @return This.
@@ -306,7 +354,7 @@ public interface Configurable<T extends Configurable<T>> {
   }
 
   /**
-   * Sets the size of the buffer that is used to process the HTTP request. This defaults to 16k.
+   * Sets the size of the buffer that is used to process the HTTP request. This defaults to 16 Kilobytes.
    *
    * @param requestBufferSize The size of the buffer.
    * @return This.
@@ -319,9 +367,11 @@ public interface Configurable<T extends Configurable<T>> {
   /**
    * Sets the size of the buffer that is used to store the HTTP response before any bytes are written back to the client. This is useful
    * when the server is generating the response but encounters an error. In this case, the server will throw out the response and change to
-   * a 500 error response. This defaults to 64k. Negative values disable the response buffer.
+   * a 500 error response. This defaults to 64 Kilobytes. Negative values disable the response buffer.
+   * <p>
+   * Set to -1 do disable buffering completely.
    *
-   * @param responseBufferSize The size of the buffer. Set to -1 to disable buffering completely.
+   * @param responseBufferSize The size of the buffer.
    * @return This.
    */
   default T withResponseBufferSize(int responseBufferSize) {

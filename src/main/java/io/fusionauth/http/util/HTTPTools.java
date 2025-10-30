@@ -34,6 +34,7 @@ import io.fusionauth.http.HTTPValues.ControlBytes;
 import io.fusionauth.http.HTTPValues.HeaderBytes;
 import io.fusionauth.http.HTTPValues.ProtocolBytes;
 import io.fusionauth.http.ParseException;
+import io.fusionauth.http.RequestHeadersTooLargeException;
 import io.fusionauth.http.io.PushbackInputStream;
 import io.fusionauth.http.log.Logger;
 import io.fusionauth.http.log.LoggerFactory;
@@ -43,6 +44,37 @@ import io.fusionauth.http.server.io.ConnectionClosedException;
 
 public final class HTTPTools {
   private static Logger logger;
+
+  /**
+   * Return the maximum request body size for the requested content type.
+   *
+   * @param contentType        the content-type of the request
+   * @param maxRequestBodySize the maximum request size configuration
+   * @return the maximum request size, or -1 if no limit should be enforced.
+   */
+  public static int getMaxRequestBodySize(String contentType, Map<String, Integer> maxRequestBodySize) {
+    if (contentType == null) {
+      return maxRequestBodySize.get("*");
+    }
+
+    // Exact match
+    Integer maximumSize = maxRequestBodySize.get(contentType);
+    if (maximumSize != null) {
+      return maximumSize;
+    }
+
+    // Ignore subtype by replacing it with '*'. RFC 1341 says a subtype is required which means each Content-Type must contain a /.
+    // - But be more defensive, and account for a case where no subtype has been defined.
+    int index = contentType.indexOf('/');
+    if (index != -1) {
+      maximumSize = maxRequestBodySize.get(contentType.substring(0, index) + "/*");
+    }
+
+    // RFC 1341 indicates subtypes cannot be nested. So if we do not yet have a match, use the default key '*'.
+    return maximumSize != null
+        ? maximumSize
+        : maxRequestBodySize.get("*");
+  }
 
   /**
    * Statically sets up the logger, mostly for trace logging.
@@ -131,12 +163,18 @@ public final class HTTPTools {
   /**
    * Parses URL encoded data either from a URL parameter list in the query string or the form body.
    *
-   * @param data   The data as a character array.
-   * @param start  The start index to start parsing from.
-   * @param length The length to parse.
-   * @param result The result Map to put the value into.
+   * @param data    The data as a character array.
+   * @param start   The start index to start parsing from.
+   * @param length  The length to parse.
+   * @param charset The charset used to decode the key and value. May be null, and will default to UTF-8.
+   * @param result  The result Map to put the value into.
    */
-  public static void parseEncodedData(byte[] data, int start, int length, Map<String, List<String>> result) {
+  public static void parseEncodedData(byte[] data, int start, int length, Charset charset, Map<String, List<String>> result) {
+    // Default to UTF-8
+    if (charset == null) {
+      charset = StandardCharsets.UTF_8;
+    }
+
     boolean inName = true;
     String name = null;
     String value;
@@ -151,7 +189,7 @@ public final class HTTPTools {
         inName = false;
 
         try {
-          name = URLDecoder.decode(new String(data, start, i - start), StandardCharsets.UTF_8);
+          name = URLDecoder.decode(new String(data, start, i - start, charset), charset);
         } catch (Exception e) {
           name = null; // Malformed
         }
@@ -167,7 +205,7 @@ public final class HTTPTools {
         //noinspection DuplicatedCode
         try {
           if (start < i) {
-            value = URLDecoder.decode(new String(data, start, i - start), StandardCharsets.UTF_8);
+            value = URLDecoder.decode(new String(data, start, i - start, charset), charset);
           } else {
             value = "";
           }
@@ -186,7 +224,7 @@ public final class HTTPTools {
       //noinspection DuplicatedCode
       try {
         if (start < length) {
-          value = URLDecoder.decode(new String(data, start, length - start), StandardCharsets.UTF_8);
+          value = URLDecoder.decode(new String(data, start, length - start, charset), charset);
         } else {
           value = "";
         }
@@ -196,6 +234,18 @@ public final class HTTPTools {
         // Ignore
       }
     }
+  }
+
+  /**
+   * Parses URL encoded data either from a URL parameter list in the query string or the form body. Assumes the values are UTF-8 encoded.
+   *
+   * @param data   The data as a character array.
+   * @param start  The start index to start parsing from.
+   * @param length The length to parse.
+   * @param result The result Map to put the value into.
+   */
+  public static void parseEncodedData(byte[] data, int start, int length, Map<String, List<String>> result) {
+    parseEncodedData(data, start, length, StandardCharsets.UTF_8, result);
   }
 
   /**
@@ -257,14 +307,19 @@ public final class HTTPTools {
 
   /**
    * Parses the request preamble directly from the given InputStream.
+   * <p>
+   * The HTTP request is made up of the request line, headers and an optional body. The request preamble comprises the Request line and the
+   * Headers. All that remains after the preamble is the optional body.
    *
-   * @param inputStream   The input stream to read the preamble from.
-   * @param request       The HTTP request to populate.
-   * @param requestBuffer A buffer used for reading to help reduce memory thrashing.
-   * @param readObserver  An observer that is called once one byte has been read.
+   * @param inputStream          The input stream to read the preamble from.
+   * @param maxRequestHeaderSize The maximum number of bytes to read for the header. If exceed throw an exception.
+   * @param request              The HTTP request to populate.
+   * @param requestBuffer        A buffer used for reading to help reduce memory thrashing.
+   * @param readObserver         An observer that is called once one byte has been read.
    * @throws IOException If the read fails.
    */
-  public static void parseRequestPreamble(PushbackInputStream inputStream, HTTPRequest request, byte[] requestBuffer, Runnable readObserver)
+  public static void parseRequestPreamble(PushbackInputStream inputStream, int maxRequestHeaderSize, HTTPRequest request,
+                                          byte[] requestBuffer, Runnable readObserver)
       throws IOException {
     RequestPreambleState state = RequestPreambleState.RequestMethod;
     var valueBuffer = new ByteArrayOutputStream(512);
@@ -272,6 +327,8 @@ public final class HTTPTools {
 
     int read = 0;
     int index = 0;
+    int premableLength = 0;
+
     while (state != RequestPreambleState.Complete) {
       long start = System.currentTimeMillis();
       read = inputStream.read(requestBuffer);
@@ -285,7 +342,9 @@ public final class HTTPTools {
       logger.trace("Read [{}] from client for preamble.", read);
 
       // Tell the callback that we've read at least one byte
-      readObserver.run();
+      if (premableLength == 0) {
+        readObserver.run();
+      }
 
       for (index = 0; index < read && state != RequestPreambleState.Complete; index++) {
         // If there is a state transition, store the value properly and reset the builder (if needed)
@@ -311,6 +370,12 @@ public final class HTTPTools {
         }
 
         state = nextState;
+      }
+
+      // index is the number of bytes we processed as part of the preamble
+      premableLength += index;
+      if (maxRequestHeaderSize != -1 && premableLength > maxRequestHeaderSize) {
+        throw new RequestHeadersTooLargeException(maxRequestHeaderSize, "The maximum size of the request header has been exceeded. The maximum size is [" + maxRequestHeaderSize + "] bytes.");
       }
     }
 
