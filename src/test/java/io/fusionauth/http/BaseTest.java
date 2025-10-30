@@ -60,6 +60,7 @@ import java.util.zip.GZIPOutputStream;
 import java.util.zip.InflaterInputStream;
 
 import io.fusionauth.http.HTTPValues.Connections;
+import io.fusionauth.http.HTTPValues.ContentEncodings;
 import io.fusionauth.http.log.FileLogger;
 import io.fusionauth.http.log.FileLoggerFactory;
 import io.fusionauth.http.log.Level;
@@ -104,7 +105,21 @@ import static org.testng.Assert.fail;
  * @author Brian Pontarelli
  */
 public abstract class BaseTest {
+  protected byte[] compressUsingContentEncoding(byte[] bytes, String contentEncoding) throws Exception {
+    if (!contentEncoding.isEmpty()) {
+      var requestEncodings = contentEncoding.toLowerCase().trim().split(",");
+      for (String part : requestEncodings) {
+        String encoding = part.trim();
+        if (encoding.equals(ContentEncodings.Deflate)) {
+          bytes = deflate(bytes);
+        } else if (encoding.equals(ContentEncodings.Gzip)) {
+          bytes = gzip(bytes);
+        }
+      }
+    }
 
+    return bytes;
+  }
   /**
    * This timeout is used for the HttpClient during each test. If you are in a debugger, you will need to change this timeout to be much
    * larger, otherwise, the client might truncate the request to the server.
@@ -245,6 +260,17 @@ public abstract class BaseTest {
     return new Object[][]{
         {Connections.Close},
         {Connections.KeepAlive}
+    };
+  }
+
+  @DataProvider(name = "contentEncoding")
+  public Object[][] contentEncoding() {
+    return new Object[][]{
+        {""},
+        {"gzip"},
+        {"deflate"},
+        {"gzip, deflate"},
+        {"deflate, gzip"}
     };
   }
 

@@ -33,17 +33,6 @@ import static org.testng.Assert.assertEquals;
  * @author Daniel DeGroff
  */
 public class HTTPInputStreamTest extends BaseTest {
-  @DataProvider(name = "contentEncoding")
-  public Object[][] contentEncoding() {
-    return new Object[][]{
-        {""},
-        {"gzip"},
-        {"deflate"},
-        {"gzip, deflate"},
-        {"deflate, gzip"}
-    };
-  }
-
   @Test(dataProvider = "contentEncoding")
   public void read_chunked_withPushback(String contentEncoding) throws Exception {
     // Ensure that when we read a chunked encoded body that the InputStream returns the correct number of bytes read even when
@@ -53,18 +42,8 @@ public class HTTPInputStreamTest extends BaseTest {
     byte[] payload = content.getBytes(StandardCharsets.UTF_8);
     int contentLength = payload.length;
 
-    // Optionally compress the payload
-    if (!contentEncoding.isEmpty()) {
-      var requestEncodings = contentEncoding.toLowerCase().trim().split(",");
-      for (String part : requestEncodings) {
-        String encoding = part.trim();
-        if (encoding.equals(ContentEncodings.Deflate)) {
-          payload = deflate(payload);
-        } else if (encoding.equals(ContentEncodings.Gzip)) {
-          payload = gzip(payload);
-        }
-      }
-    }
+    // Optionally compress
+    payload = compressUsingContentEncoding(payload, contentEncoding);
 
     // Chunk the content, add part of the next request
     payload = chunkEncoded(payload, 38, null);
@@ -93,18 +72,8 @@ public class HTTPInputStreamTest extends BaseTest {
     byte[] payload = content.getBytes(StandardCharsets.UTF_8);
     int contentLength = payload.length;
 
-    // Optionally compress the payload
-    if (!contentEncoding.isEmpty()) {
-      var requestEncodings = contentEncoding.toLowerCase().trim().split(",");
-      for (String part : requestEncodings) {
-        String encoding = part.trim();
-        if (encoding.equals(ContentEncodings.Deflate)) {
-          payload = deflate(payload);
-        } else if (encoding.equals(ContentEncodings.Gzip)) {
-          payload = gzip(payload);
-        }
-      }
-    }
+    // Optionally compress
+    payload = compressUsingContentEncoding(payload, contentEncoding);
 
     // Content-Length must be the compressed length
     int compressedLength = payload.length;
