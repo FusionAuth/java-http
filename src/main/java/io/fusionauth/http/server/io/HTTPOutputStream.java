@@ -191,7 +191,6 @@ public class HTTPOutputStream extends OutputStream {
       response.setContentLength(0L);
     } else {
       // 204 status is specifically "No Content" so we shouldn't write the content-encoding and vary headers if the status is 204
-      // TODO : Compress by default is on by default. But it looks like we don't actually compress unless you also send in an Accept-Encoding header?
       if (compress && !twoOhFour) {
         for (String encoding : acceptEncodings) {
           if (encoding.equalsIgnoreCase(ContentEncodings.Gzip)) {

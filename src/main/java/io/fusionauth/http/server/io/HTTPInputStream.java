@@ -20,8 +20,8 @@ import java.io.InputStream;
 import java.util.zip.GZIPInputStream;
 import java.util.zip.InflaterInputStream;
 
-import io.fusionauth.http.HTTPValues.ContentEncodings;
 import io.fusionauth.http.ContentTooLargeException;
+import io.fusionauth.http.HTTPValues.ContentEncodings;
 import io.fusionauth.http.io.ChunkedInputStream;
 import io.fusionauth.http.io.PushbackInputStream;
 import io.fusionauth.http.log.Logger;
@@ -59,11 +59,11 @@ public class HTTPInputStream extends InputStream {
 
   private boolean closed;
 
-  private boolean initialized;
-
   private InputStream delegate;
 
   private boolean drained;
+
+  private boolean initialized;
 
   public HTTPInputStream(HTTPServerConfiguration configuration, HTTPRequest request, PushbackInputStream pushbackInputStream,
                          int maximumContentLength) {
@@ -174,7 +174,6 @@ public class HTTPInputStream extends InputStream {
 //    int maxLen = (int) Math.min(len, bytesRemaining);
 //    int maxLen = len;
 //    int read = delegate.read(b, off, maxLen);
-
 
     int reportBytesRead = read;
     if (fixedLength && read > 0) {
