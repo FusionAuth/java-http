@@ -286,7 +286,7 @@ public class FormDataTest extends BaseTest {
 
           // Convert body to chunked
           // - Using a small chunk to ensure we end up with more than one chunk.
-          body = chunkItUp(body, 100, null);
+          body = new String(chunkEncoded(body.getBytes(StandardCharsets.UTF_8), 100, null));
         } else {
           var contentLength = body.getBytes(StandardCharsets.UTF_8).length;
           if (contentLength > 0) {

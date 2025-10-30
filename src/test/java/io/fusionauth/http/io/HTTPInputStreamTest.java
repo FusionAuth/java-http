@@ -67,12 +67,7 @@ public class HTTPInputStreamTest extends BaseTest {
     }
 
     // Chunk the content, add part of the next request
-    var temp1 = payload;
-    var temp2 = new String(payload, StandardCharsets.UTF_8).getBytes(StandardCharsets.UTF_8);
-    assertEquals(temp1, temp2);
-
-    String chunked = chunkItUp(new String(payload, StandardCharsets.UTF_8), 38, null);
-    payload = chunked.getBytes(StandardCharsets.UTF_8);
+    payload = chunkEncoded(payload, 38, null);
 
     ByteArrayOutputStream out = new ByteArrayOutputStream();
     out.write(payload);

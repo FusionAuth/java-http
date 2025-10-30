@@ -49,10 +49,8 @@ import java.time.Duration;
 import java.time.Instant;
 import java.time.ZonedDateTime;
 import java.time.format.DateTimeFormatter;
-import java.util.ArrayList;
 import java.util.Arrays;
 import java.util.Date;
-import java.util.List;
 import java.util.Map;
 import java.util.UUID;
 import java.util.stream.Collectors;
@@ -436,25 +434,29 @@ public abstract class BaseTest {
     }
   }
 
-  protected String chunkItUp(String body, int chunkSize, String chunkedExtension) {
-    List<String> result = new ArrayList<>();
-    for (var i = 0; i < body.length(); i += chunkSize) {
-      var endIndex = Math.min(i + chunkSize, body.length());
-      var chunk = body.substring(i, endIndex);
-      var chunkLength = chunk.getBytes(StandardCharsets.UTF_8).length;
+  protected byte[] chunkEncoded(byte[] bytes, int chunkSize, String chunkedExtension) throws IOException {
+    ByteArrayOutputStream out = new ByteArrayOutputStream();
+    for (var i = 0; i < bytes.length; i += chunkSize) {
+      var endIndex = Math.min(i + chunkSize, bytes.length);
+
+      var chunk = Arrays.copyOfRange(bytes, i, endIndex);
+      var chunkLength = chunk.length;
 
       String hex = Integer.toHexString(chunkLength);
-      result.add(hex);
+      out.write(hex.getBytes(StandardCharsets.UTF_8));
 
       if (chunkedExtension != null) {
-        result.add(chunkedExtension);
+        out.write(chunkedExtension.getBytes(StandardCharsets.UTF_8));
       }
 
-      result.add(("\r\n" + chunk + "\r\n"));
+      out.write("\r\n".getBytes(StandardCharsets.UTF_8));
+      out.write(chunk);
+      out.write("\r\n".getBytes(StandardCharsets.UTF_8));
     }
 
-    result.add(("0\r\n\r\n"));
-    return String.join("", result);
+
+    out.write(("0\r\n\r\n".getBytes(StandardCharsets.UTF_8)));
+    return out.toByteArray();
   }
 
   protected byte[] deflate(byte[] bytes) throws Exception {

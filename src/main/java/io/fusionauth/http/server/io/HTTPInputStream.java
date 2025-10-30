@@ -168,21 +168,6 @@ public class HTTPInputStream extends InputStream {
     Long contentLength = request.getContentLength();
     boolean hasBody = (contentLength != null && contentLength > 0) || request.isChunked();
 
-    // Request order of operations:
-    //  - "hello world" -> compress -> chunked.
-
-    // Current:
-    //   Chunked:
-    //     HTTPInputStream > Chunked > Pushback > Throughput > Socket
-    //   Fixed:
-    //     HTTPInputStream > Pushback > Throughput > Socket
-
-    // New:
-    //   Chunked
-    //     HTTPInputStream > Chunked > Pushback > Decompress > Throughput > Socket
-    //   Fixed
-    //     HTTPInputStream > Pushback > Decompress > Throughput > Socket
-
     // Note that isChunked() should take precedence over the fact that we have a Content-Length.
     // - The client should not send both, but in the case they are both present we ignore Content-Length
     if (!hasBody) {
@@ -210,14 +195,16 @@ public class HTTPInputStream extends InputStream {
       throw new ContentTooLargeException(maximumContentLength, detailedMessage);
     }
 
-    // The way it is currently coded
-    // HTTPInputStream (this) > Decompress > Fixed   > Pushback > Throughput > Socket
+    // Current state
+    // Chunked       HTTPInputStream (this) > Chunked > Pushback > Throughput > Socket
+    // Fixed length  HTTPInputStream (this) > Fixed   > Pushback > Throughput > Socket
 
-    // HTTPInputStream (this) > Chunked > Pushback > Throughput > Socket
-    //    > HTTPInputStream (this) > Decompress > Chunked > Pushback > Throughput > Socket
+    // When decompressing, the result will be something like this:
+    // Chunked       HTTPInputStream (this) > Decompress > Chunked > Pushback > Throughput > Socket
+    // Fixed length  HTTPInputStream (this) > Decompress> Fixed   > Pushback > Throughput > Socket
+    //
+    // You may have one or more Decompress InputStreams in the above diagram.
 
-    // TODO : Note I could leave this alone, but when we parse the header we can lower case these values and then remove the equalsIgnoreCase here?
-    //        Seems like ideally we would normalize them to lowercase earlier.
     if (hasBody) {
       // The request may contain more than one value, apply in reverse order.
       // - These are both using the default 512 buffer size.
