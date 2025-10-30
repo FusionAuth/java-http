@@ -26,6 +26,7 @@ import java.util.HashMap;
 import java.util.HexFormat;
 import java.util.LinkedList;
 import java.util.List;
+import java.util.Locale;
 import java.util.Map;
 import java.util.Objects;
 
@@ -58,6 +59,7 @@ public final class HTTPTools {
     }
 
     // Exact match
+    contentType = contentType.toLowerCase(Locale.ROOT);
     Integer maximumSize = maxRequestBodySize.get(contentType);
     if (maximumSize != null) {
       return maximumSize;
@@ -426,10 +428,10 @@ public final class HTTPTools {
     for (int i = start; i < end; i++) {
       if (name == null && chars[i] == '*') {
         encoded = true;
-        name = new String(chars, start, i - start).toLowerCase();
+        name = new String(chars, start, i - start).toLowerCase(Locale.ROOT);
         start = i + 2;
       } else if (name == null && chars[i] == '=') {
-        name = new String(chars, start, i - start).toLowerCase();
+        name = new String(chars, start, i - start).toLowerCase(Locale.ROOT);
         start = i + 1;
       } else if (name != null && encoded && charset == null && chars[i] == '\'') {
         String charsetName = new String(chars, start, i - start);

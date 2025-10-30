@@ -235,8 +235,8 @@ public class HTTPWorker implements Runnable {
       logger.trace("[{}] Closing socket. Client closed the connection. Reason [{}].", Thread.currentThread().threadId(), e.getMessage());
       closeSocketOnly(CloseSocketReason.Expected);
     } catch (HTTPProcessingException e) {
-      // Note that I am only tracing this, because this exception is mostly expected. Use closeSocketOnError so we can attempt to write a response.
-      logger.trace("[{}] Closing socket with status [{}]. An unhandled [{}] exception was taken. Reason [{}].", Thread.currentThread().threadId(), e.getStatus(), e.getClass().getSimpleName(), e.getMessage());
+      // These are expected, but are things the client may want to know about. Use closeSocketOnError so we can attempt to write a response.
+      logger.debug("[{}] Closing socket with status [{}]. An unhandled [{}] exception was taken. Reason [{}].", Thread.currentThread().threadId(), e.getStatus(), e.getClass().getSimpleName(), e.getMessage());
       closeSocketOnError(response, e.getStatus());
     } catch (TooManyBytesToDrainException e) {
       // The request handler did not read the entire InputStream, we tried to drain it but there were more bytes remaining than the configured maximum.

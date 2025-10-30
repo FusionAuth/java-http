@@ -27,6 +27,7 @@ import java.nio.file.Path;
 import java.util.HashMap;
 import java.util.LinkedList;
 import java.util.List;
+import java.util.Locale;
 import java.util.Map;
 import java.util.Objects;
 
@@ -264,7 +265,7 @@ public class MultipartStream {
       var nextState = state.next(b);
       if (nextState != state) {
         switch (state) {
-          case HeaderName -> headerName = build.toString().toLowerCase();
+          case HeaderName -> headerName = build.toString().toLowerCase(Locale.ROOT);
           case HeaderValue -> headers.put(headerName, HTTPTools.parseHeaderValue(build.toString()));
         }
 

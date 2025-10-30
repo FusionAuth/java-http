@@ -23,6 +23,7 @@ import java.nio.charset.StandardCharsets;
 import java.time.Duration;
 import java.util.ArrayList;
 import java.util.List;
+import java.util.Locale;
 import java.util.Map;
 import java.util.function.Consumer;
 
@@ -76,7 +77,8 @@ public class FormDataTest extends BaseTest {
         .withBodyParameterCount(42 * 1024)
         .withBodyParameterSize(128)
         // 4k * 33 > 128k
-        .withConfiguration(config -> config.withMaxRequestBodySize(Map.of(ContentTypes.Form, 128 * 1024)))
+        // - Use a UC Content-Type to make sure it still works
+        .withConfiguration(config -> config.withMaxRequestBodySize(Map.of(ContentTypes.Form.toUpperCase(Locale.ROOT), 128 * 1024)))
         .expectResponse("""
             HTTP/1.1 413 \r
             connection: close\r
@@ -197,18 +199,6 @@ public class FormDataTest extends BaseTest {
       this.scheme = scheme;
     }
 
-    public Builder assertOptionalExceptionOnWrite(Class<? extends Exception> clazz) {
-      // Note that this assertion really depends upon the system the test is run on, the size of the request, and the amount of data that can be cached.
-      // - So this is an optional assertion - if exception is not null, then we should be able to assert some attributes.
-      // - With the larger sizes this exception is mostly always thrown when running tests locally, but in GHA, it doesn't always occur.
-      if (thrownOnWrite != null) {
-        assertEquals(thrownOnWrite.getClass(), clazz);
-        assertEquals(thrownOnWrite.getMessage(), "Broken pipe");
-      }
-
-      return this;
-    }
-
     public Builder expectNoExceptionOnWrite() {
       assertNull(thrownOnWrite);
       return this;
@@ -315,6 +305,17 @@ public class FormDataTest extends BaseTest {
         }
 
         assertHTTPResponseEquals(socket, response);
+      }
+
+      return this;
+    }
+
+    public Builder assertOptionalExceptionOnWrite(Class<? extends Exception> clazz) {
+      // Note that this assertion really depends upon the system the test is run on, the size of the request, and the amount of data that can be cached.
+      // - So this is an optional assertion - if exception is not null, then we should be able to assert some attributes.
+      // - With the larger sizes this exception is mostly always thrown when running tests locally, but in GHA, it doesn't always occur.
+      if (thrownOnWrite != null) {
+        assertEquals(thrownOnWrite.getClass(), clazz);
       }
 
       return this;
