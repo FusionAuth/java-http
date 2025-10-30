@@ -362,7 +362,7 @@ public class HTTPRequest implements Buildable<HTTPRequest> {
       String contentType = getContentType();
       if (contentType != null && contentType.equalsIgnoreCase(ContentTypes.Form)) {
         byte[] body = getBodyBytes();
-        HTTPTools.parseEncodedData(body, 0, body.length, formData);
+        HTTPTools.parseEncodedData(body, 0, body.length, getCharacterEncoding(), formData);
       } else if (isMultipart()) {
         try {
           multipartStreamProcessor.process(inputStream, formData, files, multipartBoundary.getBytes());
@@ -801,15 +801,12 @@ public class HTTPRequest implements Buildable<HTTPRequest> {
             }
           }
         } else {
+          this.host = value;
           if ("http".equalsIgnoreCase(scheme)) {
             this.port = 80;
-          }
-          else if ("https".equalsIgnoreCase(scheme)) {
+          } else if ("https".equalsIgnoreCase(scheme)) {
             this.port = 443;
-          } else {
-            // fallback, intentionally do nothing
           }
-          this.host = value;
         }
         break;
     }

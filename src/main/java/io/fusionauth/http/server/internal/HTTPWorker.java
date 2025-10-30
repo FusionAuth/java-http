@@ -130,7 +130,7 @@ public class HTTPWorker implements Runnable {
         // Not this line of code will block
         // - When a client is using Keep-Alive - we will loop and block here while we wait for the client to send us bytes.
         byte[] requestBuffer = buffers.requestBuffer();
-        HTTPTools.parseRequestPreamble(inputStream, request, requestBuffer, () -> state = State.Read);
+        HTTPTools.parseRequestPreamble(inputStream, configuration.getMaxRequestHeaderSize(), request, requestBuffer, () -> state = State.Read);
         if (logger.isTraceEnabled()) {
           int availableBufferedBytes = inputStream.getAvailableBufferedBytesRemaining();
           if (availableBufferedBytes != 0) {
@@ -144,7 +144,8 @@ public class HTTPWorker implements Runnable {
           instrumenter.acceptedRequest();
         }
 
-        httpInputStream = new HTTPInputStream(configuration, request, inputStream);
+        int maximumContentLength = HTTPTools.getMaxRequestBodySize(request.getContentType(), configuration.getMaxRequestBodySize());
+        httpInputStream = new HTTPInputStream(configuration, request, inputStream, maximumContentLength);
         request.setInputStream(httpInputStream);
 
         // Set the Connection response header as soon as possible
@@ -233,8 +234,7 @@ public class HTTPWorker implements Runnable {
       logger.trace("[{}] Closing socket. Client closed the connection. Reason [{}].", Thread.currentThread().threadId(), e.getMessage());
       closeSocketOnly(CloseSocketReason.Expected);
     } catch (HTTPProcessingException e) {
-      // Note that I am only tracing this. This is sort of expected - in that it is possible that the request handler will catch this exception and handle it. If the request handler
-      // does not handle this exception, it is totally fine to handle it here.
+      // Note that I am only tracing this, because this exception is mostly expected. Use closeSocketOnError so we can attempt to write a response.
       logger.trace("[{}] Closing socket with status [{}]. An unhandled [{}] exception was taken. Reason [{}].", Thread.currentThread().threadId(), e.getStatus(), e.getClass().getSimpleName(), e.getMessage());
       closeSocketOnError(response, e.getStatus());
     } catch (TooManyBytesToDrainException e) {

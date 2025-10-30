@@ -18,7 +18,9 @@ package io.fusionauth.http.server;
 import java.nio.file.Path;
 import java.time.Duration;
 import java.util.ArrayList;
+import java.util.HashMap;
 import java.util.List;
+import java.util.Map;
 import java.util.Objects;
 
 import io.fusionauth.http.io.MultipartConfiguration;
@@ -31,11 +33,18 @@ import io.fusionauth.http.log.SystemOutLoggerFactory;
  * @author Brian Pontarelli
  */
 public class HTTPServerConfiguration implements Configurable<HTTPServerConfiguration> {
+  public static final Map<String, Integer> DefaultMaxRequestSizes = Map.of(
+      "*", 128 * 1024 * 1024,                                   // 128 Megabytes
+      "application/x-www-form-urlencoded", 10 * 1024 * 1024     // 10 Megabytes
+  );
+
   private final List<HTTPListenerConfiguration> listeners = new ArrayList<>();
+
+  private final Map<String, Integer> maxRequestBodySize = new HashMap<>(DefaultMaxRequestSizes);
 
   private Path baseDir = Path.of("");
 
-  private int chunkedBufferSize = 4 * 1024; // 4k bytes
+  private int chunkedBufferSize = 4 * 1024; // 4 Kilobytes
 
   private boolean compressByDefault = true;
 
@@ -53,19 +62,21 @@ public class HTTPServerConfiguration implements Configurable<HTTPServerConfigura
 
   private LoggerFactory loggerFactory = SystemOutLoggerFactory.FACTORY;
 
-  private int maxBytesToDrain = 256 * 1024; // 256k bytes
+  private int maxBytesToDrain = 256 * 1024; // 256 Kilobytes
 
   private int maxPendingSocketConnections = 250;
 
+  private int maxRequestHeaderSize = 128 * 1024; // 128 Kilobytes
+
   private int maxRequestsPerConnection = 100_000; // 100,000
 
-  private int maxResponseChunkSize = 16 * 1024; // 16k bytes
+  private int maxResponseChunkSize = 16 * 1024; // 16 Kilobytes
 
-  private long minimumReadThroughput = 16 * 1024; // 16k/second
+  private long minimumReadThroughput = 16 * 1024; // 16 Kilobytes/second
 
-  private long minimumWriteThroughput = 16 * 1024; // 16k/second
+  private long minimumWriteThroughput = 16 * 1024; // 16 Kilobytes/second
 
-  private int multipartBufferSize = 16 * 1024; // 16k bytes
+  private int multipartBufferSize = 16 * 1024; // 16 Kilobytes
 
   private MultipartConfiguration multipartStreamConfiguration = new MultipartConfiguration();
 
@@ -73,9 +84,9 @@ public class HTTPServerConfiguration implements Configurable<HTTPServerConfigura
 
   private Duration readThroughputCalculationDelayDuration = Duration.ofSeconds(5);
 
-  private int requestBufferSize = 16 * 1024; // 16k bytes
+  private int requestBufferSize = 16 * 1024; // 16 Kilobytes
 
-  private int responseBufferSize = 64 * 1024; // 16k bytes
+  private int responseBufferSize = 64 * 1024; // 64 Kilobytes
 
   private Duration shutdownDuration = Duration.ofSeconds(10);
 
@@ -164,9 +175,18 @@ public class HTTPServerConfiguration implements Configurable<HTTPServerConfigura
   }
 
   /**
-   * @return The maximum number of bytes to drain from the InputStream when the request handler did not read all available bytes and the
-   *     connection is using a keep-alive which means the server must drain the InputStream in preparation for the next request. Defaults to
-   *     256k.
+   * When using keep-alive, this configuration represents the maximum number of bytes to drain from the InputStream when the request handler
+   * did not read all available bytes. This is done to drain the InputStream, attempting to reach the end of the request in order to prepare
+   * for the next request.
+   * <p>
+   * If you are not using keep-alive, this configuration will not be utilized.
+   * <p>
+   * When this configured limit is reached, the socket will be closed. This would be equivalent to adding Connection: close to the request.
+   * Setting this limit too low could cause connections not to be re-used, setting this limit too high simply means that the server will
+   * take more time to read more bytes from the client before being able to re-use the connection.
+   *
+   * @return The maximum number of bytes to drain from the InputStream when the request handler did not read all available bytes. Defaults
+   *     to 256 Kilobytes.
    */
   public int getMaxBytesToDrain() {
     return maxBytesToDrain;
@@ -186,6 +206,28 @@ public class HTTPServerConfiguration implements Configurable<HTTPServerConfigura
   }
 
   /**
+   * The map that specifies the maximum size in bytes of the HTTP request body by Content-Type. This configuration excludes the size of the
+   * HTTP request header.
+   * <p>
+   * The returned map is keyed by Content-Type, and will contain a default value identified by '*', and may optionally contain a content
+   * type value with a wild card '*' as the subtype. For example, 'application/*' will match all subtypes of an application/ content type.
+   *
+   * @return the map keyed by Content-Type indicating the maximum size in bytes of the HTTP request body.  Defaults to 128 Megabytes as a
+   *     default, and 10 Megabytes for application/x-www-form-urlencoded.
+   */
+  public Map<String, Integer> getMaxRequestBodySize() {
+    return maxRequestBodySize;
+  }
+
+  /**
+   * @return the maximum size of the HTTP request header in bytes. This configuration does not affect the HTTP response header. Defaults to
+   *     128 Kilobytes.
+   */
+  public int getMaxRequestHeaderSize() {
+    return maxRequestHeaderSize;
+  }
+
+  /**
    * This limit only applies when using a persistent connection. If this number is reached without hitting a Keep-Alive timeout the
    * connection will be closed just as it would be if the Keep-Alive timeout was reached.
    *
@@ -196,7 +238,7 @@ public class HTTPServerConfiguration implements Configurable<HTTPServerConfigura
   }
 
   /**
-   * @return The max chunk size in the response. Defaults to 16k bytes.
+   * @return The max chunk size in the response. Defaults to 16 Kilobytes.
    */
   public int getMaxResponseChunkSize() {
     return maxResponseChunkSize;
@@ -205,6 +247,8 @@ public class HTTPServerConfiguration implements Configurable<HTTPServerConfigura
   /**
    * This configuration is the minimum number of bytes per second that a client must send a request to the server before the server closes
    * the connection.
+   * <p>
+   * A value of -1 indicates the minimum read throughput limitation has been disabled.
    *
    * @return The minimum throughput for any connection with the server in bytes per second.
    */
@@ -215,6 +259,8 @@ public class HTTPServerConfiguration implements Configurable<HTTPServerConfigura
   /**
    * This configuration is the minimum number of bytes per second that a client must read the response from the server before the server
    * closes the connection.
+   * <p>
+   * A value of -1 indicates the minimum write throughput limitation has been disabled.
    *
    * @return The minimum throughput for any connection with the server in bytes per second.
    */
@@ -224,7 +270,7 @@ public class HTTPServerConfiguration implements Configurable<HTTPServerConfigura
 
   /**
    * @return The multipart buffer size in bytes. This is primary used for parsing multipart requests by the {@link HTTPRequest} class.
-   *     Defaults to 16k bytes.
+   *     Defaults to 16 Kilobytes.
    */
   @Deprecated
   public int getMultipartBufferSize() {
@@ -255,7 +301,7 @@ public class HTTPServerConfiguration implements Configurable<HTTPServerConfigura
   }
 
   /**
-   * @return The size of the buffer used to read the request. This defaults to 16k bytes.
+   * @return The size of the buffer used to read the request. Defaults to 16 Kilobytes
    */
   public int getRequestBufferSize() {
     return requestBufferSize;
@@ -263,7 +309,7 @@ public class HTTPServerConfiguration implements Configurable<HTTPServerConfigura
 
   /**
    * @return The size of the buffer used to store the response. This allows the server to handle exceptions and errors without writing back
-   *     a 200 response that is actually an error. This defaults to 64k bytes.
+   *     a 200 response that is actually an error. Defaults to 64 Kilobytes.
    */
   public int getResponseBufferSize() {
     return responseBufferSize;
@@ -303,6 +349,7 @@ public class HTTPServerConfiguration implements Configurable<HTTPServerConfigura
    */
   @Override
   public HTTPServerConfiguration withBaseDir(Path baseDir) {
+    Objects.requireNonNull(baseDir, "You cannot set the base dir to null");
     this.baseDir = baseDir;
     return this;
   }
@@ -368,7 +415,6 @@ public class HTTPServerConfiguration implements Configurable<HTTPServerConfigura
       throw new IllegalArgumentException("The client timeout duration must be greater than 0");
     }
 
-
     this.initialReadTimeoutDuration = duration;
     return this;
   }
@@ -433,6 +479,41 @@ public class HTTPServerConfiguration implements Configurable<HTTPServerConfigura
    * {@inheritDoc}
    */
   @Override
+  public HTTPServerConfiguration withMaxRequestBodySize(Map<String, Integer> maxRequestBodySize) {
+    Objects.requireNonNull(maxRequestBodySize, "You cannot set the maximum request body size map to null");
+    for (String contentType : maxRequestBodySize.keySet()) {
+      Objects.requireNonNull(contentType, "You cannot specify a null value for content type");
+      Integer maxSize = maxRequestBodySize.get(contentType);
+      Objects.requireNonNull(maxSize, "You may not specify a null value for the maximum request body size");
+      if (maxSize != -1 && maxSize <= 0) {
+        throw new IllegalArgumentException("The maximum request body size must be greater than 0 for [" + contentType + "]. Set to -1 to disable this limitation.");
+      }
+    }
+
+    this.maxRequestBodySize.clear();
+    // Add back a default to ensure we always have a fallback, can still be modified by the incoming configuration.
+    this.maxRequestBodySize.put("*", DefaultMaxRequestSizes.get("*"));
+    this.maxRequestBodySize.putAll(maxRequestBodySize);
+    return this;
+  }
+
+  /**
+   * {@inheritDoc}
+   */
+  @Override
+  public HTTPServerConfiguration withMaxRequestHeaderSize(int maxRequestHeaderSize) {
+    if (maxRequestHeaderSize != -1 && maxRequestHeaderSize <= 0) {
+      throw new IllegalArgumentException("The maximum request header size must be greater than 0. Set to -1 to disable this limitation.");
+    }
+
+    this.maxRequestHeaderSize = maxRequestHeaderSize;
+    return this;
+  }
+
+  /**
+   * {@inheritDoc}
+   */
+  @Override
   public HTTPServerConfiguration withMaxRequestsPerConnection(int maxRequestsPerConnection) {
     if (maxRequestsPerConnection < 10) {
       throw new IllegalArgumentException("The maximum number of requests per connection must be greater than or equal to 10");
@@ -446,8 +527,12 @@ public class HTTPServerConfiguration implements Configurable<HTTPServerConfigura
    * {@inheritDoc}
    */
   @Override
-  public HTTPServerConfiguration withMaxResponseChunkSize(int size) {
-    this.maxResponseChunkSize = size;
+  public HTTPServerConfiguration withMaxResponseChunkSize(int maxResponseChunkSize) {
+    if (maxResponseChunkSize < 128) {
+      throw new IllegalArgumentException("The maximum chunk size must be greater than or equal to 128.");
+    }
+
+    this.maxResponseChunkSize = maxResponseChunkSize;
     return this;
   }
 
@@ -456,8 +541,8 @@ public class HTTPServerConfiguration implements Configurable<HTTPServerConfigura
    */
   @Override
   public HTTPServerConfiguration withMaximumBytesToDrain(int maxBytesToDrain) {
-    if (maxBytesToDrain < 1024 || maxBytesToDrain >= 256 * 1024 * 1024) {
-      throw new IllegalArgumentException("The maximum bytes to drain must be greater than or equal to 1024 and less than or equal to 268,435,456 (256 megabytes)");
+    if (maxBytesToDrain < 1024 || maxBytesToDrain > 256 * 1024 * 1024) {
+      throw new IllegalArgumentException("The maximum bytes to drain must be greater than or equal to 1024 and less than or equal to 268,435,456 (256 Megabytes)");
     }
 
     this.maxBytesToDrain = maxBytesToDrain;
@@ -493,6 +578,7 @@ public class HTTPServerConfiguration implements Configurable<HTTPServerConfigura
    * {@inheritDoc}
    */
   @Override
+  @SuppressWarnings("deprecation")
   public HTTPServerConfiguration withMultipartBufferSize(int multipartBufferSize) {
     if (multipartBufferSize <= 0) {
       throw new IllegalArgumentException("The multi-part buffer size must be greater than 0");

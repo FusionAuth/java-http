@@ -9,6 +9,10 @@
       <option name="addBlankAfter" value="false" />
     </LanguageOptions>
   </component>
+  <component name="GitScope">
+    <option name="currentTabIndex" value="1" />
+    <option name="modelData" value="[{&quot;targetBranchMap&quot;:{&quot;value&quot;:{&quot;/Users/bpontarelli/dev/inversoft/fusionauth/java-http&quot;:&quot;HEAD~5&quot;}},&quot;customTabName&quot;:&quot;HEAD~5&quot;}]" />
+  </component>
   <component name="InspectionProjectProfileManager">
     <profile version="1.0">
       <option name="myName" value="Project Default" />
@@ -1408,31 +1412,6 @@
   </component>
   <component name="ProjectRootManager" version="2" languageLevel="JDK_21" default="true" project-jdk-name="Java 21" project-jdk-type="JavaSDK">
     <output url="file://$PROJECT_DIR$/out" />
-  </component>
-  <component name="ProjectRunConfigurationManager">
-    <configuration default="true" type="TestNG">
-      <shortenClasspath name="NONE" />
-      <useClassPathOnly />
-      <option name="SUITE_NAME" value="" />
-      <option name="PACKAGE_NAME" value="" />
-      <option name="MAIN_CLASS_NAME" value="" />
-      <option name="GROUP_NAME" value="" />
-      <option name="TEST_OBJECT" value="CLASS" />
-      <option name="VM_PARAMETERS" value="-ea --add-exports java.base/sun.security.x509=ALL-UNNAMED --add-exports java.base/sun.security.util=ALL-UNNAMED --add-opens java.base/java.net=ALL-UNNAMED" />
-      <option name="PARAMETERS" value="" />
-      <option name="OUTPUT_DIRECTORY" value="" />
-      <option name="TEST_SEARCH_SCOPE">
-        <value defaultName="moduleWithDependencies" />
-      </option>
-      <option name="PROPERTIES_FILE" value="" />
-      <properties />
-      <listeners>
-        <listener class="io.fusionauth.http.BaseTest$TestListener" />
-      </listeners>
-      <method v="2">
-        <option name="Make" enabled="true" />
-      </method>
-    </configuration>
   </component>
   <component name="VcsDirectoryMappings">
     <mapping directory="$PROJECT_DIR$" vcs="Git" />
