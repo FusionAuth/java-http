@@ -135,6 +135,17 @@ public class HTTPInputStream extends InputStream {
       return 0;
     }
 
+    // TODO : Re: Compression - fixedLength and Content-Length needs to account for the Content-Length referring to the compressed body.
+
+    // Preamble, this could push back compressed bytes.
+    //   Pushback > Throughput > Socket
+    //
+    // HTTPInputStream (this) -> Decompress > Pushback > Throughput > Socket
+    // HTTPInputStream (this) -> Decompress > Chunked > Pushback > Throughput > Socket
+    //
+    // Pushback doesn't care if the bytes are compressed or not, it is up to the caller?
+    //
+
     // If this is a fixed length request, and we have less than or equal to 0 bytes remaining, return -1
     boolean fixedLength = !request.isChunked();
     if (fixedLength && bytesRemaining <= 0) {
@@ -147,7 +158,11 @@ public class HTTPInputStream extends InputStream {
 
     // When we have a fixed length request, read beyond the remainingBytes if possible.
     // - If we have read past the end of the current request, push those bytes back onto the InputStream.
-    int read = delegate.read(b, off, len);
+    // TODO : Can I optionally never override here? If I am fixed length, I could change len -> maxLen., and then never pushback.
+    //        Would this help with compression?
+//    int maxLen = (int) Math.min(len, bytesRemaining);
+    int maxLen = len;
+    int read = delegate.read(b, off, maxLen);
     if (fixedLength && read > 0) {
       int extraBytes = (int) (read - bytesRemaining);
       if (extraBytes > 0) {

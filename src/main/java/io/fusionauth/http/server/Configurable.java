@@ -61,6 +61,15 @@ public interface Configurable<T extends Configurable<T>> {
   /**
    * Sets the default compression behavior for the HTTP response. This behavior can be optionally set per response. See
    * {@link HTTPResponse#setCompress(boolean)}. Defaults to true.
+   * <p>
+   * Set this configuration to <code>true</code> if you want to compress the response when the Accept-Encoding header is present. Set this
+   * configuration to <code>false</code> if you want to require the request handler to use {@link HTTPResponse#setCompress(boolean)} in
+   * order to compress the response.
+   * <p>
+   * Regardless of this configuration, you always have the option to use {@link HTTPResponse#setCompress(boolean)} on a per-response basis
+   * as an override.
+   * <p>
+   * When the request does not contain an Accept-Encoding the response will not be compressed regardless of this configuration.
    *
    * @param compressByDefault true if you want to compress by default, or false to not compress by default.
    * @return This.
