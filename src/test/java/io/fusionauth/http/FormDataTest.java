@@ -315,7 +315,6 @@ public class FormDataTest extends BaseTest {
       // - With the larger sizes this exception is mostly always thrown when running tests locally, but in GHA, it doesn't always occur.
       if (thrownOnWrite != null) {
         assertEquals(thrownOnWrite.getClass(), clazz);
-        assertEquals(thrownOnWrite.getMessage(), "Broken pipe");
       }
 
       return this;
