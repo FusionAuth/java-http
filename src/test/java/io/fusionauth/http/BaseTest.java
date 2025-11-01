@@ -465,7 +465,6 @@ public abstract class BaseTest {
       out.write("\r\n".getBytes(StandardCharsets.UTF_8));
     }
 
-
     out.write(("0\r\n\r\n".getBytes(StandardCharsets.UTF_8)));
     return out.toByteArray();
   }

@@ -92,8 +92,6 @@ public class HTTPInputStreamTest extends BaseTest {
     request.setHeader(Headers.ContentEncoding, contentEncoding);
     request.setHeader(Headers.ContentLength, compressedLength + "");
 
-    // body length is 113, when compressed it is 68 (gzip) or 78 (deflate)
-    // The number of bytes available is 129.
     byte[] bytes = out.toByteArray();
     assertReadWithPushback(bytes, content, contentLength, nextRequestBytes, request);
   }
@@ -120,7 +118,7 @@ public class HTTPInputStreamTest extends BaseTest {
     int secondRead = httpInputStream.read(buffer);
     assertEquals(secondRead, -1);
 
-    // We have 16 bytes left over
+    // Expect that we have the number of bytes left over we expect
     assertEquals(pushbackInputStream.getAvailableBufferedBytesRemaining(), pushedBackBytes.length);
 
     // Next read should start at the next request
