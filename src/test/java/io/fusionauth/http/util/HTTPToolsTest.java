@@ -16,6 +16,7 @@
 package io.fusionauth.http.util;
 
 import java.io.ByteArrayInputStream;
+import java.io.ByteArrayOutputStream;
 import java.net.URLEncoder;
 import java.nio.charset.Charset;
 import java.nio.charset.StandardCharsets;
@@ -26,6 +27,7 @@ import java.util.Locale;
 import java.util.Map;
 
 import com.inversoft.json.ToString;
+import io.fusionauth.http.BaseTest;
 import io.fusionauth.http.HTTPMethod;
 import io.fusionauth.http.io.PushbackInputStream;
 import io.fusionauth.http.server.HTTPRequest;
@@ -42,7 +44,7 @@ import static org.testng.Assert.assertEquals;
  * @author Brian Pontarelli
  */
 @Test
-public class HTTPToolsTest {
+public class HTTPToolsTest extends BaseTest {
   @Test
   public void getMaxRequestBodySize() {
     var configuration = Map.of(
@@ -183,16 +185,18 @@ public class HTTPToolsTest {
     assertEquals(HTTPTools.parseHeaderValue("value; f= f"), new HeaderValue("value", Map.of("f", " f")));
   }
 
-  @Test
-  public void parsePreamble() throws Exception {
+  @Test(dataProvider = "contentEncoding")
+  public void parsePreamble(String contentEncoding) throws Exception {
     // Ensure that we can correctly read the preamble when the InputStream contains the next request.
+    // - Optionally compress the body to ensure we can push back bytes on the preamble read w/out hosing it up.
 
-    //noinspection ExtractMethodRecommender
-    String request = """
+    ByteArrayOutputStream out = new ByteArrayOutputStream();
+    String header = """
         GET / HTTP/1.1\r
         Host: localhost:42\r
         Connection: close\r
-        Content-Length: 113\r
+        Content-Encoding: {contentEncoding}\r
+        Content-Length: {contentLength}\r
         Header1: Value1\r
         Header2: Value2\r
         Header3: Value3\r
@@ -204,17 +208,31 @@ public class HTTPToolsTest {
         Header9: Value9\r
         Header10: Value10\r
         \r
-        These pretzels are making me thirsty. These pretzels are making me thirsty. These pretzels are making me thirsty.GET / HTTP/1.1\r
-        """;
+        """.replace("{contentEncoding}", contentEncoding);
+
+    // Now add the body, optionally compressed
+    String body = "These pretzels are making me thirsty. These pretzels are making me thirsty. These pretzels are making me thirsty.";
+    byte[] bodyBytes = body.getBytes(StandardCharsets.UTF_8);
+    int uncompressedBodyLength = bodyBytes.length;
+    bodyBytes = compressUsingContentEncoding(bodyBytes, contentEncoding);
+
+    header = header.replace("{contentLength}", bodyBytes.length + "");
+    out.write(header.getBytes(StandardCharsets.UTF_8));
+    out.write(bodyBytes);
+
+    // Now add part of the next request
+    String nextRequest = "GET / HTTP/1.1\n\r";
+    byte[] nextRequestBytes = nextRequest.getBytes(StandardCharsets.UTF_8);
+    out.write(nextRequestBytes);
 
     // Fixed length body with the start of the next request in the buffer
-    byte[] bytes = request.getBytes(StandardCharsets.UTF_8);
-    int bytesAvailable = bytes.length;
+    byte[] payload = out.toByteArray();
+    int bytesAvailable = payload.length;
 
     // Ensure the request buffer size will contain the entire request.
     HTTPServerConfiguration configuration = new HTTPServerConfiguration().withRequestBufferSize(bytesAvailable + 100);
 
-    ByteArrayInputStream is = new ByteArrayInputStream(bytes);
+    ByteArrayInputStream is = new ByteArrayInputStream(payload);
     PushbackInputStream pushbackInputStream = new PushbackInputStream(is, null);
 
     HTTPRequest httpRequest = new HTTPRequest();
@@ -229,37 +247,38 @@ public class HTTPToolsTest {
     assertEquals(httpRequest.getMethod(), HTTPMethod.GET);
     assertEquals(httpRequest.getHost(), "localhost");
     assertEquals(httpRequest.getPort(), 42);
-    assertEquals(httpRequest.getContentLength(), 113);
-    assertEquals(httpRequest.getHeaders().size(), 13);
-    assertEquals(httpRequest.getHeader("Content-Length"), "113");
+    assertEquals(httpRequest.getContentLength(), bodyBytes.length);
+    assertEquals(httpRequest.getHeaders().size(), contentEncoding.isEmpty() ? 13 : 14);
+    assertEquals(httpRequest.getHeader("Content-Encoding"), contentEncoding.isEmpty() ? null : contentEncoding);
+    assertEquals(httpRequest.getHeader("Content-Length"), bodyBytes.length + "");
     assertEquals(httpRequest.getHeader("Connection"), "close");
     assertEquals(httpRequest.getHeader("Host"), "localhost:42");
     for (int i = 1; i <= 10; i++) {
       assertEquals(httpRequest.getHeader("Header" + i), "Value" + i);
     }
 
-    // Expect 129 bytes left over which is 113 for the body + 16 from the next request
-    assertEquals(pushbackInputStream.getAvailableBufferedBytesRemaining(), 113 + 16);
+    // Expect that the body bytes and the next request have been pushed into the pushback buffer
+    assertEquals(pushbackInputStream.getAvailableBufferedBytesRemaining(), bodyBytes.length + nextRequestBytes.length);
 
     // Read the remaining bytes for this request, we should still have some left over.
     HTTPInputStream httpInputStream = new HTTPInputStream(configuration, httpRequest, pushbackInputStream, -1);
     byte[] buffer = new byte[1024];
     int read = httpInputStream.read(buffer);
-    assertEquals(read, 113);
+    assertEquals(read, uncompressedBodyLength);
 
     // Another read should return -1 because we are at the end of this request.
     int nextRead = httpInputStream.read(buffer);
     assertEquals(nextRead, -1);
 
     // The next read from the pushback which will be used by the next request should return the remaining bytes.
-    assertEquals(pushbackInputStream.getAvailableBufferedBytesRemaining(), 16);
+    assertEquals(pushbackInputStream.getAvailableBufferedBytesRemaining(), nextRequestBytes.length);
     int nextRequestRead = pushbackInputStream.read(buffer);
-    assertEquals(nextRequestRead, 16);
+    // Expect that we are able to read the bytes for the next request header
+    assertEquals(nextRequestRead, nextRequestBytes.length);
   }
 
   private void assertEncodedData(String actualValue, String expectedValue, Charset charset) {
     assertEncodedData(actualValue, expectedValue, charset, charset);
-
   }
 
   private void assertEncodedData(String actualValue, String expectedValue, Charset encodingCharset, Charset decodingCharset) {

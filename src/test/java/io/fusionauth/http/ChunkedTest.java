@@ -144,7 +144,7 @@ public class ChunkedTest extends BaseTest {
         var response = client.send(HttpRequest.newBuilder()
                                               .uri(uri)
                                               .header(Headers.ContentType, "text/plain")
-                                              // Note that using a InputStream baed publisher will caues the JDK to
+                                              // Note that using a InputStream based publisher will caues the JDK to
                                               // enable Transfer-Encoding: chunked
                                               .POST(BodyPublishers.ofInputStream(() ->
                                                   new ByteArrayInputStream(responseBodyBytes)))

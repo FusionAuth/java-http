@@ -199,6 +199,17 @@ public class FormDataTest extends BaseTest {
       this.scheme = scheme;
     }
 
+    public Builder assertOptionalExceptionOnWrite(Class<? extends Exception> clazz) {
+      // Note that this assertion really depends upon the system the test is run on, the size of the request, and the amount of data that can be cached.
+      // - So this is an optional assertion - if exception is not null, then we should be able to assert some attributes.
+      // - With the larger sizes this exception is mostly always thrown when running tests locally, but in GHA, it doesn't always occur.
+      if (thrownOnWrite != null) {
+        assertEquals(thrownOnWrite.getClass(), clazz);
+      }
+
+      return this;
+    }
+
     public Builder expectNoExceptionOnWrite() {
       assertNull(thrownOnWrite);
       return this;
@@ -274,7 +285,8 @@ public class FormDataTest extends BaseTest {
               """;
 
           // Convert body to chunked
-          body = chunkItUp(body, null);
+          // - Using a small chunk to ensure we end up with more than one chunk.
+          body = new String(chunkEncode(body.getBytes(StandardCharsets.UTF_8), 100, null));
         } else {
           var contentLength = body.getBytes(StandardCharsets.UTF_8).length;
           if (contentLength > 0) {
@@ -304,17 +316,6 @@ public class FormDataTest extends BaseTest {
         }
 
         assertHTTPResponseEquals(socket, response);
-      }
-
-      return this;
-    }
-
-    public Builder assertOptionalExceptionOnWrite(Class<? extends Exception> clazz) {
-      // Note that this assertion really depends upon the system the test is run on, the size of the request, and the amount of data that can be cached.
-      // - So this is an optional assertion - if exception is not null, then we should be able to assert some attributes.
-      // - With the larger sizes this exception is mostly always thrown when running tests locally, but in GHA, it doesn't always occur.
-      if (thrownOnWrite != null) {
-        assertEquals(thrownOnWrite.getClass(), clazz);
       }
 
       return this;
