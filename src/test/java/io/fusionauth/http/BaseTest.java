@@ -105,21 +105,6 @@ import static org.testng.Assert.fail;
  * @author Brian Pontarelli
  */
 public abstract class BaseTest {
-  protected byte[] compressUsingContentEncoding(byte[] bytes, String contentEncoding) throws Exception {
-    if (!contentEncoding.isEmpty()) {
-      var requestEncodings = contentEncoding.toLowerCase().trim().split(",");
-      for (String part : requestEncodings) {
-        String encoding = part.trim();
-        if (encoding.equals(ContentEncodings.Deflate)) {
-          bytes = deflate(bytes);
-        } else if (encoding.equals(ContentEncodings.Gzip)) {
-          bytes = gzip(bytes);
-        }
-      }
-    }
-
-    return bytes;
-  }
   /**
    * This timeout is used for the HttpClient during each test. If you are in a debugger, you will need to change this timeout to be much
    * larger, otherwise, the client might truncate the request to the server.
@@ -266,11 +251,11 @@ public abstract class BaseTest {
   @DataProvider(name = "contentEncoding")
   public Object[][] contentEncoding() {
     return new Object[][]{
-        {""},
-        {"gzip"},
-        {"deflate"},
-        {"gzip, deflate"},
-        {"deflate, gzip"}
+        {""},                // No compression
+        {"gzip"},            // gzip only
+        {"deflate"},         // deflate only
+        {"gzip, deflate"},   // gzip, then deflate
+        {"deflate, gzip"}    // deflate, then gzip
     };
   }
 
@@ -460,7 +445,7 @@ public abstract class BaseTest {
     }
   }
 
-  protected byte[] chunkEncoded(byte[] bytes, int chunkSize, String chunkedExtension) throws IOException {
+  protected byte[] chunkEncode(byte[] bytes, int chunkSize, String chunkedExtension) throws IOException {
     ByteArrayOutputStream out = new ByteArrayOutputStream();
     for (var i = 0; i < bytes.length; i += chunkSize) {
       var endIndex = Math.min(i + chunkSize, bytes.length);
@@ -483,6 +468,22 @@ public abstract class BaseTest {
 
     out.write(("0\r\n\r\n".getBytes(StandardCharsets.UTF_8)));
     return out.toByteArray();
+  }
+
+  protected byte[] compressUsingContentEncoding(byte[] bytes, String contentEncoding) throws Exception {
+    if (!contentEncoding.isEmpty()) {
+      var requestEncodings = contentEncoding.toLowerCase().trim().split(",");
+      for (String part : requestEncodings) {
+        String encoding = part.trim();
+        if (encoding.equals(ContentEncodings.Deflate)) {
+          bytes = deflate(bytes);
+        } else if (encoding.equals(ContentEncodings.Gzip)) {
+          bytes = gzip(bytes);
+        }
+      }
+    }
+
+    return bytes;
   }
 
   protected byte[] deflate(byte[] bytes) throws Exception {

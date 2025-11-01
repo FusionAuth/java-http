@@ -418,7 +418,6 @@ public class HTTPWorker implements Runnable {
     //   However, as long as we ignore Content-Length we should be ok. Earlier specs indicate Transfer-Encoding should take precedence,
     //   later specs imply it is an error. Seems ok to allow it and just ignore it.
     if (request.getHeader(Headers.TransferEncoding) == null) {
-      var contentLength = request.getContentLength();
       var requestedContentLengthHeaders = request.getHeaders(Headers.ContentLength);
       if (requestedContentLengthHeaders != null) {
         if (requestedContentLengthHeaders.size() != 1) {
@@ -430,6 +429,7 @@ public class HTTPWorker implements Runnable {
           return Status.BadRequest;
         }
 
+        var contentLength = request.getContentLength();
         if (contentLength == null || contentLength < 0) {
           if (debugEnabled) {
             logger.debug("Invalid request. The Content-Length must be >= 0 and <= 9,223,372,036,854,775,807. [{}]", requestedContentLengthHeaders.getFirst());
@@ -445,13 +445,9 @@ public class HTTPWorker implements Runnable {
       request.removeHeader(Headers.ContentLength);
     }
 
-    // Content-Encoding
+    // Validate Content-Encoding, we currently support deflate and gzip.
+    // - If we see anything else we should fail, we will be unable to handle the request.
     var contentEncodings = request.getContentEncodings();
-    // TODO : If provided, I think we can safely remove the Content-Length header if present?
-    //        Although, I suppose as long as we decompress early, we should still be able to use the Content-Length header as long as
-    //        it represents the un-compressed payload.
-    //        Maybe write a test to prove that we can compress with a fixed-length w/ a Content-Length header?
-    // Current support is for gzip and deflate.
     for (var encoding : contentEncodings) {
       if (!encoding.equalsIgnoreCase(ContentEncodings.Gzip) && !encoding.equalsIgnoreCase(ContentEncodings.Deflate)) {
         // Note that while we do not expect multiple Content-Encoding headers, the last one will be used. For good measure,

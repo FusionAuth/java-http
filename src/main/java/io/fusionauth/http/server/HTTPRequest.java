@@ -626,12 +626,16 @@ public class HTTPRequest implements Buildable<HTTPRequest> {
    *     {@code Content-Length} header was provided.
    */
   public boolean hasBody() {
+    if (isChunked()) {
+      return true;
+    }
+
     Long contentLength = getContentLength();
-    return isChunked() || (contentLength != null && contentLength > 0);
+    return contentLength != null && contentLength > 0;
   }
 
   public boolean isChunked() {
-    return getTransferEncoding() != null && getTransferEncoding().equalsIgnoreCase(TransferEncodings.Chunked);
+    return TransferEncodings.Chunked.equalsIgnoreCase(getTransferEncoding());
   }
 
   /**
