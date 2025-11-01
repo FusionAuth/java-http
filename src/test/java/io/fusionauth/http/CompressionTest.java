@@ -40,6 +40,7 @@ import io.fusionauth.http.server.HTTPHandler;
 import org.testng.annotations.DataProvider;
 import org.testng.annotations.Test;
 import static org.testng.Assert.assertEquals;
+import static org.testng.Assert.assertNotEquals;
 import static org.testng.Assert.assertNotNull;
 import static org.testng.Assert.assertNull;
 import static org.testng.AssertJUnit.fail;
@@ -258,14 +259,17 @@ public class CompressionTest extends BaseTest {
 
       assertEquals(req.isChunked(), false);
 
-      // We forced a Content-Length by telling the JDK client not to chunk, so it will be present. It will
-      // be used in theory - and it should be ok as long as we are using it to count compressed bytes?
-      // TODO : Once I add the push back tests for compression, we'll see if this still works. We may
-      //        need to manually remove the Content-Length header when we know the body to be compressed.
+      // We forced a Content-Length by telling the JDK client not to chunk, so it will be present.
+      // - We can still correctly use the Content-Length because it is used by the FixedLengthInputStream which
+      //   is below the decompression. See HTTPInputStream.initialize
       var contentLength = req.getHeader(Headers.ContentLength);
       assertEquals(contentLength, payload.length + "");
 
-      String body = new String(req.getInputStream().readAllBytes());
+      // Because we are compressed, don't expect the final payload to be equal to the contentLength
+      byte[] readBytes = req.getInputStream().readAllBytes();
+      assertNotEquals(readBytes.length, contentLength);
+
+      String body = new String(readBytes);
       assertEquals(body, bodyString);
 
       res.setHeader(Headers.ContentType, "text/plain");
@@ -326,9 +330,9 @@ public class CompressionTest extends BaseTest {
         {"deflate, gzip", "deflate, gzip"},
         {"gzip, deflate", "gzip, deflate"},
 
-        // x-gzip alias, https
+        // x-gzip with mixed case alias, https
         {"x-gzip", "deflate, gzip"},
-        {"x-gzip, deflate", "gzip, deflate"},
+        {"X-Gzip, deflate", "gzip, deflate"},
         {"deflate, x-gzip", "gzip, deflate"},
     };
 

@@ -790,8 +790,8 @@ public class HTTPRequest implements Buildable<HTTPRequest> {
             continue;
           }
 
-          // The HTTP/1.1 standard recommends that the servers supporting gzip also recognize x-gzip as an alias, for compatibility purposes.
-          if (encoding.equals(ContentEncodings.XGzip)) {
+          // The HTTP/1.1 standard recommends that the servers supporting gzip also recognize x-gzip as an alias for compatibility.
+          if (encoding.equalsIgnoreCase(ContentEncodings.XGzip)) {
             encoding = ContentEncodings.Gzip;
           }
 
