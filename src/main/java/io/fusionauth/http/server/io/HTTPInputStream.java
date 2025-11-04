@@ -31,7 +31,7 @@ import io.fusionauth.http.server.HTTPServerConfiguration;
 import io.fusionauth.http.server.Instrumenter;
 
 /**
- * An InputStream intended to be read the HTTP request body.
+ * An InputStream intended to read the HTTP request body.
  * <p>
  * This will handle fixed length requests, chunked requests as well as decompression if necessary.
  *
