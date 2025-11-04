@@ -1,4 +1,4 @@
-## FusionAuth HTTP client and server ![semver 2.0.0 compliant](http://img.shields.io/badge/semver-2.0.0-brightgreen.svg?style=flat-square) [![test](https://github.com/FusionAuth/java-http/actions/workflows/test.yml/badge.svg)](https://github.com/FusionAuth/java-http/actions/workflows/test.yml)
+## Java HTTP client and server ![semver 2.0.0 compliant](http://img.shields.io/badge/semver-2.0.0-brightgreen.svg?style=flat-square) [![test](https://github.com/FusionAuth/java-http/actions/workflows/test.yml/badge.svg)](https://github.com/FusionAuth/java-http/actions/workflows/test.yml)
 
 ### Latest versions
 
