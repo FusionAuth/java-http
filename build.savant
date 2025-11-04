@@ -111,7 +111,7 @@ target(name: "release", description: "Releases a full version of the project", d
   release.release()
 }
 
-target(name: "idea", description: "Updates the IntelliJ IDEA module file") {
+target(name: "idea", description: "Updates the IntelliJ IDEA module file", dependsOn: ["pom"]) {
   idea.iml()
 }
 
