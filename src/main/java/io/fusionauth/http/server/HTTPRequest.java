@@ -783,7 +783,6 @@ public class HTTPRequest implements Buildable<HTTPRequest> {
       case Headers.ContentEncodingLower:
         String[] encodings = value.split(",");
         List<String> contentEncodings = new ArrayList<>(1);
-        int encodingIndex = 0;
         for (String encoding : encodings) {
           encoding = encoding.trim();
           if (encoding.isEmpty()) {
@@ -796,7 +795,6 @@ public class HTTPRequest implements Buildable<HTTPRequest> {
           }
 
           contentEncodings.add(encoding);
-          encodingIndex++;
         }
 
         setContentEncodings(contentEncodings);
