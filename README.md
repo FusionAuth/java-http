@@ -1,8 +1,8 @@
-## FusionAuth HTTP client and server ![semver 2.0.0 compliant](http://img.shields.io/badge/semver-2.0.0-brightgreen.svg?style=flat-square) [![test](https://github.com/FusionAuth/java-http/actions/workflows/test.yml/badge.svg)](https://github.com/FusionAuth/java-http/actions/workflows/test.yml)
+## Java HTTP client and server ![semver 2.0.0 compliant](http://img.shields.io/badge/semver-2.0.0-brightgreen.svg?style=flat-square) [![test](https://github.com/FusionAuth/java-http/actions/workflows/test.yml/badge.svg)](https://github.com/FusionAuth/java-http/actions/workflows/test.yml)
 
 ### Latest versions
 
-* Latest stable version: `1.3.1`
+* Latest stable version: `1.4.0`
    * Now with 100% more virtual threads!
 * Prior stable version `0.3.7` 
 
@@ -27,20 +27,20 @@ To add this library to your project, you can include this dependency in your Mav
 <dependency>
   <groupId>io.fusionauth</groupId>
   <artifactId>java-http</artifactId>
-  <version>1.3.1</version>
+  <version>1.4.0</version>
 </dependency>
 ```
 
 If you are using Gradle, you can add this to your build file:
 
 ```groovy
-implementation 'io.fusionauth:java-http:1.3.1'
+implementation 'io.fusionauth:java-http:1.4.0'
 ```
 
 If you are using Savant, you can add this to your build file:
 
 ```groovy
-dependency(id: "io.fusionauth:java-http:1.3.1")
+dependency(id: "io.fusionauth:java-http:1.4.0")
 ```
 
 ## Examples Usages:
@@ -231,14 +231,13 @@ The general requirements and roadmap are as follows:
 ### Server tasks
 
 * [x] Basic HTTP 1.1
+* [x] Support Accept-Encoding (gzip, deflate), by default and per response options.
+* [x] Support Content-Encoding (gzip, deflate)
 * [x] Support Keep-Alive
 * [x] Support Expect-Continue 100
-* [x] Support chunked request
-* [x] Support chunked response
-* [x] Support streaming entity bodies (via chunking likely)
-* [x] Support compression (default and per response options)
+* [x] Support Transfer-Encoding: chunked on request for streaming.
+* [x] Support Transfer-Encoding: chunked on response
 * [x] Support cookies in request and response
-* [x] Clean up HTTPRequest
 * [x] Support form data
 * [x] Support multipart form data
 * [x] Support TLS

@@ -44,6 +44,7 @@ import io.fusionauth.http.Cookie;
 import io.fusionauth.http.FileInfo;
 import io.fusionauth.http.HTTPMethod;
 import io.fusionauth.http.HTTPValues.Connections;
+import io.fusionauth.http.HTTPValues.ContentEncodings;
 import io.fusionauth.http.HTTPValues.ContentTypes;
 import io.fusionauth.http.HTTPValues.Headers;
 import io.fusionauth.http.HTTPValues.Protocols;
@@ -67,6 +68,8 @@ public class HTTPRequest implements Buildable<HTTPRequest> {
   private final List<String> acceptEncodings = new LinkedList<>();
 
   private final Map<String, Object> attributes = new HashMap<>();
+
+  private final List<String> contentEncodings = new LinkedList<>();
 
   private final Map<String, Cookie> cookies = new HashMap<>();
 
@@ -145,6 +148,14 @@ public class HTTPRequest implements Buildable<HTTPRequest> {
 
   public void addAcceptEncodings(List<String> encodings) {
     this.acceptEncodings.addAll(encodings);
+  }
+
+  public void addContentEncoding(String encoding) {
+    this.contentEncodings.add(encoding);
+  }
+
+  public void addContentEncodings(List<String> encodings) {
+    this.contentEncodings.addAll(encodings);
   }
 
   public void addCookies(Cookie... cookies) {
@@ -294,6 +305,15 @@ public class HTTPRequest implements Buildable<HTTPRequest> {
 
   public void setCharacterEncoding(Charset encoding) {
     this.encoding = encoding;
+  }
+
+  public List<String> getContentEncodings() {
+    return contentEncodings;
+  }
+
+  public void setContentEncodings(List<String> encodings) {
+    this.contentEncodings.clear();
+    this.contentEncodings.addAll(encodings);
   }
 
   public Long getContentLength() {
@@ -606,12 +626,16 @@ public class HTTPRequest implements Buildable<HTTPRequest> {
    *     {@code Content-Length} header was provided.
    */
   public boolean hasBody() {
+    if (isChunked()) {
+      return true;
+    }
+
     Long contentLength = getContentLength();
-    return isChunked() || (contentLength != null && contentLength > 0);
+    return contentLength != null && contentLength > 0;
   }
 
   public boolean isChunked() {
-    return getTransferEncoding() != null && getTransferEncoding().equalsIgnoreCase(TransferEncodings.Chunked);
+    return TransferEncodings.Chunked.equalsIgnoreCase(getTransferEncoding());
   }
 
   /**
@@ -755,6 +779,25 @@ public class HTTPRequest implements Buildable<HTTPRequest> {
         } catch (Exception e) {
           // Ignore the exception and keep the value null
         }
+        break;
+      case Headers.ContentEncodingLower:
+        String[] encodings = value.split(",");
+        List<String> contentEncodings = new ArrayList<>(1);
+        for (String encoding : encodings) {
+          encoding = encoding.trim();
+          if (encoding.isEmpty()) {
+            continue;
+          }
+
+          // The HTTP/1.1 standard recommends that the servers supporting gzip also recognize x-gzip as an alias for compatibility.
+          if (encoding.equalsIgnoreCase(ContentEncodings.XGzip)) {
+            encoding = ContentEncodings.Gzip;
+          }
+
+          contentEncodings.add(encoding);
+        }
+
+        setContentEncodings(contentEncodings);
         break;
       case Headers.ContentTypeLower:
         this.encoding = null;

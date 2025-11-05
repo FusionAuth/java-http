@@ -15,6 +15,8 @@
  */
 package io.fusionauth.http;
 
+import java.io.ByteArrayInputStream;
+import java.io.ByteArrayOutputStream;
 import java.io.IOException;
 import java.io.InputStream;
 import java.io.OutputStream;
@@ -47,15 +49,18 @@ import java.time.Duration;
 import java.time.Instant;
 import java.time.ZonedDateTime;
 import java.time.format.DateTimeFormatter;
-import java.util.ArrayList;
 import java.util.Arrays;
 import java.util.Date;
-import java.util.List;
 import java.util.Map;
 import java.util.UUID;
 import java.util.stream.Collectors;
+import java.util.zip.DeflaterOutputStream;
+import java.util.zip.GZIPInputStream;
+import java.util.zip.GZIPOutputStream;
+import java.util.zip.InflaterInputStream;
 
 import io.fusionauth.http.HTTPValues.Connections;
+import io.fusionauth.http.HTTPValues.ContentEncodings;
 import io.fusionauth.http.log.FileLogger;
 import io.fusionauth.http.log.FileLoggerFactory;
 import io.fusionauth.http.log.Level;
@@ -100,7 +105,6 @@ import static org.testng.Assert.fail;
  * @author Brian Pontarelli
  */
 public abstract class BaseTest {
-
   /**
    * This timeout is used for the HttpClient during each test. If you are in a debugger, you will need to change this timeout to be much
    * larger, otherwise, the client might truncate the request to the server.
@@ -241,6 +245,17 @@ public abstract class BaseTest {
     return new Object[][]{
         {Connections.Close},
         {Connections.KeepAlive}
+    };
+  }
+
+  @DataProvider(name = "contentEncoding")
+  public Object[][] contentEncoding() {
+    return new Object[][]{
+        {""},                // No compression
+        {"gzip"},            // gzip only
+        {"deflate"},         // deflate only
+        {"gzip, deflate"},   // gzip, then deflate
+        {"deflate, gzip"}    // deflate, then gzip
     };
   }
 
@@ -430,27 +445,71 @@ public abstract class BaseTest {
     }
   }
 
-  protected String chunkItUp(String body, String chunkedExtension) {
-    List<String> result = new ArrayList<>();
-    // Chunk in 100 byte increments. Using a smaller chunk size to ensure we don't end up with a single chunk.
-    int chunkSize = 100;
-    for (var i = 0; i < body.length(); i += chunkSize) {
-      var endIndex = Math.min(i + chunkSize, body.length());
-      var chunk = body.substring(i, endIndex);
-      var chunkLength = chunk.getBytes(StandardCharsets.UTF_8).length;
+  protected byte[] chunkEncode(byte[] bytes, int chunkSize, String chunkedExtension) throws IOException {
+    ByteArrayOutputStream out = new ByteArrayOutputStream();
+    for (var i = 0; i < bytes.length; i += chunkSize) {
+      var endIndex = Math.min(i + chunkSize, bytes.length);
+
+      var chunk = Arrays.copyOfRange(bytes, i, endIndex);
+      var chunkLength = chunk.length;
 
       String hex = Integer.toHexString(chunkLength);
-      result.add(hex);
+      out.write(hex.getBytes(StandardCharsets.UTF_8));
 
       if (chunkedExtension != null) {
-        result.add(chunkedExtension);
+        out.write(chunkedExtension.getBytes(StandardCharsets.UTF_8));
       }
 
-      result.add(("\r\n" + chunk + "\r\n"));
+      out.write("\r\n".getBytes(StandardCharsets.UTF_8));
+      out.write(chunk);
+      out.write("\r\n".getBytes(StandardCharsets.UTF_8));
     }
 
-    result.add(("0\r\n\r\n"));
-    return String.join("", result);
+    out.write(("0\r\n\r\n".getBytes(StandardCharsets.UTF_8)));
+    return out.toByteArray();
+  }
+
+  protected byte[] compressUsingContentEncoding(byte[] bytes, String contentEncoding) throws Exception {
+    if (!contentEncoding.isEmpty()) {
+      var requestEncodings = contentEncoding.toLowerCase().trim().split(",");
+      for (String part : requestEncodings) {
+        String encoding = part.trim();
+        if (encoding.equals(ContentEncodings.Deflate)) {
+          bytes = deflate(bytes);
+        } else if (encoding.equals(ContentEncodings.Gzip)) {
+          bytes = gzip(bytes);
+        }
+      }
+    }
+
+    return bytes;
+  }
+
+  protected byte[] deflate(byte[] bytes) throws Exception {
+    ByteArrayOutputStream baseOutputStream = new ByteArrayOutputStream();
+    try (DeflaterOutputStream out = new DeflaterOutputStream(baseOutputStream, true)) {
+      out.write(bytes);
+      out.flush();
+      out.finish();
+      return baseOutputStream.toByteArray();
+    }
+  }
+
+  protected byte[] gzip(byte[] bytes) throws Exception {
+    ByteArrayOutputStream baseOutputStream = new ByteArrayOutputStream();
+    try (DeflaterOutputStream out = new GZIPOutputStream(baseOutputStream, true)) {
+      out.write(bytes);
+      out.flush();
+      out.finish();
+      return baseOutputStream.toByteArray();
+    }
+  }
+
+  protected byte[] inflate(byte[] bytes) throws Exception {
+    ByteArrayInputStream baseInputStream = new ByteArrayInputStream(bytes);
+    try (InflaterInputStream in = new InflaterInputStream(baseInputStream)) {
+      return in.readAllBytes();
+    }
   }
 
   protected void printf(String format, Object... args) {
@@ -469,6 +528,13 @@ public abstract class BaseTest {
     try {
       Thread.sleep(millis);
     } catch (InterruptedException ignore) {
+    }
+  }
+
+  protected byte[] ungzip(byte[] bytes) throws Exception {
+    ByteArrayInputStream baseInputStream = new ByteArrayInputStream(bytes);
+    try (InflaterInputStream in = new GZIPInputStream(baseInputStream)) {
+      return in.readAllBytes();
     }
   }
 
