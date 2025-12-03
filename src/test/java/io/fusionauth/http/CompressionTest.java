@@ -128,7 +128,7 @@ public class CompressionTest extends BaseTest {
                      .header(Headers.AcceptEncoding, acceptEncoding)
                      .header(Headers.ContentEncoding, contentEncoding)
                      .header(Headers.ContentType, "text/plain")
-                     // In general using a BodyPublishers.ofInputStream causes the client to use chunked transfer encoding.
+                     // In general, using a BodyPublishers.ofInputStream causes the client to use chunked transfer encoding.
                      // - Manually set the header because the body is small, and it may not chunk it otherwise.
                      .header(Headers.TransferEncoding, "chunked")
                      .POST(BodyPublishers.ofInputStream(() -> new ByteArrayInputStream(requestPayload)))

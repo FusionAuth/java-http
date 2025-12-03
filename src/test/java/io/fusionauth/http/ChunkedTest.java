@@ -102,7 +102,6 @@ public class ChunkedTest extends BaseTest {
     }
   }
 
-  @SuppressWarnings({"SpellCheckingInspection", "GrazieInspection"})
   @Test(dataProvider = "schemes")
   public void chunkedRequest_doNotReadTheInputStream(String scheme) throws Exception {
     // Use a large chunked request
@@ -140,7 +139,8 @@ public class ChunkedTest extends BaseTest {
       URI uri = makeURI(scheme, "");
 
       // This ensures we are not just passing the test because we interrupt the InputStream and cause it to not hang.
-      for (int i = 0; i < 10; i++) {
+      int iterations = 50;
+      for (int i = 0; i < iterations; i++) {
         var response = client.send(HttpRequest.newBuilder()
                                               .uri(uri)
                                               .header(Headers.ContentType, "text/plain")
@@ -154,13 +154,11 @@ public class ChunkedTest extends BaseTest {
 
         assertEquals(response.statusCode(), 200);
         assertEquals(response.body(), ExpectedResponse);
-        // We didn't read the InputStream, but the drain() will have - so this will count as a chunkedRequest.
-        // - Note if you run this a bunch of times in a tight loop this next check doesn't always line up. I think it is because of the
-        //   Java HTTP client being slow. If I just run it 10 times in a loop it is fine, if I run it 100 times in a loop it fails interminttentl
-        //   and the error is the chunked requests don't match the iteration count. I can confirm the getChunkedRequests() matches
-        //   the number of times we commit the InputStream which causes us to mark the request as chunked.
-        assertEquals(instrumenter.getChunkedRequests(), i + 1);
       }
+
+      // Expect that we counted the correct number of chunked requests.
+      long chunkedRequests = instrumenter.getChunkedRequests();
+      assertEquals(chunkedRequests, iterations);
     }
   }
 
