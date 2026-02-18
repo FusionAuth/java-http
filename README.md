@@ -173,58 +173,31 @@ Then you can open `https://example.org` in a browser or call it using an HTTP cl
 
 ## Performance
 
-A key purpose for this project is obtain screaming performance. Here are some basic metrics using the FusionAuth load test suite against a boilerplate request handler. The request handler simply returns a `200`. Here are some simple comparisons between `apache-tomcat`, `Netty`, and `java-http`.
+A key purpose for this project is to obtain screaming performance. Here are benchmark results comparing `java-http` against other Java HTTP servers.
 
-The load test configuration is set to `100` clients with `100,000` requests each per worker. This means the entire test will execute `10,000,000` requests. The HTTP client is [Restify](https://github.com/inversoft/restify) which is a FusionAuth library that uses `HttpURLConnection` under the hoods. This REST client is used because it is considerably faster than the native Java REST client. In a real life example, depending upon your application, this performance may not matter. For the purposes of a load test, we have attempted to remove as many limitations to pushing the server as hard as we can. 
+All servers implement the same request handler that reads the request body and returns a `200`. All servers were tested over HTTP (no TLS) to isolate server performance.
 
-All the servers were HTTP so that TLS would not introduce any additional latency.
+| Server | Requests/sec | Failures/sec | Avg latency (ms) | P99 latency (ms) | vs java-http |
+|--------|-------------:|-------------:|------------------:|------------------:|-------------:|
+| Netty          |      120,481 |            0 |              0.89 |              2.96 |       107.0% |
+| java-http      |      112,575 |            0 |              0.85 |              1.58 |       100.0% |
+| Jetty          |      111,496 |            0 |              0.90 |              2.46 |        99.0% |
+| Apache Tomcat  |      109,450 |            0 |              0.88 |              2.72 |        97.2% |
+| JDK HttpServer |      107,874 |            0 |              0.89 |              2.25 |        95.8% |
 
-Here are the current test results: (in progress...)
-
-| Server         | Avg requests per second   | Failures per second   | Avg latency in ms       | Normalized Performance (%) |
-|----------------|---------------------------|-----------------------|-------------------------|----------------------------|
-| java-http      | 101,317                   | 0                     | 0.350                   | 100%                       |
-| Apache Tomcat  | 83,463                    | 0                     | 0.702                   | 82.3%                      | 
-| Netty          | ?                         | ?                     | ?                       |                            |
-| OkHttp         | ?                         | ?                     | ?                       |                            |
-| JDK HttpServer | ?                         | ?                     | ?                       |                            |
-
-Note the JDK HTTP Server is `com.sun.net.httpserver.HttpServer`. I don't know that anyone would use this in production, the JDK has not yet made a version of this using a public API. It is included here for reference only. 
-
-Load test last performed May 30, 2025. Using the [fusionauth-load-test](https://github.com/fusionauth/fusionauth-load-tests) library.
+_Benchmark performed 2026-02-18 using `both` on Darwin, arm64, 10 cores, Apple M4._
+_Java: openjdk version "21.0.10" 2026-01-20._
 
 ### Running load tests
 
-Start the HTTP server to test.
-
-#### java-http
-
-Start the HTTP server. Run the following commands from the `java-http` repo.
+The benchmark suite can be run with:
 
 ```bash
-cd load-tests/self
-sb clean start
+cd load-tests
+./run-benchmarks.sh
 ```
 
-#### Apache Tomcat
-
-Start the HTTP server. Run the following commands from the `java-http` repo.
-
-```bash
-cd load-tests/tomcat
-sb clean start
-```
-
-Once you have the server started you wish to test, start the load test. Run the following commands from the `fusionauth-load-tests` repo.
-
-```bash
-sb clean int
-./load-test.sh HTTP.json
-```
-
-Netty and Tomcat both seem to suffer from buffering and connection issues at very high scale. Regardless of the configuration, both servers always begins to fail with connection timeout problems at scale. `java-http` does not have these issues because of the way it handles connections via the selector. Connections don't back up and client connection pools can always be re-used with Keep-Alive.
-
-The general requirements and roadmap are as follows:
+See [load-tests/README.md](load-tests/README.md) for full usage and options.
 
 ## Todos and Roadmap
 

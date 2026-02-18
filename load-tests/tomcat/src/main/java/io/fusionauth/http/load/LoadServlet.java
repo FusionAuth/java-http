@@ -51,7 +51,7 @@ public class LoadServlet extends HttpServlet {
   private void handleFailure(HttpServletRequest req, HttpServletResponse res) {
     // Path does not match handler.
     res.setStatus(400);
-    byte[] response = ("Invalid path [" + req.getPathInfo() + "]. Supported paths include [/, /text, /file, /echo].").getBytes(StandardCharsets.UTF_8);
+    byte[] response = ("Invalid path [" + req.getPathInfo() + "]. Supported paths include [/, /no-read, /hello, /file, /load].").getBytes(StandardCharsets.UTF_8);
     res.setContentLength(response.length);
     res.setContentType("text/plain");
     try {

@@ -1,7 +1,7 @@
 #!/usr/bin/env bash
 
 #
-# Copyright (c) 2022-2025, FusionAuth, All Rights Reserved
+# Copyright (c) 2025, FusionAuth, All Rights Reserved
 #
 # Licensed under the Apache License, Version 2.0 (the "License");
 # you may not use this file except in compliance with the License.
@@ -42,4 +42,4 @@ if [[ $# -ge 1 && $1 == "--suspend" ]]; then
 fi
 
 ulimit -S -n 32768
-${JAVA_HOME}/bin/java ${suspend} -cp "${CLASSPATH}" -Dio.fusionauth.http.server.stats="${SCRIPT_DIR}" io.fusionauth.http.load.Main
+${JAVA_HOME}/bin/java ${suspend} -cp "${CLASSPATH}" io.fusionauth.http.load.NettyLoadServer

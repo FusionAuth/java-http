@@ -45,7 +45,7 @@ public class LoadHandler implements HTTPHandler {
   private void handleFailure(HTTPRequest req, HTTPResponse res) {
     // Path does not match handler.
     res.setStatus(400);
-    byte[] response = ("Invalid path [" + req.getPath() + "]. Supported paths include [/, /text, /file, /echo].").getBytes(StandardCharsets.UTF_8);
+    byte[] response = ("Invalid path [" + req.getPath() + "]. Supported paths include [/, /no-read, /hello, /file, /load].").getBytes(StandardCharsets.UTF_8);
     res.setContentLength(response.length);
     res.setContentType("text/plain");
     try {
