@@ -248,6 +248,35 @@ run_fusionauth_load_tests() {
     }'
 }
 
+# --- Elapsed timer helpers ---
+# Starts a background process that prints elapsed time on the current line.
+# Usage: start_timer "prefix message"
+#        ... long-running command ...
+#        stop_timer
+TIMER_PID=""
+start_timer() {
+  local msg="$1"
+  (
+    local start="${SECONDS}"
+    while true; do
+      local elapsed=$(( SECONDS - start ))
+      printf "\r    %s ... %ds" "${msg}" "${elapsed}"
+      sleep 1
+    done
+  ) &
+  TIMER_PID=$!
+}
+
+stop_timer() {
+  if [[ -n "${TIMER_PID}" ]]; then
+    kill "${TIMER_PID}" 2>/dev/null || true
+    wait "${TIMER_PID}" 2>/dev/null || true
+    TIMER_PID=""
+    printf "\r\033[K"  # Clear the timer line
+  fi
+}
+trap stop_timer EXIT
+
 # --- Banner ---
 
 echo "=== java-http Benchmark Suite ==="
@@ -370,10 +399,12 @@ run_wrk_benchmark() {
   echo "  [wrk] Running: ${scenario} (${threads}t, ${connections}c, ${DURATION}) -> ${endpoint}"
 
   # Run wrk and capture JSON output from the Lua done() callback
+  start_timer "[wrk] ${server}/${scenario}"
   local wrk_output
   wrk_output="$(wrk -t"${threads}" -c"${connections}" -d"${DURATION}" \
     -s "${SCENARIO_DIR}/${scenario}.lua" \
     "http://localhost:8080${endpoint}" 2>&1)"
+  stop_timer
 
   # The JSON line is the last line of output (from the done() callback)
   local json_line
@@ -446,8 +477,10 @@ run_fusionauth_benchmark() {
   generate_fusionauth_config "${endpoint}" "${connections}" "${loops_per_worker}" "${config_file}"
 
   # Run and parse
+  start_timer "[fusionauth] ${server}/${scenario}"
   local json_line
   json_line="$(run_fusionauth_load_tests "${config_file}")"
+  stop_timer
 
   # Clean up config
   rm -f "${config_file}"
