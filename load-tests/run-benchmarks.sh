@@ -18,7 +18,10 @@
 
 set -euo pipefail
 
-# Ensure sufficient file descriptors for high-concurrency benchmarks (wrk needs 1000+ for -c1000)
+# Raise the soft file descriptor limit for this process and its children (wrk, server start.sh, etc.).
+# macOS defaults can be as low as 256, which is insufficient for high-concurrency benchmarks where
+# wrk opens 1000+ simultaneous connections. This only affects the current process tree — it does not
+# change system defaults or persist after the script exits. Linux and macOS only.
 ulimit -S -n 32768
 
 # Resolve script directory
