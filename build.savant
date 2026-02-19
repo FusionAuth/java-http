@@ -123,12 +123,6 @@ target(name: "print-dependency-tree", description: "Prints the dependency tree")
   dependency.printFull()
 }
 
-target(name: "benchmark", description: "Runs the benchmark suite against all servers") {
-  if (new ProcessBuilder('./run-benchmarks.sh').directory(new File("load-tests")).inheritIO().start().waitFor() != 0) {
-    fail("Benchmark suite failed!")
-  }
-}
-
 target(name: "publish", description: "Publish to MVN repo", dependsOn: ["clean", "compile"]) {
   if (new ProcessBuilder('mvn', 'clean', 'deploy', '-Prelease').inheritIO().start().waitFor() != 0) {
     fail("deploy failed")
