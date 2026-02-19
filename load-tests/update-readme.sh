@@ -158,6 +158,11 @@ if [[ "${HAS_HIGH_CONCURRENCY}" == "true" ]]; then
 
 HC_HEADER
   generate_table "high-concurrency" "${TOOL_FILTER}" "${HC_SELF_RPS}" >> "${PERF_FILE}"
+
+  cat >> "${PERF_FILE}" << 'HC_NOTE'
+
+_JDK HttpServer (`com.sun.net.httpserver`) is included as a baseline since it ships with the JDK and requires no dependencies. However, as the stress test shows, it is not suitable for production workloads — it suffers significant failures under high concurrency._
+HC_NOTE
 fi
 
 # Add footer with machine specs and reproducibility info

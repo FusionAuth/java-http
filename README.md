@@ -195,6 +195,8 @@ All servers implement the same request handler that reads the request body and r
 | Apache Tomcat  |       86,110 |            0 |             11.37 |             23.70 |        77.6% |
 | JDK HttpServer |       50,345 |      16943.4 |              6.12 |             10.40 |        45.3% |
 
+_JDK HttpServer (`com.sun.net.httpserver`) is included as a baseline since it ships with the JDK and requires no dependencies. However, as the stress test shows, it is not suitable for production workloads — it suffers significant failures under high concurrency._
+
 _Benchmark performed 2026-02-19 on Darwin, arm64, 10 cores, Apple M4, 24GB RAM._
 _Java: openjdk version "21.0.10" 2026-01-20._
 
