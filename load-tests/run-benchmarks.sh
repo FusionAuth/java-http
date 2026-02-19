@@ -18,6 +18,9 @@
 
 set -euo pipefail
 
+# Ensure sufficient file descriptors for high-concurrency benchmarks (wrk needs 1000+ for -c1000)
+ulimit -S -n 32768
+
 # Resolve script directory
 SOURCE="${BASH_SOURCE[0]}"
 while [[ -h ${SOURCE} ]]; do
