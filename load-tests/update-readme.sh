@@ -43,6 +43,7 @@ echo "Using results from: ${LATEST}"
 # Extract system info and timestamp
 TIMESTAMP="$(jq -r '.timestamp' "${LATEST}")"
 SYSTEM_DESC="$(jq -r '[.system.os, .system.arch, (.system.cpuCores | tostring) + " cores", .system.cpuModel] | join(", ")' "${LATEST}")"
+RAM_GB="$(jq -r '.system.ramGB' "${LATEST}")"
 JAVA_VERSION="$(jq -r '.system.javaVersion' "${LATEST}")"
 TOOL_NAME="$(jq -r '.tools.selected // .tool.name // "wrk"' "${LATEST}")"
 
@@ -58,10 +59,16 @@ server_display_name() {
   esac
 }
 
-# Pick scenario — prefer baseline, fall back to hello
-SCENARIO="baseline"
+# Pick scenario — prefer hello, fall back to baseline
+SCENARIO="hello"
 if ! jq -e ".results[] | select(.scenario == \"${SCENARIO}\")" "${LATEST}" &>/dev/null; then
-  SCENARIO="hello"
+  SCENARIO="baseline"
+fi
+
+# Check if high-concurrency data is available
+HAS_HIGH_CONCURRENCY=false
+if jq -e '.results[] | select(.scenario == "high-concurrency")' "${LATEST}" &>/dev/null; then
+  HAS_HIGH_CONCURRENCY=true
 fi
 
 # When both tools were used, prefer wrk results for the table (has percentiles)
@@ -73,15 +80,61 @@ fi
 # Get java-http RPS as the normalization baseline
 SELF_RPS="$(jq -r ".results[] | select(.server == \"self\" and .scenario == \"${SCENARIO}\" and .tool == \"${TOOL_FILTER}\") | .metrics.rps" "${LATEST}" 2>/dev/null || echo "0")"
 if [[ -z "${SELF_RPS}" || "${SELF_RPS}" == "null" ]]; then
-  # Fallback: try without tool filter
   SELF_RPS="$(jq -r ".results[] | select(.server == \"self\" and .scenario == \"${SCENARIO}\") | .metrics.rps" "${LATEST}" 2>/dev/null | head -1 || echo "0")"
 fi
+
+# Extract scenario config for reproducibility
+SCENARIO_CONFIG="$(jq -r --arg scenario "${SCENARIO}" --arg tool "${TOOL_FILTER}" \
+  '.results[] | select(.scenario == $scenario and .tool == $tool) | .config | "\(.threads)t, \(.connections)c, \(.duration)"' \
+  "${LATEST}" 2>/dev/null | head -1)"
 
 # Build the performance section into a temp file
 PERF_FILE="$(mktemp)"
 trap 'rm -f "${PERF_FILE}"' EXIT
 
 DATE_FORMATTED="$(echo "${TIMESTAMP}" | cut -d'T' -f1)"
+
+# Helper function: generate a results table for a given scenario
+# Args: $1=scenario, $2=tool_filter, $3=self_rps
+generate_table() {
+  local scenario="$1"
+  local tool="$2"
+  local self_rps="$3"
+
+  echo "| Server | Requests/sec | Failures/sec | Avg latency (ms) | P99 latency (ms) | vs java-http |"
+  echo "|--------|-------------:|-------------:|------------------:|------------------:|-------------:|"
+
+  jq -r --arg scenario "${scenario}" --arg tool "${tool}" \
+    '[.results[] | select(.scenario == $scenario and .tool == $tool)] | sort_by(-.metrics.rps) | .[] | [.server, (.metrics.rps | tostring), ((.metrics.errors_connect + .metrics.errors_read + .metrics.errors_write + .metrics.errors_timeout) | tostring), (.metrics.avg_latency_us | tostring), (.metrics.p99_us | tostring)] | @tsv' \
+    "${LATEST}" | while IFS=$'\t' read -r server rps errors avg_lat p99_lat; do
+
+    display_name="$(server_display_name "${server}")"
+
+    # Convert microseconds to milliseconds (printf ensures leading zero)
+    avg_lat_ms="$(printf "%.2f" "$(echo "scale=4; ${avg_lat} / 1000" | bc)")"
+    p99_lat_ms="$(printf "%.2f" "$(echo "scale=4; ${p99_lat} / 1000" | bc)")"
+
+    # Calculate failures per second from total errors / duration
+    duration_s="$(jq -r --arg server "${server}" --arg scenario "${scenario}" --arg tool "${tool}" \
+      '.results[] | select(.server == $server and .scenario == $scenario and .tool == $tool) | .metrics.duration_us / 1e6' "${LATEST}")"
+    if [[ -n "${duration_s}" && "${duration_s}" != "0" && "${duration_s}" != "null" ]]; then
+      fps="$(echo "scale=1; ${errors} / ${duration_s}" | bc)"
+    else
+      fps="0"
+    fi
+
+    # Normalized performance vs java-http
+    if [[ -n "${self_rps}" && "${self_rps}" != "0" && "${self_rps}" != "null" ]]; then
+      normalized="$(echo "scale=1; ${rps} * 100 / ${self_rps}" | bc)"
+    else
+      normalized="?"
+    fi
+
+    rps_formatted="$(printf "%'.0f" "${rps}")"
+    printf "| %-14s | %12s | %12s | %17s | %17s | %11s%% |\n" \
+      "${display_name}" "${rps_formatted}" "${fps}" "${avg_lat_ms}" "${p99_lat_ms}" "${normalized}"
+  done
+}
 
 cat > "${PERF_FILE}" << 'HEADER'
 ## Performance
@@ -90,55 +143,34 @@ A key purpose for this project is to obtain screaming performance. Here are benc
 
 All servers implement the same request handler that reads the request body and returns a `200`. All servers were tested over HTTP (no TLS) to isolate server performance.
 
-| Server | Requests/sec | Failures/sec | Avg latency (ms) | P99 latency (ms) | vs java-http |
-|--------|-------------:|-------------:|------------------:|------------------:|-------------:|
 HEADER
 
-# Process each server's results for the chosen scenario, ordered by RPS descending
-jq -r --arg scenario "${SCENARIO}" --arg tool "${TOOL_FILTER}" \
-  '[.results[] | select(.scenario == $scenario and .tool == $tool)] | sort_by(-.metrics.rps) | .[] | [.server, (.metrics.rps | tostring), ((.metrics.errors_connect + .metrics.errors_read + .metrics.errors_write + .metrics.errors_timeout) | tostring), (.metrics.avg_latency_us | tostring), (.metrics.p99_us | tostring)] | @tsv' \
-  "${LATEST}" | while IFS=$'\t' read -r server rps errors avg_lat p99_lat; do
+# Add the primary table (hello or baseline)
+generate_table "${SCENARIO}" "${TOOL_FILTER}" "${SELF_RPS}" >> "${PERF_FILE}"
 
-  display_name="$(server_display_name "${server}")"
+# Add high-concurrency table if available
+if [[ "${HAS_HIGH_CONCURRENCY}" == "true" ]]; then
+  HC_SELF_RPS="$(jq -r ".results[] | select(.server == \"self\" and .scenario == \"high-concurrency\" and .tool == \"${TOOL_FILTER}\") | .metrics.rps" "${LATEST}" 2>/dev/null || echo "0")"
 
-  # Convert microseconds to milliseconds (printf ensures leading zero)
-  avg_lat_ms="$(printf "%.2f" "$(echo "scale=4; ${avg_lat} / 1000" | bc)")"
-  p99_lat_ms="$(printf "%.2f" "$(echo "scale=4; ${p99_lat} / 1000" | bc)")"
+  cat >> "${PERF_FILE}" << 'HC_HEADER'
 
-  # Calculate failures per second from total errors / duration
-  duration_s="$(jq -r --arg server "${server}" --arg scenario "${SCENARIO}" --arg tool "${TOOL_FILTER}" \
-    '.results[] | select(.server == $server and .scenario == $scenario and .tool == $tool) | .metrics.duration_us / 1e6' "${LATEST}")"
-  if [[ -n "${duration_s}" && "${duration_s}" != "0" && "${duration_s}" != "null" ]]; then
-    fps="$(echo "scale=1; ${errors} / ${duration_s}" | bc)"
-  else
-    fps="0"
-  fi
+#### Under stress (1,000 concurrent connections)
 
-  # Normalized performance vs java-http
-  if [[ -n "${SELF_RPS}" && "${SELF_RPS}" != "0" && "${SELF_RPS}" != "null" ]]; then
-    normalized="$(echo "scale=1; ${rps} * 100 / ${SELF_RPS}" | bc)"
-  else
-    normalized="?"
-  fi
+HC_HEADER
+  generate_table "high-concurrency" "${TOOL_FILTER}" "${HC_SELF_RPS}" >> "${PERF_FILE}"
+fi
 
-  rps_formatted="$(printf "%'.0f" "${rps}")"
-  printf "| %-14s | %12s | %12s | %17s | %17s | %11s%% |\n" \
-    "${display_name}" "${rps_formatted}" "${fps}" "${avg_lat_ms}" "${p99_lat_ms}" "${normalized}" >> "${PERF_FILE}"
-done
-
-# Add footer
+# Add footer with machine specs and reproducibility info
 cat >> "${PERF_FILE}" << EOF
 
-_Benchmark performed ${DATE_FORMATTED} using \`${TOOL_NAME}\` on ${SYSTEM_DESC}._
+_Benchmark performed ${DATE_FORMATTED} on ${SYSTEM_DESC}, ${RAM_GB}GB RAM._
 _Java: ${JAVA_VERSION}._
 
-### Running load tests
-
-The benchmark suite can be run with:
-
+To reproduce:
 \`\`\`bash
 cd load-tests
-./run-benchmarks.sh
+./run-benchmarks.sh --tool ${TOOL_NAME} --scenarios ${SCENARIO}$(if [[ "${HAS_HIGH_CONCURRENCY}" == "true" ]]; then echo ",high-concurrency"; fi)
+./update-readme.sh
 \`\`\`
 
 See [load-tests/README.md](load-tests/README.md) for full usage and options.

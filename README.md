@@ -179,22 +179,30 @@ All servers implement the same request handler that reads the request body and r
 
 | Server | Requests/sec | Failures/sec | Avg latency (ms) | P99 latency (ms) | vs java-http |
 |--------|-------------:|-------------:|------------------:|------------------:|-------------:|
-| Netty          |      120,481 |            0 |              0.89 |              2.96 |       107.0% |
-| java-http      |      112,575 |            0 |              0.85 |              1.58 |       100.0% |
-| Jetty          |      111,496 |            0 |              0.90 |              2.46 |        99.0% |
-| Apache Tomcat  |      109,450 |            0 |              0.88 |              2.72 |        97.2% |
-| JDK HttpServer |      107,874 |            0 |              0.89 |              2.25 |        95.8% |
+| java-http      |      112,838 |            0 |              0.85 |              1.37 |       100.0% |
+| Jetty          |      100,210 |            0 |              1.51 |             18.18 |        88.8% |
+| Netty          |       92,460 |            0 |              1.93 |             30.72 |        81.9% |
+| JDK HttpServer |       77,726 |            0 |              1.23 |              2.55 |        68.8% |
+| Apache Tomcat  |       77,516 |            0 |              1.87 |             19.85 |        68.6% |
 
-_Benchmark performed 2026-02-18 using `both` on Darwin, arm64, 10 cores, Apple M4._
+#### Under stress (1,000 concurrent connections)
+
+| Server | Requests/sec | Failures/sec | Avg latency (ms) | P99 latency (ms) | vs java-http |
+|--------|-------------:|-------------:|------------------:|------------------:|-------------:|
+| java-http      |      110,918 |            0 |              8.87 |             10.71 |       100.0% |
+| Jetty          |       98,499 |            0 |             10.02 |             12.29 |        88.8% |
+| Netty          |       91,186 |            0 |             10.74 |             11.85 |        82.2% |
+| Apache Tomcat  |       86,110 |            0 |             11.37 |             23.70 |        77.6% |
+| JDK HttpServer |       50,345 |      16943.4 |              6.12 |             10.40 |        45.3% |
+
+_Benchmark performed 2026-02-19 on Darwin, arm64, 10 cores, Apple M4, 24GB RAM._
 _Java: openjdk version "21.0.10" 2026-01-20._
 
-### Running load tests
-
-The benchmark suite can be run with:
-
+To reproduce:
 ```bash
 cd load-tests
-./run-benchmarks.sh
+./run-benchmarks.sh --tool both --scenarios hello,high-concurrency
+./update-readme.sh
 ```
 
 See [load-tests/README.md](load-tests/README.md) for full usage and options.

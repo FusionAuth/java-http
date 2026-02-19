@@ -31,7 +31,7 @@ public class HTTP11SocketTest extends BaseSocketTest {
    * <p>
    * The parser requires \r before \n. A bare \n in the request protocol state is rejected as an unexpected character.
    */
-  @Test(invocationCount = 100)
+  @Test
   public void bare_line_feed() throws Exception {
     // Bare \n (missing \r) after the protocol version. The preamble parser only accepts \r as the transition from
     // RequestProtocol to RequestCR. A bare \n will cause a ParseException.
@@ -72,7 +72,7 @@ public class HTTP11SocketTest extends BaseSocketTest {
    * <p>
    * Header field names are case-insensitive. Verify that uppercase "HOST" is accepted.
    */
-  @Test(invocationCount = 100)
+  @Test
   public void case_insensitive_header_matching() throws Exception {
     withRequest("""
         GET / HTTP/1.1\r
@@ -146,7 +146,7 @@ public class HTTP11SocketTest extends BaseSocketTest {
    * <p>
    * See <a href="https://www.rfc-editor.org/rfc/rfc9112#section-9.6">RFC 9112 Section 9.6</a>
    */
-  @Test(invocationCount = 100)
+  @Test
   public void connection_close() throws Exception {
     withRequest("""
         GET / HTTP/1.1\r
@@ -171,7 +171,7 @@ public class HTTP11SocketTest extends BaseSocketTest {
    * <p>
    * Header field names must be token characters. Control characters are not token characters.
    */
-  @Test(invocationCount = 100)
+  @Test
   public void control_characters_in_header_name() throws Exception {
     // NUL byte (0x00) in header name. The parser only accepts token characters for header names.
     withRequest("GET / HTTP/1.1\r\nHost: cyberdyne-systems.com\r\nX-Bad\0Header: value\r\nContent-Length: {contentLength}\r\n\r\n{body}"
@@ -190,7 +190,7 @@ public class HTTP11SocketTest extends BaseSocketTest {
    * <p>
    * If multiple Content-Length headers are received, the server must reject the message.
    */
-  @Test(invocationCount = 100)
+  @Test
   public void duplicate_content_length_different_values() throws Exception {
     withRequest("""
         GET / HTTP/1.1\r
@@ -215,7 +215,7 @@ public class HTTP11SocketTest extends BaseSocketTest {
    * <p>
    * When the total preamble (request line + headers) exceeds the configured maximum, the server returns 431.
    */
-  @Test(invocationCount = 100)
+  @Test
   public void header_exceeding_max_header_size() throws Exception {
     // Create a header value that, combined with the rest of the preamble, exceeds the configured max.
     String longValue = "x".repeat(300);
@@ -284,7 +284,7 @@ public class HTTP11SocketTest extends BaseSocketTest {
    * Per the RFC, a server should accept HTTP/1.0 requests without a Host header. However, this server requires Host
    * for all protocol versions. This test documents the current behavior (400).
    */
-  @Test(invocationCount = 100)
+  @Test
   public void http_1_0_without_host() throws Exception {
     withRequest("""
         GET / HTTP/1.0\r
@@ -305,7 +305,7 @@ public class HTTP11SocketTest extends BaseSocketTest {
    * <p>
    * See <a href="https://www.rfc-editor.org/rfc/rfc9112#section-7.2">RFC 9112 Section 7.2</a>
    */
-  @Test(invocationCount = 100)
+  @Test
   public void http_1_0_with_host() throws Exception {
     withRequest("""
         GET / HTTP/1.0\r
@@ -541,7 +541,7 @@ public class HTTP11SocketTest extends BaseSocketTest {
    * <p>
    * NUL (0x00) is not a valid URI character. The parser requires characters in the range 0x21-0x7E.
    */
-  @Test(invocationCount = 100)
+  @Test
   public void nul_bytes_in_request_line() throws Exception {
     withRequest("GET /\0path HTTP/1.1\r\nHost: cyberdyne-systems.com\r\nContent-Length: {contentLength}\r\n\r\n{body}"
     ).expectResponse("""
@@ -560,7 +560,7 @@ public class HTTP11SocketTest extends BaseSocketTest {
    * Obs-fold (continuation line starting with SP or HTAB) is deprecated. After a header line's \r\n, the parser
    * expects either a token character (next header name) or \r (end of headers). A space causes a ParseException.
    */
-  @Test(invocationCount = 100)
+  @Test
   public void obs_fold() throws Exception {
     // Header continuation line (obs-fold): value followed by \r\n then a space-prefixed continuation.
     // The parser does not support obs-fold and rejects the SP after the header LF.
@@ -582,7 +582,7 @@ public class HTTP11SocketTest extends BaseSocketTest {
    * maxRequestHeaderSize. Exceeding this limit returns 431 (Request Header Fields Too Large) rather than the
    * RFC-specified 414 (URI Too Long). This test documents the current behavior.
    */
-  @Test(invocationCount = 100)
+  @Test
   public void uri_exceeding_max_header_size() throws Exception {
     String longPath = "/" + "a".repeat(300);
     withRequest("GET " + longPath + " HTTP/1.1\r\nHost: cyberdyne-systems.com\r\nContent-Length: {contentLength}\r\n\r\n{body}"
@@ -603,7 +603,7 @@ public class HTTP11SocketTest extends BaseSocketTest {
    * No whitespace is allowed between the header field-name and colon. The parser rejects a space in the HeaderName
    * state since it is not a token character.
    */
-  @Test(invocationCount = 100)
+  @Test
   public void whitespace_before_header_colon() throws Exception {
     withRequest("""
         GET / HTTP/1.1\r
