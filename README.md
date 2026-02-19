@@ -19,8 +19,6 @@ For more information about Project Loom and virtual threads, please review the f
 - No dependencies
 - To not boil the ocean. This is a purpose built HTTP server that probably won't do everything.
 
-Most real-world applications are bottlenecked by database queries and application logic, not the HTTP server. As long as the server isn't the bottleneck, we believe simplicity and zero dependencies matter more than squeezing out the last few percent of throughput. `java-http` is consistently within a few percent of the fastest servers we've benchmarked while being dramatically simpler to use and having no dependencies. For most use cases, that makes `java-http` the best choice.
-
 ## Installation
 
 To add this library to your project, you can include this dependency in your Maven POM:
@@ -261,7 +259,7 @@ We are looking for Java developers that are interested in helping us build the c
 ```bash
 $ mkdir ~/savant
 $ cd ~/savant
-$ wget http://savant.inversoft.org/org/savantbuild/savant-core/2.0.2/savant-2.0.2.tar.gz
+$ wget https://savant.inversoft.org/org/savantbuild/savant-core/2.0.2/savant-2.0.2.tar.gz
 $ tar xvfz savant-2.0.2.tar.gz
 $ ln -s ./savant-2.0.2 current
 $ export PATH=$PATH:~/savant/current/bin/
