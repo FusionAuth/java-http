@@ -24,7 +24,7 @@ JAVA_HOME=/opt/homebrew/opt/openjdk@21 ./run-benchmarks.sh --servers self --scen
 
 | Server | Directory | Description |
 |--------|-----------|-------------|
-| `self` | `self/` | FusionAuth java-http (the project being benchmarked) |
+| `self` | `self/` | java-http (the project being benchmarked) |
 | `jdk-httpserver` | `jdk-httpserver/` | JDK built-in `com.sun.net.httpserver.HttpServer` |
 | `jetty` | `jetty/` | Eclipse Jetty 12.0.x embedded server |
 | `netty` | `netty/` | Netty 4.1.x with HTTP codec |

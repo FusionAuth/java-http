@@ -250,7 +250,7 @@ run_fusionauth_load_tests() {
 
 # --- Banner ---
 
-echo "=== FusionAuth java-http Benchmark Suite ==="
+echo "=== java-http Benchmark Suite ==="
 echo ""
 
 # --- System metadata ---
