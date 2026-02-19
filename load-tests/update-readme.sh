@@ -105,7 +105,7 @@ generate_table() {
   echo "|--------|-------------:|-------------:|------------------:|------------------:|-------------:|"
 
   jq -r --arg scenario "${scenario}" --arg tool "${tool}" \
-    '[.results[] | select(.scenario == $scenario and .tool == $tool)] | sort_by(-.metrics.rps) | .[] | [.server, (.metrics.rps | tostring), ((.metrics.errors_connect + .metrics.errors_read + .metrics.errors_write + .metrics.errors_timeout) | tostring), (.metrics.avg_latency_us | tostring), (.metrics.p99_us | tostring)] | @tsv' \
+    '[.results[] | select(.scenario == $scenario and .tool == $tool)] | sort_by(if .server == "self" then "" else .server end) | .[] | [.server, (.metrics.rps | tostring), ((.metrics.errors_connect + .metrics.errors_read + .metrics.errors_write + .metrics.errors_timeout) | tostring), (.metrics.avg_latency_us | tostring), (.metrics.p99_us | tostring)] | @tsv' \
     "${LATEST}" | while IFS=$'\t' read -r server rps errors avg_lat p99_lat; do
 
     display_name="$(server_display_name "${server}")"

@@ -179,21 +179,21 @@ All servers implement the same request handler that reads the request body and r
 
 | Server | Requests/sec | Failures/sec | Avg latency (ms) | P99 latency (ms) | vs java-http |
 |--------|-------------:|-------------:|------------------:|------------------:|-------------:|
-| java-http      |      112,838 |            0 |              0.85 |              1.37 |       100.0% |
-| Jetty          |      100,210 |            0 |              1.51 |             18.18 |        88.8% |
-| Netty          |       92,460 |            0 |              1.93 |             30.72 |        81.9% |
-| JDK HttpServer |       77,726 |            0 |              1.23 |              2.55 |        68.8% |
-| Apache Tomcat  |       77,516 |            0 |              1.87 |             19.85 |        68.6% |
+| java-http      |      114,483 |            0 |              0.86 |              1.68 |       100.0% |
+| JDK HttpServer |       89,870 |            0 |              1.08 |              2.44 |        78.5% |
+| Jetty          |      111,500 |            0 |              1.17 |             11.89 |        97.3% |
+| Netty          |      117,119 |            0 |              0.85 |              1.75 |       102.3% |
+| Apache Tomcat  |      102,030 |            0 |              0.94 |              2.41 |        89.1% |
 
 #### Under stress (1,000 concurrent connections)
 
 | Server | Requests/sec | Failures/sec | Avg latency (ms) | P99 latency (ms) | vs java-http |
 |--------|-------------:|-------------:|------------------:|------------------:|-------------:|
-| java-http      |      110,918 |            0 |              8.87 |             10.71 |       100.0% |
-| Jetty          |       98,499 |            0 |             10.02 |             12.29 |        88.8% |
-| Netty          |       91,186 |            0 |             10.74 |             11.85 |        82.2% |
-| Apache Tomcat  |       86,110 |            0 |             11.37 |             23.70 |        77.6% |
-| JDK HttpServer |       50,345 |      16943.4 |              6.12 |             10.40 |        45.3% |
+| java-http      |      114,120 |            0 |              8.68 |             11.88 |       100.0% |
+| JDK HttpServer |       50,870 |      17655.7 |              6.19 |             22.61 |        44.5% |
+| Jetty          |      108,434 |            0 |              9.20 |             14.83 |        95.0% |
+| Netty          |      115,105 |            0 |              8.61 |             10.09 |       100.8% |
+| Apache Tomcat  |       99,163 |            0 |              9.88 |             18.77 |        86.8% |
 
 _JDK HttpServer (`com.sun.net.httpserver`) is included as a baseline since it ships with the JDK and requires no dependencies. However, as the stress test shows, it is not suitable for production workloads — it suffers significant failures under high concurrency._
 
@@ -203,7 +203,7 @@ _Java: openjdk version "21.0.10" 2026-01-20._
 To reproduce:
 ```bash
 cd load-tests
-./run-benchmarks.sh --tool both --scenarios hello,high-concurrency
+./run-benchmarks.sh --tool wrk --scenarios hello,high-concurrency
 ./update-readme.sh
 ```
 
