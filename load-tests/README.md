@@ -1,6 +1,6 @@
 # Load Tests
 
-Automated benchmarking framework for comparing FusionAuth's java-http server against other Java HTTP server implementations.
+Automated benchmarking framework for comparing java-http against other Java HTTP server implementations.
 
 ## Prerequisites
 
