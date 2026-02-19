@@ -137,7 +137,7 @@ public class NettyLoadServer {
           if (blob == null) {
             System.out.println("Build file with size : " + size);
             String s = "Lorem ipsum dolor sit amet";
-            String body = s.repeat(size / s.length() + (size % s.length()));
+            String body = s.repeat((size + s.length() - 1) / s.length()).substring(0, size);
             assert body.length() == size;
             Blobs.put(size, body.getBytes(StandardCharsets.UTF_8));
             blob = Blobs.get(size);
@@ -161,6 +161,8 @@ public class NettyLoadServer {
     }
 
     private FullHttpResponse handleLoad(FullHttpRequest request) {
+      // Note that this should be mostly the same between all load tests.
+      // - See load-tests/self
       byte[] body = new byte[request.content().readableBytes()];
       request.content().readBytes(body);
       byte[] result = Base64.getEncoder().encode(body);

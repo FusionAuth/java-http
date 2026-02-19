@@ -72,7 +72,7 @@ public class HTTP11SocketTest extends BaseSocketTest {
    * <p>
    * Header field names are case-insensitive. Verify that uppercase "HOST" is accepted.
    */
-  @Test
+  @Test(invocationCount = 100)
   public void case_insensitive_header_matching() throws Exception {
     withRequest("""
         GET / HTTP/1.1\r
@@ -196,7 +196,7 @@ public class HTTP11SocketTest extends BaseSocketTest {
         GET / HTTP/1.1\r
         Host: cyberdyne-systems.com\r
         Content-Type: plain/text\r
-        Content-Length: 10\r
+        Content-Length: {contentLength}\r
         Content-Length: 20\r
         \r
         {body}"""

@@ -103,7 +103,7 @@ public class JettyLoadServer {
           if (blob == null) {
             System.out.println("Build file with size : " + size);
             String s = "Lorem ipsum dolor sit amet";
-            String body = s.repeat(size / s.length() + (size % s.length()));
+            String body = s.repeat((size + s.length() - 1) / s.length()).substring(0, size);
             assert body.length() == size;
             Blobs.put(size, body.getBytes(StandardCharsets.UTF_8));
             blob = Blobs.get(size);
@@ -126,6 +126,8 @@ public class JettyLoadServer {
     }
 
     private void handleLoad(Request request, Response response) throws Exception {
+      // Note that this should be mostly the same between all load tests.
+      // - See load-tests/self
       byte[] body = readRequestBody(request);
       byte[] result = Base64.getEncoder().encode(body);
       response.setStatus(200);

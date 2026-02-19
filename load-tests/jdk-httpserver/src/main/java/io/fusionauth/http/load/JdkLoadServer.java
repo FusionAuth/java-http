@@ -93,7 +93,7 @@ public class JdkLoadServer {
         if (blob == null) {
           System.out.println("Build file with size : " + size);
           String s = "Lorem ipsum dolor sit amet";
-          String body = s.repeat(size / s.length() + (size % s.length()));
+          String body = s.repeat((size + s.length() - 1) / s.length()).substring(0, size);
           assert body.length() == size;
           Blobs.put(size, body.getBytes(StandardCharsets.UTF_8));
           blob = Blobs.get(size);
@@ -123,6 +123,8 @@ public class JdkLoadServer {
   }
 
   private static void handleLoad(HttpExchange exchange) throws IOException {
+    // Note that this should be mostly the same between all load tests.
+    // - See load-tests/self
     byte[] body;
     try (InputStream is = exchange.getRequestBody()) {
       body = is.readAllBytes();
