@@ -46,6 +46,8 @@ SYSTEM_DESC="$(jq -r '[.system.os, .system.arch, (.system.cpuCores | tostring) +
 RAM_GB="$(jq -r '.system.ramGB' "${LATEST}")"
 JAVA_VERSION="$(jq -r '.system.javaVersion' "${LATEST}")"
 TOOL_NAME="$(jq -r '.tools.selected // .tool.name // "wrk"' "${LATEST}")"
+MACHINE_MODEL="$(jq -r '.system.machineModel // "unknown"' "${LATEST}")"
+OS_VERSION="$(jq -r '.system.osVersion // ""' "${LATEST}")"
 
 # Server display name mapping
 server_display_name() {
@@ -141,6 +143,8 @@ cat > "${PERF_FILE}" << 'HEADER'
 
 A key purpose for this project is to obtain screaming performance. Here are benchmark results comparing `java-http` against other Java HTTP servers.
 
+These benchmarks ensure `java-http` stays near the top in raw throughput, and we'll be working on claiming the top position -- even if only for bragging rights, since in practice your database and application code will be the bottleneck long before the HTTP server.
+
 All servers implement the same request handler that reads the request body and returns a `200`. All servers were tested over HTTP (no TLS) to isolate server performance.
 
 HEADER
@@ -166,9 +170,18 @@ HC_NOTE
 fi
 
 # Add footer with machine specs and reproducibility info
+MACHINE_LINE=""
+if [[ "${MACHINE_MODEL}" != "unknown" && -n "${MACHINE_MODEL}" ]]; then
+  MACHINE_LINE=" (${MACHINE_MODEL})"
+fi
+OS_LINE=""
+if [[ -n "${OS_VERSION}" && "${OS_VERSION}" != "null" ]]; then
+  OS_LINE=$'\n'"_OS: ${OS_VERSION}._"
+fi
+
 cat >> "${PERF_FILE}" << EOF
 
-_Benchmark performed ${DATE_FORMATTED} on ${SYSTEM_DESC}, ${RAM_GB}GB RAM._
+_Benchmark performed ${DATE_FORMATTED} on ${SYSTEM_DESC}, ${RAM_GB}GB RAM${MACHINE_LINE}._${OS_LINE}
 _Java: ${JAVA_VERSION}._
 
 To reproduce:

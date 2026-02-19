@@ -19,6 +19,8 @@ For more information about Project Loom and virtual threads, please review the f
 - No dependencies
 - To not boil the ocean. This is a purpose built HTTP server that probably won't do everything.
 
+Most real-world applications are bottlenecked by database queries and application logic, not the HTTP server. As long as the server isn't the bottleneck, we believe simplicity and zero dependencies matter more than squeezing out the last few percent of throughput. `java-http` is consistently within a few percent of the fastest servers we've benchmarked while being dramatically simpler to use and having no dependencies. For most use cases, that makes `java-http` the best choice.
+
 ## Installation
 
 To add this library to your project, you can include this dependency in your Maven POM:
@@ -175,6 +177,8 @@ Then you can open `https://example.org` in a browser or call it using an HTTP cl
 
 A key purpose for this project is to obtain screaming performance. Here are benchmark results comparing `java-http` against other Java HTTP servers.
 
+These benchmarks ensure `java-http` stays near the top in raw throughput, and we'll be working on claiming the top position -- even if only for bragging rights, since in practice your database and application code will be the bottleneck long before the HTTP server.
+
 All servers implement the same request handler that reads the request body and returns a `200`. All servers were tested over HTTP (no TLS) to isolate server performance.
 
 | Server | Requests/sec | Failures/sec | Avg latency (ms) | P99 latency (ms) | vs java-http |
@@ -197,7 +201,8 @@ All servers implement the same request handler that reads the request body and r
 
 _JDK HttpServer (`com.sun.net.httpserver`) is included as a baseline since it ships with the JDK and requires no dependencies. However, as the stress test shows, it is not suitable for production workloads — it suffers significant failures under high concurrency._
 
-_Benchmark performed 2026-02-19 on Darwin, arm64, 10 cores, Apple M4, 24GB RAM._
+_Benchmark performed 2026-02-19 on Darwin, arm64, 10 cores, Apple M4, 24GB RAM (MacBook Air)._
+_OS: macOS 15.7.3._
 _Java: openjdk version "21.0.10" 2026-01-20._
 
 To reproduce:

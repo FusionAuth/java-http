@@ -300,9 +300,17 @@ CPU_CORES="$(getconf _NPROCESSORS_ONLN 2>/dev/null || sysctl -n hw.ncpu 2>/dev/n
 if [[ "${OS}" == "Darwin" ]]; then
   CPU_MODEL="$(sysctl -n machdep.cpu.brand_string 2>/dev/null || echo unknown)"
   RAM_GB="$(( $(sysctl -n hw.memsize 2>/dev/null || echo 0) / 1073741824 ))"
+  MACHINE_MODEL="$(system_profiler SPHardwareDataType 2>/dev/null | grep 'Model Name' | sed 's/.*: *//' || echo unknown)"
+  OS_VERSION="$(sw_vers -productName 2>/dev/null || echo macOS) $(sw_vers -productVersion 2>/dev/null || echo unknown)"
 else
   CPU_MODEL="$(lscpu 2>/dev/null | grep 'Model name' | sed 's/.*: *//' || echo unknown)"
   RAM_GB="$(( $(grep MemTotal /proc/meminfo 2>/dev/null | awk '{print $2}' || echo 0) / 1048576 ))"
+  MACHINE_MODEL="$(cat /sys/devices/virtual/dmi/id/product_name 2>/dev/null || echo unknown)"
+  if [[ -f /etc/os-release ]]; then
+    OS_VERSION="$(. /etc/os-release && echo "${PRETTY_NAME}")"
+  else
+    OS_VERSION="Linux $(uname -r)"
+  fi
 fi
 JAVA_VERSION="$(java -version 2>&1 | head -1 || echo unknown)"
 
@@ -311,6 +319,8 @@ if [[ "${TOOL}" == "wrk" || "${TOOL}" == "both" ]]; then
   WRK_VERSION="$(set +o pipefail; wrk -v 2>&1 | head -1)"
 fi
 
+echo "Machine:  ${MACHINE_MODEL}"
+echo "OS:       ${OS_VERSION}"
 echo "System:   ${OS} ${ARCH}, ${CPU_CORES} cores, ${RAM_GB}GB RAM"
 echo "CPU:      ${CPU_MODEL}"
 echo "Java:     ${JAVA_VERSION}"
@@ -609,6 +619,8 @@ FULL_RESULT="$(jq -n \
   --arg timestamp "${TIMESTAMP}" \
   --arg os "${OS}" \
   --arg arch "${ARCH}" \
+  --arg osVersion "${OS_VERSION}" \
+  --arg machineModel "${MACHINE_MODEL}" \
   --arg cpuModel "${CPU_MODEL}" \
   --argjson cpuCores "${CPU_CORES}" \
   --argjson ramGB "${RAM_GB}" \
@@ -623,6 +635,8 @@ FULL_RESULT="$(jq -n \
     system: {
       os: $os,
       arch: $arch,
+      osVersion: $osVersion,
+      machineModel: $machineModel,
       cpuModel: $cpuModel,
       cpuCores: $cpuCores,
       ramGB: $ramGB,
