@@ -279,7 +279,9 @@ trap stop_timer EXIT
 
 # --- Banner ---
 
-echo "=== java-http Benchmark Suite ==="
+SUITE_START="${SECONDS}"
+SUITE_START_TIME="$(date '+%H:%M:%S')"
+echo "=== java-http Benchmark Suite (started ${SUITE_START_TIME}) ==="
 echo ""
 
 # --- System metadata ---
@@ -643,5 +645,8 @@ echo "${RESULTS_JSON}" | jq -r '.[] | [.server, .tool, .scenario, (.metrics.rps 
     printf "%-15s %-10s %-18s %12.0f %12.0f %12d %8d\n" "${srv}" "${tool}" "${scn}" "${rps}" "${avg}" "${p99}" "${errs}"
   done
 
+SUITE_ELAPSED=$(( SECONDS - SUITE_START ))
+SUITE_MINS=$(( SUITE_ELAPSED / 60 ))
+SUITE_SECS=$(( SUITE_ELAPSED % 60 ))
 echo ""
-echo "=== Done ==="
+echo "=== Done (${SUITE_MINS}m ${SUITE_SECS}s) ==="
