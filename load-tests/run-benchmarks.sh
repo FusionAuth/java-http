@@ -254,12 +254,13 @@ run_fusionauth_load_tests() {
 #        ... long-running command ...
 #        stop_timer
 TIMER_PID=""
+TIMER_START=0
 start_timer() {
   local msg="$1"
+  TIMER_START="${SECONDS}"
   (
-    local start="${SECONDS}"
     while true; do
-      local elapsed=$(( SECONDS - start ))
+      local elapsed=$(( SECONDS - TIMER_START ))
       printf "\r    %s ... %ds" "${msg}" "${elapsed}"
       sleep 1
     done
@@ -274,6 +275,7 @@ stop_timer() {
     TIMER_PID=""
     printf "\r\033[K"  # Clear the timer line
   fi
+  TIMER_ELAPSED=$(( SECONDS - TIMER_START ))
 }
 trap stop_timer EXIT
 
@@ -448,8 +450,8 @@ run_wrk_benchmark() {
   avg_lat="$(echo "${json_line}" | jq -r '.avg_latency_us')"
   p99_lat="$(echo "${json_line}" | jq -r '.p99_us')"
   errors="$(echo "${json_line}" | jq -r '.errors_connect + .errors_read + .errors_write + .errors_timeout')"
-  printf "    RPS: %'.0f | Avg Latency: %'.0f us | P99: %'.0f us | Errors: %d\n" \
-    "${rps}" "${avg_lat}" "${p99_lat}" "${errors}"
+  printf "    RPS: %'.0f | Avg Latency: %'.0f us | P99: %'.0f us | Errors: %d | %ds\n" \
+    "${rps}" "${avg_lat}" "${p99_lat}" "${errors}" "${TIMER_ELAPSED}"
 }
 
 # --- Run a single fusionauth-load-tests benchmark ---
@@ -520,8 +522,8 @@ run_fusionauth_benchmark() {
   rps="$(echo "${json_line}" | jq -r '.rps')"
   avg_lat="$(echo "${json_line}" | jq -r '.avg_latency_us')"
   errors="$(echo "${json_line}" | jq -r '.errors_timeout')"
-  printf "    RPS: %'.0f | Avg Latency: %'.0f us | Errors: %d\n" \
-    "${rps}" "${avg_lat}" "${errors}"
+  printf "    RPS: %'.0f | Avg Latency: %'.0f us | Errors: %d | %ds\n" \
+    "${rps}" "${avg_lat}" "${errors}" "${TIMER_ELAPSED}"
 }
 
 # --- Run benchmarks ---
