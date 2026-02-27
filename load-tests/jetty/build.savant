@@ -1,5 +1,5 @@
 /*
- * Copyright (c) 2022-2025, FusionAuth, All Rights Reserved
+ * Copyright (c) 2025, FusionAuth, All Rights Reserved
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -13,29 +13,33 @@
  * either express or implied. See the License for the specific
  * language governing permissions and limitations under the License.
  */
-project(group: "io.fusionauth", name: "self", version: "0.1.0", licenses: ["Apache-2.0"]) {
+jettyVersion = "12.0.16"
+slf4jVersion = "2.0.16"
+
+project(group: "io.fusionauth", name: "jetty", version: "0.1.0", licenses: ["Apache-2.0"]) {
   workflow {
     fetch {
       cache()
       url(url: "https://repository.savantbuild.org")
+      maven()
     }
     publish {
       cache()
     }
-  }
 
-  publishWorkflow {
-    subversion(repository: "https://svn.savantbuild.org")
+    semanticVersions {
+      mapping(id: "io.netty:netty-bom:4.1.115.Final", version: "4.1.115")
+      mapping(id: "org.hibernate.search:hibernate-search-bom:7.1.2.Final", version: "7.1.2")
+      mapping(id: "org.infinispan:infinispan-bom:15.0.11.Final", version: "15.0.11")
+      mapping(id: "org.infinispan:infinispan-build-configuration-parent:15.0.11.Final", version: "15.0.11")
+    }
   }
 
   dependencies {
     group(name: "compile") {
-      dependency(id: "io.fusionauth:java-http:1.4.0")
+      dependency(id: "org.eclipse.jetty:jetty-server:${jettyVersion}", skipCompatibilityCheck: true)
+      dependency(id: "org.slf4j:slf4j-api:${slf4jVersion}", skipCompatibilityCheck: true)
     }
-  }
-
-  publications {
-    standard()
   }
 }
 
@@ -43,10 +47,12 @@ project(group: "io.fusionauth", name: "self", version: "0.1.0", licenses: ["Apac
 dependency = loadPlugin(id: "org.savantbuild.plugin:dependency:2.0.0")
 file = loadPlugin(id: "org.savantbuild.plugin:file:2.0.0")
 java = loadPlugin(id: "org.savantbuild.plugin:java:2.0.0")
-idea = loadPlugin(id: "org.savantbuild.plugin:idea:2.0.0")
 
 java.settings.javaVersion = "21"
 java.settings.compilerArguments = ""
+java.settings.mainDependencies = [
+    [group: "compile", transitive: true, fetchSource: false, transitiveGroups: ["compile", "runtime"]]
+]
 
 target(name: "clean", description: "Cleans the build directory") {
   java.clean()
@@ -61,7 +67,6 @@ target(name: "jar", description: "Builds the project JARs", dependsOn: ["compile
 }
 
 target(name: "app", description: "Builds the app", dependsOn: ["jar"]) {
-  // Copy all compile dependencies to be able to run command line
   dependency.copy(to: "build/dist/lib") {
     dependencies(group: "compile", transitive: true, fetchSource: false)
   }
@@ -75,18 +80,8 @@ target(name: "app", description: "Builds the app", dependsOn: ["jar"]) {
   }
 }
 
-target(name: "idea", description: "Updates the IntelliJ IDEA module file") {
-  idea.iml()
-}
-
-target(name: "start", description: "Starts the java-http server for load testing!", dependsOn: ["app"]) {
+target(name: "start", description: "Starts the Jetty server for load testing!", dependsOn: ["app"]) {
   if (new ProcessBuilder('./start.sh').directory(new File("build/dist")).inheritIO().start().waitFor() != 0) {
-    fail("Unable to start the server!")
-  }
-}
-
-target(name: "suspend", description: "Starts the java-http server for load testing! ", dependsOn: ["app"]) {
-  if (new ProcessBuilder('./start.sh', '--suspend').directory(new File("build/dist")).inheritIO().start().waitFor() != 0) {
     fail("Unable to start the server!")
   }
 }

@@ -1,0 +1,100 @@
+/*
+ * Copyright (c) 2025, FusionAuth, All Rights Reserved
+ *
+ * Licensed under the Apache License, Version 2.0 (the "License");
+ * you may not use this file except in compliance with the License.
+ * You may obtain a copy of the License at
+ *
+ *   http://www.apache.org/licenses/LICENSE-2.0
+ *
+ * Unless required by applicable law or agreed to in writing,
+ * software distributed under the License is distributed on an
+ * "AS IS" BASIS, WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND,
+ * either express or implied. See the License for the specific
+ * language governing permissions and limitations under the License.
+ */
+nettyVersion = "4.1.118.Final"
+
+project(group: "io.fusionauth", name: "netty", version: "0.1.0", licenses: ["Apache-2.0"]) {
+  workflow {
+    fetch {
+      cache()
+      url(url: "https://repository.savantbuild.org")
+      maven()
+    }
+    publish {
+      cache()
+    }
+
+    semanticVersions {
+      // Netty uses .Final suffix on all modules
+      mapping(id: "io.netty:netty-bom:${nettyVersion}", version: "4.1.118")
+      mapping(id: "io.netty:netty-buffer:${nettyVersion}", version: "4.1.118")
+      mapping(id: "io.netty:netty-codec:${nettyVersion}", version: "4.1.118")
+      mapping(id: "io.netty:netty-codec-http:${nettyVersion}", version: "4.1.118")
+      mapping(id: "io.netty:netty-common:${nettyVersion}", version: "4.1.118")
+      mapping(id: "io.netty:netty-handler:${nettyVersion}", version: "4.1.118")
+      mapping(id: "io.netty:netty-parent:${nettyVersion}", version: "4.1.118")
+      mapping(id: "io.netty:netty-resolver:${nettyVersion}", version: "4.1.118")
+      mapping(id: "io.netty:netty-transport:${nettyVersion}", version: "4.1.118")
+      mapping(id: "io.netty:netty-transport-classes-epoll:${nettyVersion}", version: "4.1.118")
+      mapping(id: "io.netty:netty-transport-native-unix-common:${nettyVersion}", version: "4.1.118")
+
+      // Transitive dependencies with non-semantic versions
+      mapping(id: "org.javassist:javassist:3.28.0-GA", version: "3.28.0")
+
+      // Version ranges in transitive POMs
+      rangeMapping(id: "junit:junit:[4.13.1,)", version: "4.13.1")
+    }
+  }
+
+  dependencies {
+    group(name: "compile") {
+      dependency(id: "io.netty:netty-codec-http:${nettyVersion}", skipCompatibilityCheck: true)
+      dependency(id: "io.netty:netty-handler:${nettyVersion}", skipCompatibilityCheck: true)
+    }
+  }
+}
+
+// Plugins
+dependency = loadPlugin(id: "org.savantbuild.plugin:dependency:2.0.0")
+file = loadPlugin(id: "org.savantbuild.plugin:file:2.0.0")
+java = loadPlugin(id: "org.savantbuild.plugin:java:2.0.0")
+
+java.settings.javaVersion = "21"
+java.settings.compilerArguments = ""
+java.settings.mainDependencies = [
+    [group: "compile", transitive: true, fetchSource: false, transitiveGroups: ["compile", "runtime"]]
+]
+
+target(name: "clean", description: "Cleans the build directory") {
+  java.clean()
+}
+
+target(name: "compile", description: "Compiles the Java source files") {
+  java.compile()
+}
+
+target(name: "jar", description: "Builds the project JARs", dependsOn: ["compile"]) {
+  java.jar()
+}
+
+target(name: "app", description: "Builds the app", dependsOn: ["jar"]) {
+  dependency.copy(to: "build/dist/lib") {
+    dependencies(group: "compile", transitive: true, fetchSource: false)
+  }
+
+  file.copy(to: "build/dist/lib") {
+    fileSet(dir: "build/jars")
+  }
+
+  file.copy(to: "build/dist") {
+    fileSet(dir: "src/main/script")
+  }
+}
+
+target(name: "start", description: "Starts the Netty server for load testing!", dependsOn: ["app"]) {
+  if (new ProcessBuilder('./start.sh').directory(new File("build/dist")).inheritIO().start().waitFor() != 0) {
+    fail("Unable to start the server!")
+  }
+}

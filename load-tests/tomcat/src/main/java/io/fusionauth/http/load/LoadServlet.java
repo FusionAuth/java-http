@@ -51,7 +51,7 @@ public class LoadServlet extends HttpServlet {
   private void handleFailure(HttpServletRequest req, HttpServletResponse res) {
     // Path does not match handler.
     res.setStatus(400);
-    byte[] response = ("Invalid path [" + req.getPathInfo() + "]. Supported paths include [/, /text, /file, /echo].").getBytes(StandardCharsets.UTF_8);
+    byte[] response = ("Invalid path [" + req.getPathInfo() + "]. Supported paths include [/, /no-read, /hello, /file, /load].").getBytes(StandardCharsets.UTF_8);
     res.setContentLength(response.length);
     res.setContentType("text/plain");
     try {
@@ -62,9 +62,7 @@ public class LoadServlet extends HttpServlet {
   }
 
   private void handleFile(HttpServletRequest req, HttpServletResponse res) {
-    // Note that it is intentionally that we are not reading the InputStream. This will cause the server to have to drain it.
     try (InputStream is = req.getInputStream()) {
-      // Empty the InputStream
       is.readAllBytes();
 
       int size = 1024 * 1024;
@@ -81,7 +79,7 @@ public class LoadServlet extends HttpServlet {
           if (blob == null) {
             System.out.println("Build file with size : " + size);
             String s = "Lorem ipsum dolor sit amet";
-            String body = s.repeat(size / s.length() + (size % s.length()));
+            String body = s.repeat((size + s.length() - 1) / s.length()).substring(0, size);
             assert body.length() == size;
             Blobs.put(size, body.getBytes(StandardCharsets.UTF_8));
             blob = Blobs.get(size);
@@ -123,7 +121,7 @@ public class LoadServlet extends HttpServlet {
 
   private void handleLoad(HttpServletRequest req, HttpServletResponse res) {
     // Note that this should be mostly the same between all load tests.
-    // - See load-tests/tomcat
+    // - See load-tests/self
     try (InputStream is = req.getInputStream()) {
       byte[] body = is.readAllBytes();
       byte[] result = Base64.getEncoder().encode(body);

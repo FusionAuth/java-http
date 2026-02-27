@@ -24,6 +24,32 @@ import org.testng.annotations.Test;
  * @author Daniel DeGroff
  */
 public class HTTP11SocketTest extends BaseSocketTest {
+  /**
+   * Bare line feed (\n) instead of CRLF (\r\n) in the request line.
+   * <p>
+   * See <a href="https://www.rfc-editor.org/rfc/rfc9112#section-2.2">RFC 9112 Section 2.2</a>
+   * <p>
+   * The parser requires \r before \n. A bare \n in the request protocol state is rejected as an unexpected character.
+   */
+  @Test
+  public void bare_line_feed() throws Exception {
+    // Bare \n (missing \r) after the protocol version. The preamble parser only accepts \r as the transition from
+    // RequestProtocol to RequestCR. A bare \n will cause a ParseException.
+    withRequest("""
+        GET / HTTP/1.1
+        Host: cyberdyne-systems.com\r
+        Content-Type: plain/text\r
+        Content-Length: {contentLength}\r
+        \r
+        {body}"""
+    ).expectResponse("""
+        HTTP/1.1 400 \r
+        connection: close\r
+        content-length: 0\r
+        \r
+        """);
+  }
+
   @Test(invocationCount = 100)
   public void bad_request() throws Exception {
     // Invalid HTTP header
@@ -34,6 +60,30 @@ public class HTTP11SocketTest extends BaseSocketTest {
     ).expectResponse("""
         HTTP/1.1 400 \r
         connection: close\r
+        content-length: 0\r
+        \r
+        """);
+  }
+
+  /**
+   * Header matching must be case-insensitive.
+   * <p>
+   * See <a href="https://www.rfc-editor.org/rfc/rfc9110#section-5.1">RFC 9110 Section 5.1</a>
+   * <p>
+   * Header field names are case-insensitive. Verify that uppercase "HOST" is accepted.
+   */
+  @Test(invocationCount = 100)
+  public void case_insensitive_header_matching() throws Exception {
+    withRequest("""
+        GET / HTTP/1.1\r
+        HOST: cyberdyne-systems.com\r
+        CONTENT-TYPE: plain/text\r
+        CONTENT-LENGTH: {contentLength}\r
+        \r
+        {body}"""
+    ).expectResponse("""
+        HTTP/1.1 200 \r
+        connection: keep-alive\r
         content-length: 0\r
         \r
         """);
@@ -92,6 +142,94 @@ public class HTTP11SocketTest extends BaseSocketTest {
   }
 
   /**
+   * Connection: close on HTTP/1.1 should result in a 200 and the response should include connection: close.
+   * <p>
+   * See <a href="https://www.rfc-editor.org/rfc/rfc9112#section-9.6">RFC 9112 Section 9.6</a>
+   */
+  @Test
+  public void connection_close() throws Exception {
+    withRequest("""
+        GET / HTTP/1.1\r
+        Host: cyberdyne-systems.com\r
+        Connection: close\r
+        Content-Type: plain/text\r
+        Content-Length: {contentLength}\r
+        \r
+        {body}"""
+    ).expectResponse("""
+        HTTP/1.1 200 \r
+        connection: close\r
+        content-length: 0\r
+        \r
+        """);
+  }
+
+  /**
+   * Control characters (e.g., NUL) are not allowed in header names.
+   * <p>
+   * See <a href="https://www.rfc-editor.org/rfc/rfc9110#section-5.1">RFC 9110 Section 5.1</a>
+   * <p>
+   * Header field names must be token characters. Control characters are not token characters.
+   */
+  @Test
+  public void control_characters_in_header_name() throws Exception {
+    // NUL byte (0x00) in header name. The parser only accepts token characters for header names.
+    withRequest("GET / HTTP/1.1\r\nHost: cyberdyne-systems.com\r\nX-Bad\0Header: value\r\nContent-Length: {contentLength}\r\n\r\n{body}"
+    ).expectResponse("""
+        HTTP/1.1 400 \r
+        connection: close\r
+        content-length: 0\r
+        \r
+        """);
+  }
+
+  /**
+   * Duplicate Content-Length headers with different values.
+   * <p>
+   * See <a href="https://www.rfc-editor.org/rfc/rfc9112#section-6.3">RFC 9112 Section 6.3</a>
+   * <p>
+   * If multiple Content-Length headers are received, the server must reject the message.
+   */
+  @Test
+  public void duplicate_content_length_different_values() throws Exception {
+    withRequest("""
+        GET / HTTP/1.1\r
+        Host: cyberdyne-systems.com\r
+        Content-Type: plain/text\r
+        Content-Length: {contentLength}\r
+        Content-Length: 20\r
+        \r
+        {body}"""
+    ).expectResponse("""
+        HTTP/1.1 400 \r
+        connection: close\r
+        content-length: 0\r
+        \r
+        """);
+  }
+
+  /**
+   * Header exceeding the maximum request header size.
+   * <p>
+   * See <a href="https://www.rfc-editor.org/rfc/rfc6585#section-5">RFC 6585 Section 5</a>
+   * <p>
+   * When the total preamble (request line + headers) exceeds the configured maximum, the server returns 431.
+   */
+  @Test
+  public void header_exceeding_max_header_size() throws Exception {
+    // Create a header value that, combined with the rest of the preamble, exceeds the configured max.
+    String longValue = "x".repeat(300);
+    withRequest("GET / HTTP/1.1\r\nHost: cyberdyne-systems.com\r\nX-Large: " + longValue + "\r\nContent-Length: {contentLength}\r\n\r\n{body}"
+    ).withMaxRequestHeaderSize(256)
+     .expectResponse("""
+         HTTP/1.1 431 \r
+         connection: close\r
+         content-length: 0\r
+         \r
+         """);
+  }
+
+  /**
    * Host header requirements. Must be provided, and not duplicated.
    * </p>
    * See <a href="https://www.rfc-editor.org/rfc/rfc7230#section-5.4">RFC 7230 Section 5.4</a>
@@ -132,6 +270,52 @@ public class HTTP11SocketTest extends BaseSocketTest {
         {body}"""
     ).expectResponse("""
         HTTP/1.1 400 \r
+        connection: close\r
+        content-length: 0\r
+        \r
+        """);
+  }
+
+  /**
+   * HTTP/1.0 without Host header.
+   * <p>
+   * See <a href="https://www.rfc-editor.org/rfc/rfc9112#section-7.2">RFC 9112 Section 7.2</a>
+   * <p>
+   * Per the RFC, a server should accept HTTP/1.0 requests without a Host header. However, this server requires Host
+   * for all protocol versions. This test documents the current behavior (400).
+   */
+  @Test
+  public void http_1_0_without_host() throws Exception {
+    withRequest("""
+        GET / HTTP/1.0\r
+        Content-Type: plain/text\r
+        Content-Length: {contentLength}\r
+        \r
+        {body}"""
+    ).expectResponse("""
+        HTTP/1.1 400 \r
+        connection: close\r
+        content-length: 0\r
+        \r
+        """);
+  }
+
+  /**
+   * HTTP/1.0 with Host header should be accepted. HTTP/1.0 defaults to Connection: close.
+   * <p>
+   * See <a href="https://www.rfc-editor.org/rfc/rfc9112#section-7.2">RFC 9112 Section 7.2</a>
+   */
+  @Test
+  public void http_1_0_with_host() throws Exception {
+    withRequest("""
+        GET / HTTP/1.0\r
+        Host: cyberdyne-systems.com\r
+        Content-Type: plain/text\r
+        Content-Length: {contentLength}\r
+        \r
+        {body}"""
+    ).expectResponse("""
+        HTTP/1.1 200 \r
         connection: close\r
         content-length: 0\r
         \r
@@ -339,6 +523,92 @@ public class HTTP11SocketTest extends BaseSocketTest {
         GET /\r
         Host: cyberdyne-systems.com\r
         Content-Type: plain/text\r
+        Content-Length: {contentLength}\r
+        \r
+        {body}"""
+    ).expectResponse("""
+        HTTP/1.1 400 \r
+        connection: close\r
+        content-length: 0\r
+        \r
+        """);
+  }
+
+  /**
+   * NUL byte (0x00) in the request URI path.
+   * <p>
+   * See <a href="https://www.rfc-editor.org/rfc/rfc9112#section-3">RFC 9112 Section 3</a>
+   * <p>
+   * NUL (0x00) is not a valid URI character. The parser requires characters in the range 0x21-0x7E.
+   */
+  @Test
+  public void nul_bytes_in_request_line() throws Exception {
+    withRequest("GET /\0path HTTP/1.1\r\nHost: cyberdyne-systems.com\r\nContent-Length: {contentLength}\r\n\r\n{body}"
+    ).expectResponse("""
+        HTTP/1.1 400 \r
+        connection: close\r
+        content-length: 0\r
+        \r
+        """);
+  }
+
+  /**
+   * Obsolete line folding (obs-fold) in header values.
+   * <p>
+   * See <a href="https://www.rfc-editor.org/rfc/rfc9112#section-5.2">RFC 9112 Section 5.2</a>
+   * <p>
+   * Obs-fold (continuation line starting with SP or HTAB) is deprecated. After a header line's \r\n, the parser
+   * expects either a token character (next header name) or \r (end of headers). A space causes a ParseException.
+   */
+  @Test
+  public void obs_fold() throws Exception {
+    // Header continuation line (obs-fold): value followed by \r\n then a space-prefixed continuation.
+    // The parser does not support obs-fold and rejects the SP after the header LF.
+    withRequest("GET / HTTP/1.1\r\nHost: cyberdyne-systems.com\r\nX-Custom: value\r\n continued\r\nContent-Length: {contentLength}\r\n\r\n{body}"
+    ).expectResponse("""
+        HTTP/1.1 400 \r
+        connection: close\r
+        content-length: 0\r
+        \r
+        """);
+  }
+
+  /**
+   * URI exceeding the maximum request header size.
+   * <p>
+   * See <a href="https://www.rfc-editor.org/rfc/rfc9110#section-15.5.15">RFC 9110 Section 15.5.15</a>
+   * <p>
+   * Note: the server does not have a separate URI length limit. The URI is part of the preamble which is bounded by
+   * maxRequestHeaderSize. Exceeding this limit returns 431 (Request Header Fields Too Large) rather than the
+   * RFC-specified 414 (URI Too Long). This test documents the current behavior.
+   */
+  @Test
+  public void uri_exceeding_max_header_size() throws Exception {
+    String longPath = "/" + "a".repeat(300);
+    withRequest("GET " + longPath + " HTTP/1.1\r\nHost: cyberdyne-systems.com\r\nContent-Length: {contentLength}\r\n\r\n{body}"
+    ).withMaxRequestHeaderSize(256)
+     .expectResponse("""
+         HTTP/1.1 431 \r
+         connection: close\r
+         content-length: 0\r
+         \r
+         """);
+  }
+
+  /**
+   * Whitespace before the header name colon.
+   * <p>
+   * See <a href="https://www.rfc-editor.org/rfc/rfc9112#section-5.1">RFC 9112 Section 5.1</a>
+   * <p>
+   * No whitespace is allowed between the header field-name and colon. The parser rejects a space in the HeaderName
+   * state since it is not a token character.
+   */
+  @Test
+  public void whitespace_before_header_colon() throws Exception {
+    withRequest("""
+        GET / HTTP/1.1\r
+        Host: cyberdyne-systems.com\r
+        Content-Type : plain/text\r
         Content-Length: {contentLength}\r
         \r
         {body}"""

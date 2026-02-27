@@ -45,7 +45,7 @@ public class LoadHandler implements HTTPHandler {
   private void handleFailure(HTTPRequest req, HTTPResponse res) {
     // Path does not match handler.
     res.setStatus(400);
-    byte[] response = ("Invalid path [" + req.getPath() + "]. Supported paths include [/, /text, /file, /echo].").getBytes(StandardCharsets.UTF_8);
+    byte[] response = ("Invalid path [" + req.getPath() + "]. Supported paths include [/, /no-read, /hello, /file, /load].").getBytes(StandardCharsets.UTF_8);
     res.setContentLength(response.length);
     res.setContentType("text/plain");
     try {
@@ -74,7 +74,7 @@ public class LoadHandler implements HTTPHandler {
           if (blob == null) {
             System.out.println("Build file with size : " + size);
             String s = "Lorem ipsum dolor sit amet";
-            String body = s.repeat(size / s.length() + (size % s.length()));
+            String body = s.repeat((size + s.length() - 1) / s.length()).substring(0, size);
             assert body.length() == size;
             Blobs.put(size, body.getBytes(StandardCharsets.UTF_8));
             blob = Blobs.get(size);
@@ -96,9 +96,7 @@ public class LoadHandler implements HTTPHandler {
   }
 
   private void handleHello(HTTPRequest req, HTTPResponse res) {
-    // Note that it is intentionally that we are not reading the InputStream. This will cause the server to have to drain it.
     try (InputStream is = req.getInputStream()) {
-      // Empty the InputStream
       is.readAllBytes();
 
       // Hello world
@@ -117,7 +115,7 @@ public class LoadHandler implements HTTPHandler {
 
   private void handleLoad(HTTPRequest req, HTTPResponse res) {
     // Note that this should be mostly the same between all load tests.
-    // - See load-tests/tomcat
+    // - See load-tests/tomcat, load-tests/jdk-httpserver, load-tests/jetty, load-tests/netty
     try (InputStream is = req.getInputStream()) {
       byte[] body = is.readAllBytes();
       byte[] result = Base64.getEncoder().encode(body);

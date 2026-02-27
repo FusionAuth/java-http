@@ -34,14 +34,14 @@ public abstract class BaseSocketTest extends BaseTest {
     return new Builder(request);
   }
 
-  private void assertResponse(String request, String chunkedExtension, String response) throws Exception {
+  private void assertResponse(String request, String chunkedExtension, int maxRequestHeaderSize, String response) throws Exception {
     HTTPHandler handler = (req, res) -> {
       // Read the request body
       req.getInputStream().readAllBytes();
       res.setStatus(200);
     };
 
-    try (HTTPServer ignore = makeServer("http", handler)
+    var server = makeServer("http", handler)
         .withReadThroughputCalculationDelayDuration(Duration.ofMinutes(2))
         .withWriteThroughputCalculationDelayDuration(Duration.ofMinutes(2))
 
@@ -51,8 +51,13 @@ public abstract class BaseSocketTest extends BaseTest {
         .withProcessingTimeoutDuration(Duration.ofSeconds(27))
 
         // Default is 8k, reduce this 512 to ensure we overflow this and have to read from the input stream again
-        .withRequestBufferSize(512)
-        .start();
+        .withRequestBufferSize(512);
+
+    if (maxRequestHeaderSize > 0) {
+      server.withMaxRequestHeaderSize(maxRequestHeaderSize);
+    }
+
+    try (HTTPServer ignore = server.start();
          Socket socket = makeClientSocket("http")) {
 
       socket.setSoTimeout((int) Duration.ofSeconds(30).toMillis());
@@ -89,6 +94,8 @@ public abstract class BaseSocketTest extends BaseTest {
   protected class Builder {
     public String chunkedExtension;
 
+    public int maxRequestHeaderSize = -1;
+
     public String request;
 
     public Builder(String request) {
@@ -96,11 +103,16 @@ public abstract class BaseSocketTest extends BaseTest {
     }
 
     public void expectResponse(String response) throws Exception {
-      assertResponse(request, chunkedExtension, response);
+      assertResponse(request, chunkedExtension, maxRequestHeaderSize, response);
     }
 
     public Builder withChunkedExtension(String extension) {
       chunkedExtension = extension;
+      return this;
+    }
+
+    public Builder withMaxRequestHeaderSize(int maxRequestHeaderSize) {
+      this.maxRequestHeaderSize = maxRequestHeaderSize;
       return this;
     }
   }

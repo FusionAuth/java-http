@@ -173,58 +173,44 @@ Then you can open `https://example.org` in a browser or call it using an HTTP cl
 
 ## Performance
 
-A key purpose for this project is obtain screaming performance. Here are some basic metrics using the FusionAuth load test suite against a boilerplate request handler. The request handler simply returns a `200`. Here are some simple comparisons between `apache-tomcat`, `Netty`, and `java-http`.
+A key purpose for this project is to obtain screaming performance. Here are benchmark results comparing `java-http` against other Java HTTP servers.
 
-The load test configuration is set to `100` clients with `100,000` requests each per worker. This means the entire test will execute `10,000,000` requests. The HTTP client is [Restify](https://github.com/inversoft/restify) which is a FusionAuth library that uses `HttpURLConnection` under the hoods. This REST client is used because it is considerably faster than the native Java REST client. In a real life example, depending upon your application, this performance may not matter. For the purposes of a load test, we have attempted to remove as many limitations to pushing the server as hard as we can. 
+These benchmarks ensure `java-http` stays near the top in raw throughput, and we'll be working on claiming the top position -- even if only for bragging rights, since in practice your database and application code will be the bottleneck long before the HTTP server.
 
-All the servers were HTTP so that TLS would not introduce any additional latency.
+All servers implement the same request handler that reads the request body and returns a `200`. All servers were tested over HTTP (no TLS) to isolate server performance.
 
-Here are the current test results: (in progress...)
+| Server | Requests/sec | Failures/sec | Avg latency (ms) | P99 latency (ms) | vs java-http |
+|--------|-------------:|-------------:|------------------:|------------------:|-------------:|
+| java-http      |      114,483 |            0 |              0.86 |              1.68 |       100.0% |
+| JDK HttpServer |       89,870 |            0 |              1.08 |              2.44 |        78.5% |
+| Jetty          |      111,500 |            0 |              1.17 |             11.89 |        97.3% |
+| Netty          |      117,119 |            0 |              0.85 |              1.75 |       102.3% |
+| Apache Tomcat  |      102,030 |            0 |              0.94 |              2.41 |        89.1% |
 
-| Server         | Avg requests per second   | Failures per second   | Avg latency in ms       | Normalized Performance (%) |
-|----------------|---------------------------|-----------------------|-------------------------|----------------------------|
-| java-http      | 101,317                   | 0                     | 0.350                   | 100%                       |
-| Apache Tomcat  | 83,463                    | 0                     | 0.702                   | 82.3%                      | 
-| Netty          | ?                         | ?                     | ?                       |                            |
-| OkHttp         | ?                         | ?                     | ?                       |                            |
-| JDK HttpServer | ?                         | ?                     | ?                       |                            |
+#### Under stress (1,000 concurrent connections)
 
-Note the JDK HTTP Server is `com.sun.net.httpserver.HttpServer`. I don't know that anyone would use this in production, the JDK has not yet made a version of this using a public API. It is included here for reference only. 
+| Server | Requests/sec | Failures/sec | Avg latency (ms) | P99 latency (ms) | vs java-http |
+|--------|-------------:|-------------:|------------------:|------------------:|-------------:|
+| java-http      |      114,120 |            0 |              8.68 |             11.88 |       100.0% |
+| JDK HttpServer |       50,870 |      17655.7 |              6.19 |             22.61 |        44.5% |
+| Jetty          |      108,434 |            0 |              9.20 |             14.83 |        95.0% |
+| Netty          |      115,105 |            0 |              8.61 |             10.09 |       100.8% |
+| Apache Tomcat  |       99,163 |            0 |              9.88 |             18.77 |        86.8% |
 
-Load test last performed May 30, 2025. Using the [fusionauth-load-test](https://github.com/fusionauth/fusionauth-load-tests) library.
+_JDK HttpServer (`com.sun.net.httpserver`) is included as a baseline since it ships with the JDK and requires no dependencies. However, as the stress test shows, it is not suitable for production workloads — it suffers significant failures under high concurrency._
 
-### Running load tests
+_Benchmark performed 2026-02-19 on Darwin, arm64, 10 cores, Apple M4, 24GB RAM (MacBook Air)._
+_OS: macOS 15.7.3._
+_Java: openjdk version "21.0.10" 2026-01-20._
 
-Start the HTTP server to test.
-
-#### java-http
-
-Start the HTTP server. Run the following commands from the `java-http` repo.
-
+To reproduce:
 ```bash
-cd load-tests/self
-sb clean start
+cd load-tests
+./run-benchmarks.sh --tool wrk --scenarios hello,high-concurrency
+./update-readme.sh
 ```
 
-#### Apache Tomcat
-
-Start the HTTP server. Run the following commands from the `java-http` repo.
-
-```bash
-cd load-tests/tomcat
-sb clean start
-```
-
-Once you have the server started you wish to test, start the load test. Run the following commands from the `fusionauth-load-tests` repo.
-
-```bash
-sb clean int
-./load-test.sh HTTP.json
-```
-
-Netty and Tomcat both seem to suffer from buffering and connection issues at very high scale. Regardless of the configuration, both servers always begins to fail with connection timeout problems at scale. `java-http` does not have these issues because of the way it handles connections via the selector. Connections don't back up and client connection pools can always be re-used with Keep-Alive.
-
-The general requirements and roadmap are as follows:
+See [load-tests/README.md](load-tests/README.md) for full usage and options.
 
 ## Todos and Roadmap
 
@@ -273,7 +259,7 @@ We are looking for Java developers that are interested in helping us build the c
 ```bash
 $ mkdir ~/savant
 $ cd ~/savant
-$ wget http://savant.inversoft.org/org/savantbuild/savant-core/2.0.2/savant-2.0.2.tar.gz
+$ wget https://savant.inversoft.org/org/savantbuild/savant-core/2.0.2/savant-2.0.2.tar.gz
 $ tar xvfz savant-2.0.2.tar.gz
 $ ln -s ./savant-2.0.2 current
 $ export PATH=$PATH:~/savant/current/bin/
