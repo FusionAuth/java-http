@@ -1,0 +1,23 @@
+# Default ignored files
+/shelf/
+/workspace.xml
+# Ignored default folder with query files
+/queries/
+# Datasource local storage ignored files
+/dataSources.local.xml
+/dataSources/data_sources_history.xml
+# Editor-based HTTP Client requests
+/httpRequests/
+
+# Random generated files
+gbrowser_project.xml
+db-forest-config.xml
+copilot.data.migration.ask2agent.xml
+git_toolbox_prj.xml
+
+# User-specific settings
+/tasks.xml
+/usage.statistics.xml
+/dictionaries/
+/sonarlint/
+/caches/
