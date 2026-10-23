@@ -15,6 +15,8 @@
  */
 package io.fusionauth.http.server;
 
+import javax.net.ServerSocketFactory;
+
 import java.net.Inet6Address;
 import java.net.InetAddress;
 import java.net.InterfaceAddress;
@@ -44,6 +46,8 @@ public class HTTPListenerConfiguration {
 
   private final boolean tls;
 
+  private final ServerSocketFactory serverSocketFactory;
+
   /**
    * Stores the configuration for a single HTTP listener for the server. This constructor sets up a non-TLS based listener that binds to all
    * the network interfaces of the server.
@@ -56,6 +60,7 @@ public class HTTPListenerConfiguration {
     this.tls = false;
     this.certificateChain = null;
     this.privateKey = null;
+    this.serverSocketFactory = null;
   }
 
   /**
@@ -75,6 +80,7 @@ public class HTTPListenerConfiguration {
     this.tls = true;
     this.certificateChain = SecurityTools.parseCertificates(certificate);
     this.privateKey = SecurityTools.parsePrivateKey(privateKey);
+    this.serverSocketFactory = null;
   }
 
   /**
@@ -93,6 +99,7 @@ public class HTTPListenerConfiguration {
     this.tls = true;
     this.certificateChain = new Certificate[]{certificate};
     this.privateKey = privateKey;
+    this.serverSocketFactory = null;
   }
 
   /**
@@ -112,6 +119,7 @@ public class HTTPListenerConfiguration {
     this.tls = true;
     this.certificateChain = certificateChain;
     this.privateKey = privateKey;
+    this.serverSocketFactory = null;
   }
 
   /**
@@ -128,6 +136,7 @@ public class HTTPListenerConfiguration {
     this.tls = false;
     this.certificateChain = null;
     this.privateKey = null;
+    this.serverSocketFactory = null;
   }
 
   /**
@@ -150,6 +159,7 @@ public class HTTPListenerConfiguration {
     this.tls = true;
     this.certificateChain = SecurityTools.parseCertificates(certificate);
     this.privateKey = SecurityTools.parsePrivateKey(privateKey);
+    this.serverSocketFactory = null;
   }
 
   /**
@@ -170,6 +180,59 @@ public class HTTPListenerConfiguration {
     this.tls = true;
     this.certificateChain = new Certificate[]{certificate};
     this.privateKey = privateKey;
+    this.serverSocketFactory = null;
+  }
+
+  /**
+   * Stores the configuration for a listener that uses a custom server socket factory.
+   *
+   * @param bindAddress The bind address of this listener.
+   * @param port The port of this listener.
+   * @param tls Whether the custom factory provides a TLS-enabled server socket.
+   * @param serverSocketFactory The custom factory used to create an unbound server socket.
+   */
+  public HTTPListenerConfiguration(InetAddress bindAddress, int port, boolean tls, ServerSocketFactory serverSocketFactory) {
+    Objects.requireNonNull(bindAddress);
+    Objects.requireNonNull(serverSocketFactory);
+
+    this.bindAddress = bindAddress;
+    this.port = port;
+    this.tls = tls;
+    this.certificateChain = null;
+    this.privateKey = null;
+    this.serverSocketFactory = serverSocketFactory;
+  }
+
+  /**
+   * Stores the configuration for a non-TLS listener that uses a custom server socket factory.
+   *
+   * @param bindAddress The bind address of this listener.
+   * @param port The port of this listener.
+   * @param serverSocketFactory The custom factory used to create an unbound server socket.
+   */
+  public HTTPListenerConfiguration(InetAddress bindAddress, int port, ServerSocketFactory serverSocketFactory) {
+    this(bindAddress, port, false, serverSocketFactory);
+  }
+
+  /**
+   * Stores the configuration for a non-TLS listener that uses a custom server socket factory and binds to all network interfaces.
+   *
+   * @param port The port of this listener.
+   * @param serverSocketFactory The custom factory used to create an unbound server socket.
+   */
+  public HTTPListenerConfiguration(int port, ServerSocketFactory serverSocketFactory) {
+    this(allInterfaces(), port, false, serverSocketFactory);
+  }
+
+  /**
+   * Stores the configuration for a listener that uses a custom server socket factory and binds to all network interfaces.
+   *
+   * @param port The port of this listener.
+   * @param tls Whether the custom factory provides a TLS-enabled server socket.
+   * @param serverSocketFactory The custom factory used to create an unbound server socket.
+   */
+  public HTTPListenerConfiguration(int port, boolean tls, ServerSocketFactory serverSocketFactory) {
+    this(allInterfaces(), port, tls, serverSocketFactory);
   }
 
   public InetAddress getBindAddress() {
@@ -200,7 +263,14 @@ public class HTTPListenerConfiguration {
     return tls;
   }
 
-  private InetAddress allInterfaces() {
+  /**
+   * @return The custom server socket factory, or null when the server should use its default factory.
+   */
+  public ServerSocketFactory getServerSocketFactory() {
+    return serverSocketFactory;
+  }
+
+  private static InetAddress allInterfaces() {
     try {
       boolean ipv6Supported = Collections.list(NetworkInterface.getNetworkInterfaces()).stream()
                                          .map(NetworkInterface::getInterfaceAddresses)
