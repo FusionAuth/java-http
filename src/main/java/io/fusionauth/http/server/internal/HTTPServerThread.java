@@ -74,7 +74,9 @@ public class HTTPServerThread extends Thread {
     this.minimumWriteThroughput = configuration.getMinimumWriteThroughput();
     this.cleaner = new HTTPServerCleanerThread();
 
-    if (listener.isTLS()) {
+    if (listener.getServerSocketFactory() != null) {
+      this.socket = listener.getServerSocketFactory().createServerSocket();
+    } else if (listener.isTLS()) {
       SSLContext context = SecurityTools.serverContext(listener.getCertificateChain(), listener.getPrivateKey());
       this.socket = context.getServerSocketFactory().createServerSocket();
     } else {
