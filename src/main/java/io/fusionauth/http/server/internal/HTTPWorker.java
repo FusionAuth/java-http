@@ -116,7 +116,7 @@ public class HTTPWorker implements Runnable {
 
       while (true) {
         logger.trace("[{}] Running HTTP worker. Block while we wait to read the preamble", Thread.currentThread().threadId());
-        request = new HTTPRequest(configuration.getContextPath(), listener.getCertificate() != null ? "https" : "http", listener.getPort(), socket.getInetAddress().getHostAddress());
+        request = new HTTPRequest(configuration.getContextPath(), listener.isTLS() ? "https" : "http", listener.getPort(), socket.getInetAddress().getHostAddress());
 
         // Create a deep copy of the MultipartConfiguration so that the request may optionally modify the configuration on a per-request basis.
         request.getMultiPartStreamProcessor().setMultipartConfiguration(new MultipartConfiguration(configuration.getMultipartConfiguration()));
